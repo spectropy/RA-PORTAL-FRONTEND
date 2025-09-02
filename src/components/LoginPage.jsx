@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import supabase from './lib/supabaseClient'; // ← Import Supabase client
+import supabase from '../lib/supabaseClient'; // ← Import Supabase client
 import SchoolOwnerDashboard from "./SchoolOwnerDashboard";
 
 const ROLES = {
