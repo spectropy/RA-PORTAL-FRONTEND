@@ -1,80 +1,147 @@
-import React, { useEffect, useState } from 'react'
-import { getSchools, createSchool, uploadExcel } from './api.js'
-import SchoolForm from './components/SchoolForm.jsx'
-import UploadExcel from './components/UploadExcel.jsx'
-import SchoolTable from './components/SchoolTable.jsx'
-import ReportButtons from './components/ReportButtons.jsx'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 
-const box = {
-  maxWidth: 1100, margin: '24px auto', padding: 16,
-  fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial'
+import LoginPage from './components/LoginPage.jsx';
+import Dashboard from './Dashboard.jsx'; // Your main page (SchoolForm + Table + Upload)
+
+// ===== Auth Context Wrapper =====
+function Protected({ children, allowedRoles = ['SPECTROPY_ADMIN'] }) {
+  const raw = sessionStorage.getItem('sp_user');
+  let user = null;
+
+  try {
+    user = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error('Invalid user session:', e);
+    sessionStorage.removeItem('sp_user');
+  }
+
+  const hasValidRole = user && allowedRoles.includes(user.role);
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!hasValidRole) {
+    // Optional: show unauthorized page or redirect
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 }
 
-const h1 = { margin: '0 0 12px', fontSize: 24 }
-const card = { border: '1px solid #d3d8e6', borderRadius: 12, padding: 16, marginBottom: 16, background:'#fff' }
+// ===== Login Handler Component =====
+function AppRoutes() {
+  const navigate = useNavigate();
 
-export default function App() {
-  const [schools, setSchools] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const handleLogin = (user) => {
+    const { role } = user;
 
-  async function refresh() {
-    setLoading(true)
-    setError('')
-    try {
-      const rows = await getSchools()
-      setSchools(rows)
-    } catch (e) {
-      setError(e.message || 'Failed to load schools')
-    } finally {
-      setLoading(false)
+    // Validate role
+    if (!role) {
+      alert('Invalid login: Missing role');
+      return;
     }
-  }
 
-  useEffect(() => { refresh() }, [])
-
-  async function onAddSchool(payload) {
-    setError('')
-    try {
-      await createSchool(payload)
-      await refresh()
-    } catch (e) {
-      setError(e.message || 'Failed to create school')
+    // Only allow known roles (extend later if needed)
+    if (role !== 'SPECTROPY_ADMIN') {
+      alert('Access denied: You do not have permission to view this page.');
+      return;
     }
-  }
 
-  async function onUpload(file) {
-    setError('')
+    // Save to session
     try {
-      const res = await uploadExcel(file)
-      await refresh()
-      return res
-    } catch (e) {
-      setError(e.message || 'Upload failed')
-      throw e
+      sessionStorage.setItem('sp_user', JSON.stringify(user));
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Failed to save session:', err);
+      alert('Login failed due to browser settings (private mode?)');
     }
-  }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('sp_user');
+    navigate('/login', { replace: true });
+  };
+
+  // Optional: Expose logout to Dashboard via context or props if needed
+  // For now, you can add a Logout button inside Dashboard conditionally
 
   return (
-    <div style={box}>
-      <h1 style={h1}>🎓 SPECTROPY — School Registration & Report</h1>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Header (shown on all pages) */}
+      <header style={{
+        padding: '12px 20px',
+        backgroundColor: '#1a56db',
+        color: 'white',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: '18px',
+        fontWeight: 'bold',
+      }}>
+        <span>SPECTROPY School Portal</span>
+        {sessionStorage.getItem('sp_user') && (
+          <button
+            onClick={handleLogout}
+            style={{
+              background: '#ef4444',
+              color: 'white',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            🔐 Logout
+          </button>
+        )}
+      </header>
 
-      <div style={card}>
-        <SchoolForm onSubmit={onAddSchool} />
-      </div>
+      {/* Page Content */}
+      <main style={{ flex: 1, padding: '20px', backgroundColor: '#f7fafc' }}>
+        <Routes>
+          {/* Redirect root to login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
-      <div style={card}>
-        <UploadExcel onUpload={onUpload} />
-      </div>
+          {/* Login Page */}
+          <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
 
-      <div style={card}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8}}>
-          <h2 style={{margin:0, fontSize:18}}>School List</h2>
-          <ReportButtons rows={schools} />
-        </div>
-        {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
-        {error ? <p style={{color:'crimson'}}>{error}</p> : null}
-      </div>
+          {/* Admin Dashboard (Protected) */}
+          <Route
+            path="/dashboard"
+            element={
+              <Protected allowedRoles={['SPECTROPY_ADMIN']}>
+                <Dashboard />
+              </Protected>
+            }
+          />
+
+          {/* Catch-all: invalid routes */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </main>
+
+      {/* Footer */}
+      <footer style={{
+        textAlign: 'center',
+        padding: '10px',
+        fontSize: '12px',
+        color: '#666',
+        backgroundColor: '#f1f5f9',
+      }}>
+        © {new Date().getFullYear()} SPECTROPY. All rights reserved.
+      </footer>
     </div>
-  )
+  );
+}
+
+// ===== Main App =====
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
 }
