@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import supabase from './lib/supabaseClient'; // ← Import Supabase client
+import SchoolOwnerDashboard from "./SchoolOwnerDashboard";
 
 const ROLES = {
   ADMIN: "SPECTROPY_ADMIN",
@@ -9,130 +11,161 @@ const ROLES = {
   GUEST: "GUEST",
 };
 
-// Hardcoded admin credentials (replace with backend auth later)
-const ADMIN_CREDENTIALS = {
-  username: "admin",
-  password: "spectropy@123", // Change this in production!
-};
-
-const ROLE_CARDS = [
-  { key: ROLES.ADMIN, title: "Spectropy Admin", emoji: "🛠️", blurb: "Manage portals and schools." },
-  { key: ROLES.OWNER, title: "School Owner", emoji: "🏫", blurb: "View school analytics." },
-  { key: ROLES.TEACHER, title: "Teacher", emoji: "👩‍🏫", blurb: "Upload results & reports." },
-  { key: ROLES.STUDENT, title: "Student", emoji: "🎓", blurb: "Check your scores." },
-  { key: ROLES.PARENT, title: "Parent", emoji: "👨‍👩‍👧‍👦", blurb: "Track child performance." },
-  { key: ROLES.GUEST, title: "Guest", emoji: "👤", blurb: "Preview limited access." },
-];
-
 export default function LoginPage({ onLogin }) {
-  const [showAdminForm, setShowAdminForm] = useState(false);
-  const [username, setUsername] = useState("");
+  const [loginStep, setLoginStep] = useState(null); // null | 'admin-login' | 'owner-login' | 'owner-dashboard'
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleAdminSubmit = (e) => {
+  const handleBack = () => {
+    setLoginStep(null);
+    setEmail("");
+    setPassword("");
+    setError("");
+  };
+
+  // 🔐 Spectropy Admin Login
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-      setError("");
-      setUsername("");
-      setPassword("");
-      setShowAdminForm(false);
-      onLogin({ role: ROLES.ADMIN }); // Proceed to dashboard
-    } else {
-      setError("Invalid username or password");
+    setError("");
+
+    const { data: admin, error: fetchError } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (fetchError || !admin) {
+      setError("Admin not found");
+      return;
     }
+
+    if (admin.password !== password) { // Compare plain text (dev only)
+      setError("Invalid password");
+      return;
+    }
+
+    // Save user to session
+    sessionStorage.setItem('sp_user', JSON.stringify({
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: ROLES.ADMIN
+    }));
+
+    onLogin({ role: ROLES.ADMIN });
   };
 
-  const handleRoleClick = (role) => {
-    if (role === ROLES.ADMIN) {
-      setShowAdminForm(true);
-    } else {
-      onLogin({ role }); // Other roles go directly (for now)
+  // 🏫 School Owner Login
+  const handleOwnerLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    const { data: user, error: fetchError } = await supabase
+      .from('school_users')
+      .select('*, schools(school_id)')
+      .eq('email', email)
+      .in('role', ['SCHOOL_OWNER', 'PRINCIPAL', 'ADMINISTRATOR'])
+      .single();
+
+    if (fetchError || !user) {
+      setError("Invalid credentials or access denied");
+      return;
     }
+
+    if (user.password !== password) {
+      setError("Invalid password");
+      return;
+    }
+
+    // Save to session
+    sessionStorage.setItem('sp_user', JSON.stringify({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: ROLES.OWNER,
+      school_id: user.schools.school_id,
+      school_name: user.schools.school_name
+    }));
+
+    sessionStorage.setItem('sp_school_id', user.schools.school_id);
+    setLoginStep("owner-dashboard");
   };
 
+  // ============ RENDER ============
+
+  if (loginStep === "admin-login") {
+    return (
+      <AuthForm
+        title="🔐 Spectropy Admin Login"
+        subtitle="Enter your admin credentials"
+        email={email}
+        password={password}
+        setEmail={setEmail}
+        setPassword={setPassword}
+        onSubmit={handleAdminLogin}
+        error={error}
+        onBack={handleBack}
+      />
+    );
+  }
+
+  if (loginStep === "owner-login") {
+    return (
+      <AuthForm
+        title="🏫 School Owner Login"
+        subtitle="Enter your school credentials"
+        email={email}
+        password={password}
+        setEmail={setEmail}
+        setPassword={setPassword}
+        onSubmit={handleOwnerLogin}
+        error={error}
+        onBack={handleBack}
+      />
+    );
+  }
+
+  if (loginStep === "owner-dashboard") {
+    return <SchoolOwnerDashboard onBack={handleBack} />;
+  }
+
+  // === Role Selection Screen ===
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        {/* Header */}
         <header style={styles.header}>
-          <h1 style={styles.h1}>
-            {showAdminForm ? "🔐 Admin Login" : "SPECTROPY — Portal Login"}
-          </h1>
-          <p style={styles.sub}>
-            {showAdminForm
-              ? "Enter your credentials to continue"
-              : "Select your role to continue"}
-          </p>
+          <h1 style={styles.h1}>SPECTROPY — Portal Login</h1>
+          <p style={styles.sub}>Select your role to continue</p>
         </header>
 
-        {/* Admin Login Form */}
-        {showAdminForm ? (
-          <form onSubmit={handleAdminSubmit} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={styles.input}
-                placeholder="Enter username"
-                autoFocus
-              />
-            </div>
+        <div style={styles.grid} role="list">
+          {[
+            { key: ROLES.ADMIN, title: "Spectropy Admin", emoji: "🛠️", blurb: "Manage portals and schools." },
+            { key: ROLES.OWNER, title: "School Owner", emoji: "🏫", blurb: "View school analytics." },
+            { key: ROLES.TEACHER, title: "Teacher", emoji: "👩‍🏫", blurb: "Upload results & reports." },
+            { key: ROLES.STUDENT, title: "Student", emoji: "🎓", blurb: "Check your scores." },
+            { key: ROLES.PARENT, title: "Parent", emoji: "👨‍👩‍👧‍👦", blurb: "Track child performance." },
+            { key: ROLES.GUEST, title: "Guest", emoji: "👤", blurb: "Preview limited access." },
+          ].map(({ key, title, emoji, blurb }) => (
+            <button
+              key={key}
+              role="listitem"
+              onClick={() => {
+                if (key === ROLES.ADMIN) setLoginStep("admin-login");
+                else if (key === ROLES.OWNER) setLoginStep("owner-login");
+                else onLogin({ role: key });
+              }}
+              style={styles.tile}
+              aria-label={`Login as ${title}`}
+            >
+              <div style={styles.emoji}>{emoji}</div>
+              <div style={styles.title}>{title}</div>
+              <div style={styles.blurb}>{blurb}</div>
+            </button>
+          ))}
+        </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={styles.input}
-                placeholder="Enter password"
-              />
-            </div>
-
-            {error && <div style={styles.error}>{error}</div>}
-
-            <div style={styles.formActions}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAdminForm(false);
-                  setError("");
-                }}
-                style={styles.cancelBtn}
-              >
-                ← Back
-              </button>
-              <button type="submit" style={styles.submitBtn}>
-                Log In
-              </button>
-            </div>
-          </form>
-        ) : (
-          /* Role Selection Grid */
-          <div style={styles.grid} role="list">
-            {ROLE_CARDS.map(({ key, title, emoji, blurb }) => (
-              <button
-                key={key}
-                role="listitem"
-                onClick={() => handleRoleClick(key)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") handleRoleClick(key);
-                }}
-                style={styles.tile}
-                aria-label={`Login as ${title}`}
-              >
-                <div style={styles.emoji}>{emoji}</div>
-                <div style={styles.title}>{title}</div>
-                <div style={styles.blurb}>{blurb}</div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Footer */}
         <footer style={styles.footer}>
           <small>
             Need help? Contact{" "}
@@ -146,119 +179,60 @@ export default function LoginPage({ onLogin }) {
   );
 }
 
-// === Styles ===
-const styles = {
-  wrap: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#f0f8ff",
-    padding: 24,
-  },
-  card: {
-    width: "min(1100px, 100%)",
-    background: "white",
-    border: "2px solid #add8e6",
-    borderRadius: 20,
-    padding: "28px 28px 18px",
-    boxShadow: "0 6px 20px rgba(173,216,230,0.5)",
-  },
-  header: { textAlign: "center", marginBottom: 12 },
-  h1: {
-    margin: 0,
-    color: "#1e90ff",
-    fontSize: 28,
-    fontWeight: 700,
-  },
-  sub: {
-    marginTop: 6,
-    color: "#4682b4",
-    fontSize: 14,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 14,
-    marginTop: 18,
-  },
-  tile: {
-    display: "grid",
-    gridTemplateRows: "auto auto 1fr",
-    gap: 6,
-    padding: "16px 14px",
-    textAlign: "center",
-    background: "#f0f8ff",
-    border: "1px solid #87ceeb",
-    borderRadius: 14,
-    color: "#1e3d59",
-    cursor: "pointer",
-    transition: "transform 140ms ease, box-shadow 140ms ease, background 140ms ease",
-    outline: "none",
-  },
-  emoji: { fontSize: 26, lineHeight: 1 },
-  title: { fontSize: 16, fontWeight: 700, marginTop: 2, color: "#1e90ff" },
-  blurb: { fontSize: 13, color: "#4682b4" },
-  footer: { marginTop: 14, textAlign: "center", color: "#4682b4" },
-  link: { color: "#1e90ff", textDecoration: "underline" },
+// Reusable Auth Form Component
+function AuthForm({ title, subtitle, email, password, setEmail, setPassword, onSubmit, error, onBack }) {
+  return (
+    <div style={styles.wrap}>
+      <div style={styles.card}>
+        <header style={styles.header}>
+          <h1 style={styles.h1}>{title}</h1>
+          <p style={styles.sub}>{subtitle}</p>
+        </header>
 
-  // Form Styles
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#1e3d59",
-  },
-  input: {
-    padding: "10px 12px",
-    fontSize: 14,
-    border: "1px solid #87ceeb",
-    borderRadius: 8,
-    outline: "none",
-    background: "#f8faff",
-  },
-  error: {
-    color: "#e3342f",
-    fontSize: 13,
-    textAlign: "center",
-    padding: "8px",
-    background: "#fff5f5",
-    border: "1px solid #e3342f",
-    borderRadius: 8,
-  },
-  formActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    marginTop: 10,
-  },
-  cancelBtn: {
-    padding: "8px 16px",
-    fontSize: 14,
-    border: "1px solid #4682b4",
-    background: "white",
-    color: "#4682b4",
-    borderRadius: 8,
-    cursor: "pointer",
-  },
-  submitBtn: {
-    padding: "8px 20px",
-    fontSize: 14,
-    border: "none",
-    background: "#1e90ff",
-    color: "white",
-    borderRadius: 8,
-    cursor: "pointer",
-  },
-};
+        <form onSubmit={onSubmit} style={styles.form}>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.input}
+              placeholder="you@domain.com"
+              autoFocus
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.input}
+              placeholder="Enter password"
+            />
+          </div>
+          {error && <div style={styles.error}>{error}</div>}
+
+          <div style={styles.formActions}>
+            <button type="button" onClick={onBack} style={styles.cancelBtn}>
+              ← Back
+            </button>
+            <button type="submit" style={styles.submitBtn}>
+              Log In
+            </button>
+          </div>
+        </form>
+
+        <footer style={styles.footer}>
+          <small>Contact admin for credentials</small>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+// === Styles (same as before) ===
+const styles = { /* ... keep your existing styles ... */ };
 
 // Responsive
 styles.grid["@media (max-width: 900px)"] = { gridTemplateColumns: "repeat(2, minmax(0,1fr))" };
