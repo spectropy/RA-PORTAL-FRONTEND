@@ -1,12 +1,13 @@
+// SchoolOwnerDashboard.jsx
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';import React, { useState, useEffect } from "react";
+import 'jspdf-autotable';
+import React, { useState, useEffect } from "react";
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client (same as your backend)
 const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || 'https://your-project.supabase.co',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || 'your-anon-key'
+  import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key'
 );
 
 export default function SchoolOwnerDashboard({ onBack }) {
@@ -16,53 +17,59 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [uploading, setUploading] = useState(false);
   const [filters, setFilters] = useState({ class: '', section: '' });
 
-  // Get school_id from session (set during login)
   const school_id = sessionStorage.getItem('sp_school_id');
 
   useEffect(() => {
     if (!school_id) {
-      alert('No school linked to this session');
+      alert('No session found. Please log in again.');
       onBack();
       return;
     }
 
-    fetchSchoolData();
-    fetchStudents();
+    const loadData = async () => {
+      await fetchSchoolData();
+      await fetchStudents();
+    };
+
+    loadData();
   }, [school_id]);
 
   const fetchSchoolData = async () => {
-    const { data, error } = await supabase
-      .from('school_list')
-      .select('*')
-      .eq('school_id', school_id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('school_list')
+        .select('*')
+        .eq('school_id', school_id)
+        .single();
 
-    if (error) {
-      console.error('Failed to load school:', error);
-      alert('Could not load school data');
-      onBack();
-    } else {
+      if (error) throw error;
       setSchool(data);
+    } catch (err) {
+      console.error('Error fetching school:', err);
+      alert('School not found. Redirecting...');
+      onBack();
     }
   };
 
   const fetchStudents = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .eq('school_id', school_id)
-      .order('class')
-      .order('section')
-      .order('roll_no');
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('school_id', school_id)
+        .order('class')
+        .order('section')
+        .order('roll_no');
 
-    if (error) {
-      console.error('Failed to load students:', error);
-      alert('Failed to load student list');
-    } else {
+      if (error) throw error;
       setStudents(data || []);
+    } catch (err) {
+      console.error('Error fetching students:', err);
+      alert('Failed to load student list.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Generate Student ID: SCHOOL_ID-GRADE-SECTION-ROLL (e.g., TS2501-11A-01)
@@ -79,32 +86,32 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     setUploading(true);
     const reader = new FileReader();
+
     reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
         const newStudents = [];
         const errors = [];
 
-        for (let i = 0; i < json.length; i++) {
-          const row = json[i];
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
           const roll_no = parseInt(row['Roll No'] || row['roll_no'], 10);
           const name = row['Student Name'] || row['name'];
-          const cls = row['Class'] || row['class'];
-          const section = row['Section'] || row['section'];
-          const gender = row['Gender'] || row['gender'] || null;
+          const cls = (row['Class'] || row['class']).toString().trim();
+          const section = (row['Section'] || row['section']).toString().trim();
+          const gender = String(row['Gender'] || row['gender'] || '').trim() || null;
 
           if (!roll_no || !name || !cls || !section) {
             errors.push(`Row ${i + 1}: Missing required field(s)`);
             continue;
           }
 
-          // Check for duplicates in current list
-          const existing = students.find(s => s.roll_no === roll_no && s.class === cls && s.section === section);
-          if (existing) {
+          const exists = students.some(s => s.roll_no === roll_no && s.class === cls && s.section === section);
+          if (exists) {
             errors.push(`Roll No ${roll_no} in ${cls} ${section} already exists`);
             continue;
           }
@@ -117,36 +124,33 @@ export default function SchoolOwnerDashboard({ onBack }) {
             name,
             class: cls,
             section,
-            gender
+            gender,
           });
         }
 
         if (errors.length > 0) {
           alert('Upload failed:\n' + errors.join('\n'));
-          setUploading(false);
           return;
         }
 
-        // Insert to Supabase
         const { error: insertError } = await supabase.from('students').insert(newStudents);
 
-        if (insertError) {
-          if (insertError.code === '23505') {
-            alert('One or more students already exist (duplicate student_id or roll_no)');
-          } else {
-            alert('Database error: ' + insertError.message);
-          }
+        if (insertError?.code === '23505') {
+          alert('One or more students already exist (duplicate student_id)');
+        } else if (insertError) {
+          alert('Database error: ' + insertError.message);
         } else {
-          alert(`✅ Successfully uploaded ${newStudents.length} students!`);
-          fetchStudents(); // Refresh list
+          alert(`✅ Uploaded ${newStudents.length} students!`);
+          fetchStudents(); // Refresh
         }
       } catch (err) {
         console.error('Upload error:', err);
-        alert('❌ Failed to parse Excel file');
+        alert('❌ Failed to parse Excel file.');
       } finally {
         setUploading(false);
       }
     };
+
     reader.readAsArrayBuffer(file);
   };
 
@@ -158,31 +162,31 @@ export default function SchoolOwnerDashboard({ onBack }) {
     ];
     const ws = XLSX.utils.json_to_sheet(sampleData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Students");
+    XLSX.utils.book_append_sheet(wb, ws, "Student Data");
     XLSX.writeFile(wb, "SPECTROPY_Student_Upload_Template.xlsx");
   };
 
-  // Filter students
+  // Filters
   const filteredStudents = students.filter(s => {
     return (filters.class ? s.class === filters.class : true) &&
            (filters.section ? s.section === filters.section : true);
   });
 
-  // Download as Excel
+  // Export to Excel
   const downloadAsExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredStudents);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
-    XLSX.writeFile(wb, `${school_id}_Students_List.xlsx`);
+    XLSX.writeFile(wb, `${school?.school_name?.replace(/\s+/g, '_') || school_id}_Students_List.xlsx`);
   };
 
-  // Download as PDF
+  // Export to PDF
   const downloadAsPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(`${school?.school_name}`, 14, 15);
+    doc.setFontSize(18);
+    doc.text(`${school?.school_name}`, 14, 20);
     doc.setFontSize(12);
-    doc.text(`Student List • ${school_id}`, 14, 25);
+    doc.text(`Student List • ${school_id}`, 14, 30);
 
     if (filteredStudents.length > 0) {
       const tableData = filteredStudents.map(s => [
@@ -196,51 +200,58 @@ export default function SchoolOwnerDashboard({ onBack }) {
       doc.autoTable({
         head: [['Student ID', 'Roll No', 'Name', 'Class', 'Section', 'Gender']],
         body: tableData,
-        startY: 35,
+        startY: 40,
+        theme: 'striped',
+        headStyles: { fillColor: [26, 86, 219] }
       });
     } else {
-      doc.text("No students to display", 14, 35);
+      doc.text("No students to display", 14, 40);
     }
-    doc.save(`${school_id}_Students_List.pdf`);
+    doc.save(`${school?.school_name?.replace(/\s+/g, '_') || school_id}_Students_List.pdf`);
   };
 
-  if (!school) return <div>Loading school data...</div>;
+  const handleLogout = () => {
+    sessionStorage.removeItem('sp_school_id');
+    onBack();
+  };
+
+  if (!school) return <div style={styles.container}>Loading school...</div>;
 
   return (
-    <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
-      <button onClick={onBack} style={{ marginBottom: 16 }}>&#8592; Back to Login</button>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <button onClick={handleLogout} style={styles.backButton}>← Logout</button>
+        <h2 style={styles.title}>🏫 {school.school_name}</h2>
+        <p><strong>SCHOOL_ID:</strong> {school.school_id}</p>
+        <p>{school.area || 'N/A'}, {school.district}, {school.state} • {school.academic_year}</p>
+      </div>
 
-      <h2>🏫 {school.school_name}</h2>
-      <p><strong>SCHOOL_ID:</strong> {school.school_id}</p>
-      <p>{school.area || 'N/A'}, {school.district}, {school.state} • {school.academic_year}</p>
+      <hr style={styles.divider} />
 
-      <hr style={{ margin: '20px 0' }} />
+      <section style={styles.section}>
+        <h3 style={styles.heading}>📥 Upload Students</h3>
+        <button onClick={downloadSample} style={styles.buttonOutline}>📥 Download Sample Format</button>
+        <p style={styles.note}>
+          <strong>Student ID:</strong> <code style={styles.code}>{school.school_id}-11A-01</code>
+        </p>
+        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={uploading} />
+        {uploading && <p style={styles.uploading}>Uploading...</p>}
+      </section>
 
-      <h3>📥 Upload Students List</h3>
-      <p>
-        <button onClick={downloadSample} className="btn btn-outline">
-          📥 Download Sample Excel Format
-        </button>
-      </p>
-      <p>
-        <strong>Student ID Format:</strong>{' '}
-        <code>{school.school_id}-11A-01</code> → (SCHOOL_ID + GRADE + SECTION + 2-digit roll)
-      </p>
-      <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={uploading} />
-      {uploading && <p>Uploading students...</p>}
+      <hr style={styles.divider} />
 
-      <div style={{ marginTop: 20 }}>
-        <label>Filter: </label>
-        <select value={filters.class} onChange={e => setFilters(prev => ({ ...prev, class: e.target.value }))}>
+      <div style={styles.filterContainer}>
+        <label style={styles.label}>Filter: </label>
+        <select value={filters.class} onChange={e => setFilters(p => ({ ...p, class: e.target.value }))} style={styles.select}>
           <option value="">All Classes</option>
-          {Array.from(new Set(students.map(s => s.class))).map(cls => (
-            <option key={cls} value={cls}>{cls}</option>
+          {Array.from(new Set(students.map(s => s.class))).sort().map(c => (
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select value={filters.section} onChange={e => setFilters(prev => ({ ...prev, section: e.target.value }))} style={{ marginLeft: 10 }}>
+        <select value={filters.section} onChange={e => setFilters(p => ({ ...p, section: e.target.value }))} style={{ ...styles.select, marginLeft: 10 }}>
           <option value="">All Sections</option>
-          {Array.from(new Set(students.map(s => s.section))).map(sec => (
-            <option key={sec} value={sec}>{sec}</option>
+          {Array.from(new Set(students.map(s => s.section))).sort().map(s => (
+            <option key={s} value={s}>{s}</option>
           ))}
         </select>
       </div>
@@ -249,35 +260,37 @@ export default function SchoolOwnerDashboard({ onBack }) {
         <p>Loading students...</p>
       ) : (
         <>
-          <h3>📊 Student List ({filteredStudents.length})</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
-            <thead>
-              <tr style={{ background: '#f0f8ff' }}>
-                <th style={th}>Student ID</th>
-                <th style={th}>Roll No</th>
-                <th style={th}>Name</th>
-                <th style={th}>Class</th>
-                <th style={th}>Section</th>
-                <th style={th}>Gender</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.map((s, i) => (
-                <tr key={s.id || i}>
-                  <td style={td}>{s.student_id}</td>
-                  <td style={td}>{s.roll_no}</td>
-                  <td style={td}>{s.name}</td>
-                  <td style={td}>{s.class}</td>
-                  <td style={td}>{s.section}</td>
-                  <td style={td}>{s.gender || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h3 style={styles.heading}>📊 Student List ({filteredStudents.length})</h3>
+          {filteredStudents.length === 0 ? (
+            <p>No students match filters.</p>
+          ) : (
+            <table style={styles.table}>
+              <thead><tr style={styles.tableHeader}>
+                <th style={styles.th}>ID</th>
+                <th style={styles.th}>Roll</th>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Class</th>
+                <th style={styles.th}>Section</th>
+                <th style={styles.th}>Gender</th>
+              </tr></thead>
+              <tbody>
+                {filteredStudents.map(s => (
+                  <tr key={s.id} style={styles.tableRow}>
+                    <td style={styles.td}>{s.student_id}</td>
+                    <td style={styles.td}>{s.roll_no}</td>
+                    <td style={styles.td}>{s.name}</td>
+                    <td style={styles.td}>{s.class}</td>
+                    <td style={styles.td}>{s.section}</td>
+                    <td style={styles.td}>{s.gender || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
-          <div style={{ marginTop: 20 }}>
-            <button onClick={downloadAsExcel} style={btnStyle}>📥 Download as Excel</button>
-            <button onClick={downloadAsPDF} style={{ ...btnStyle, marginLeft: 10 }}>📄 Download as PDF</button>
+          <div style={styles.actions}>
+            <button onClick={downloadAsExcel} style={styles.button}>📥 Excel</button>
+            <button onClick={downloadAsPDF} style={{ ...styles.button, marginLeft: 12 }}>📄 PDF</button>
           </div>
         </>
       )}
@@ -285,12 +298,25 @@ export default function SchoolOwnerDashboard({ onBack }) {
   );
 }
 
-// Styles
-const th = { padding: '8px', borderBottom: '1px solid #ddd', textAlign: 'left' };
-const td = { padding: '8px', borderBottom: '1px solid #eee' };
-const btnStyle = { padding: '8px 12px', border: 'none', background: '#1a56db', color: 'white', borderRadius: 6, cursor: 'pointer' };
-
-// Import at top of file
-// import * as XLSX from 'xlsx';
-// import jsPDF from 'jspdf';
-// import 'jspdf-autotable';
+// === Styles ===
+const styles = {
+  container: { padding: '20px', fontFamily: 'Arial', maxWidth: '1100px', margin: '0 auto' },
+  header: { marginBottom: '20px' },
+  backButton: { padding: '8px 16px', border: '1px solid #4682b4', background: 'white', color: '#4682b4', borderRadius: 6, cursor: 'pointer' },
+  title: { margin: '0 0 8px 0', color: '#1e90ff', fontSize: '24px' },
+  divider: { margin: '20px 0', borderColor: '#ddd' },
+  section: { marginBottom: '20px' },
+  heading: { margin: '0 0 12px 0', color: '#1e3d59', fontSize: '18px' },
+  buttonOutline: { padding: '8px 12px', border: '1px solid #1e90ff', background: 'transparent', color: '#1e90ff', borderRadius: 6, cursor: 'pointer' },
+  note: { fontSize: '13px', color: '#555', margin: '8px 0' },
+  code: { backgroundColor: '#eee', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' },
+  filterContainer: { marginBottom: '20px' },
+  label: { marginRight: '8px', fontSize: '14px', fontWeight: '600' },
+  select: { padding: '6px 8px', fontSize: '14px', border: '1px solid #ccc', borderRadius: '6px' },
+  table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', background: 'white', boxShadow: '0 1px 5px rgba(0,0,0,0.1)' },
+  tableHeader: { backgroundColor: '#f0f8ff' },
+  th: { textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd', color: '#1e3d59' },
+  td: { padding: '10px', borderBottom: '1px solid #eee' },
+  actions: { marginTop: '20px', display: 'flex' },
+  button: { padding: '10px 16px', border: 'none', background: '#1a56db', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' },
+};
