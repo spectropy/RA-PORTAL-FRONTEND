@@ -14,7 +14,7 @@ export default function GuestPage({ onBack }) {
         <p>
           <strong>Founded:</strong> 2020<br />
           <strong>Headquarters:</strong> Hyderabad, Telangana<br />
-          <strong>Email:</strong> <a href="spectropy@gmail.com">spectropy@gmail.com</a><br />
+          <strong>Email:</strong> <a href="Contact@spectropy.com">Contact@spectropy.com</a><br />
           <strong>Website:</strong> <a href="https://spectropy.com" target="_blank">spectropy.com</a>
         </p>
         <p>

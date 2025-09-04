@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+// API base (use env var in production)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 export default function SchoolTable({ rows }) {
   const [expanded, setExpanded] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: 'school_id', direction: 'asc' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [loadingDetails, setLoadingDetails] = useState({});
+  const [schoolDetails, setSchoolDetails] = useState({});
 
   if (!rows?.length) {
     return <p className="help">No schools yet.</p>;
@@ -35,10 +40,45 @@ export default function SchoolTable({ rows }) {
   });
 
   const toggleExpand = (schoolId) => {
-    setExpanded((prev) => ({
-      ...prev,
-      [schoolId]: !prev[schoolId],
-    }));
+    const isCurrentlyExpanded = !!expanded[schoolId];
+    setExpanded((prev) => ({ ...prev, [schoolId]: !isCurrentlyExpanded }));
+
+    // If expanding, fetch details
+    if (!isCurrentlyExpanded) {
+      fetchSchoolDetails(schoolId);
+    }
+  };
+
+  const fetchSchoolDetails = async (schoolId) => {
+    if (schoolDetails[schoolId] || loadingDetails[schoolId]) return;
+
+    setLoadingDetails((prev) => ({ ...prev, [schoolId]: true }));
+    try {
+      const res = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+
+      const data = await res.json();
+
+      // ✅ Ensure fallbacks
+      const classes = Array.isArray(data.classes) ? data.classes : [];
+      const teachers = Array.isArray(data.teachers) ? data.teachers : [];
+
+      setSchoolDetails((prev) => ({
+        ...prev,
+        [schoolId]: {
+          classes,
+          teachers,
+        },
+      }));
+    } catch (err) {
+      console.error('Failed to load school details:', err);
+      setSchoolDetails((prev) => ({
+        ...prev,
+        [schoolId]: { classes: [], teachers: [] },
+      }));
+    } finally {
+      setLoadingDetails((prev) => ({ ...prev, [schoolId]: false }));
+    }
   };
 
   const isExpanded = (schoolId) => !!expanded[schoolId];
@@ -132,8 +172,8 @@ export default function SchoolTable({ rows }) {
                     <td style={td}>{r.district || '-'}</td>
                     <td style={td}>{r.state}</td>
                     <td style={td}>{r.academic_year}</td>
-                    <td style={td}>{r.classes?.length || 0}</td>
-                    <td style={td}>{r.teachers?.length || 0}</td>
+                    <td style={td}>{r.classes_count || 0}</td>
+                    <td style={td}>{r.teachers_count || 0}</td>
                     <td style={td}>
                       <button
                         className="btn btn-outline"
@@ -149,122 +189,99 @@ export default function SchoolTable({ rows }) {
                     </td>
                   </tr>
 
-                  {/* Expanded Row: Class & Teacher Details */}
+                  {/* Expanded Row: Fetch and Show Class & Teacher Details */}
                   {isExpanded(r.school_id) && (
                     <tr id={`details-${r.school_id}`} aria-labelledby={`school-${r.school_id}`}>
                       <td colSpan={9} style={{ padding: '16px', backgroundColor: '#f8fafc', borderTop: 'none' }}>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                            gap: '24px',
-                          }}
-                        >
-                          {/* Classes Table */}
-                          <div>
-                            <h4
-                              id={`classes-header-${r.school_id}`}
-                              style={{
-                                margin: '0 0 10px 0',
-                                fontSize: '16px',
-                                color: '#2d3748',
-                                fontWeight: '600',
-                              }}
-                            >
-                              Classes ({r.classes?.length || 0})
-                            </h4>
-                            {r.classes && r.classes.length > 0 ? (
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead>
-                                  <tr style={{ backgroundColor: '#ebf4ff' }}>
-                                    <th style={{ ...th, fontSize: '12px' }}>CLASS</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>SECTION</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>FOUNDATION</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>PROGRAM</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>GROUP</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>STUDENTS</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {r.classes.map((c, idx) => (
-                                    <tr key={idx}>
-                                      <td style={td}>{c.class}</td>
-                                      <td style={td}>{c.section}</td>
-                                      <td style={td}>{c.foundation}</td>
-                                      <td style={td}>{c.program}</td>
-                                      <td style={td}>{c.group}</td>
-                                      <td style={td}>{c.num_students}</td>
+                        {loadingDetails[r.school_id] ? (
+                          <p>Loading details...</p>
+                        ) : (
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                              gap: '24px',
+                            }}
+                          >
+                            {/* Classes Table */}
+                            <div>
+                              <h4 style={sectionHeader}>
+                                Classes ({schoolDetails[r.school_id]?.classes?.length || 0})
+                              </h4>
+                              {schoolDetails[r.school_id]?.classes?.length > 0 ? (
+                                <table style={innerTable}>
+                                  <thead>
+                                    <tr style={{ backgroundColor: '#ebf4ff' }}>
+                                      <th style={thSmall}>CLASS</th>
+                                      <th style={thSmall}>SECTION</th>
+                                      <th style={thSmall}>FOUNDATION</th>
+                                      <th style={thSmall}>PROGRAM</th>
+                                      <th style={thSmall}>GROUP</th>
+                                      <th style={thSmall}>STUDENTS</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <p style={{ color: '#718096', fontSize: '14px' }}>- No classes added -</p>
-                            )}
-                          </div>
+                                  </thead>
+                                  <tbody>
+                                    {schoolDetails[r.school_id].classes.map((c, idx) => (
+                                      <tr key={idx}>
+                                        <td style={tdSmall}>{c.class}</td>
+                                        <td style={tdSmall}>{c.section}</td>
+                                        <td style={tdSmall}>{c.foundation}</td>
+                                        <td style={tdSmall}>{c.program}</td>
+                                        <td style={tdSmall}>{c.group}</td>
+                                        <td style={tdSmall}>{c.num_students}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <p style={emptyText}>- No classes added -</p>
+                              )}
+                            </div>
 
-                          {/* Teachers Table */}
-                          <div>
-                            <h4
-                              id={`teachers-header-${r.school_id}`}
-                              style={{
-                                margin: '0 0 10px 0',
-                                fontSize: '16px',
-                                color: '#2d3748',
-                                fontWeight: '600',
-                              }}
-                            >
-                              Teachers ({r.teachers?.length || 0})
-                            </h4>
-                            {r.teachers && r.teachers.length > 0 ? (
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead>
-                                  <tr style={{ backgroundColor: '#ebf4ff' }}>
-                                    <th style={{ ...th, fontSize: '12px' }}>NAME</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>CONTACT</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>EMAIL</th>
-                                    <th style={{ ...th, fontSize: '12px' }}>ASSIGNMENTS</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {r.teachers.map((t, idx) => (
-                                    <tr key={idx}>
-                                      <td style={td}>{t.name}</td>
-                                      <td style={td}>{t.contact || '-'}</td>
-                                      <td style={td}>{t.email || '-'}</td>
-                                      <td style={td}>
-                                        {t.assignments.length > 0 ? (
-                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                            {t.assignments.map((a, i) => (
-                                              <span
-                                                key={i}
-                                                style={{
-                                                  display: 'inline-block',
-                                                  padding: '2px 6px',
-                                                  backgroundColor: '#4299e1',
-                                                  color: 'white',
-                                                  borderRadius: '4px',
-                                                  fontSize: '12px',
-                                                  whiteSpace: 'nowrap',
-                                                }}
-                                              >
-                                                {a.class} • {a.section} • {a.subject}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <span style={{ color: '#718096' }}>-</span>
-                                        )}
-                                      </td>
+                            {/* Teachers Table */}
+                            <div>
+                              <h4 style={sectionHeader}>
+                                Teachers ({schoolDetails[r.school_id]?.teachers?.length || 0})
+                              </h4>
+                              {schoolDetails[r.school_id]?.teachers?.length > 0 ? (
+                                <table style={innerTable}>
+                                  <thead>
+                                    <tr style={{ backgroundColor: '#ebf4ff' }}>
+                                      <th style={thSmall}>NAME</th>
+                                      <th style={thSmall}>CONTACT</th>
+                                      <th style={thSmall}>EMAIL</th>
+                                      <th style={thSmall}>ASSIGNMENTS</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <p style={{ color: '#718096', fontSize: '14px' }}>- No teachers added -</p>
-                            )}
+                                  </thead>
+                                  <tbody>
+                                    {schoolDetails[r.school_id].teachers.map((t, idx) => (
+                                      <tr key={idx}>
+                                        <td style={tdSmall}>{t.name}</td>
+                                        <td style={tdSmall}>{t.contact || '-'}</td>
+                                        <td style={tdSmall}>{t.email || '-'}</td>
+                                        <td style={tdSmall}>
+                                          {Array.isArray(t.teacher_assignments) && t.teacher_assignments.length > 0 ? (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                              {t.teacher_assignments.map((a, i) => (
+                                                <span key={i} style={badge}>
+                                                  {a.class} • {a.section} • {a.subject}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <span style={emptySpan}>-</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <p style={emptyText}>- No teachers added -</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -296,4 +313,25 @@ const td = {
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
+};
+
+const thSmall = { ...th, fontSize: '12px' };
+const tdSmall = { ...td, fontSize: '13px', padding: '6px 10px' };
+const sectionHeader = {
+  margin: '0 0 10px 0',
+  fontSize: '16px',
+  color: '#2d3748',
+  fontWeight: '600',
+};
+const innerTable = { width: '100%', borderCollapse: 'collapse' };
+const emptyText = { color: '#718096', fontSize: '14px' };
+const emptySpan = { color: '#718096' };
+const badge = {
+  display: 'inline-block',
+  padding: '2px 6px',
+  backgroundColor: '#4299e1',
+  color: 'white',
+  borderRadius: '4px',
+  fontSize: '12px',
+  whiteSpace: 'nowrap',
 };

@@ -367,7 +367,7 @@ export default function SchoolForm({ onSubmit }) {
 
               {/* Multi-select dropdown for CONCAT(Class, Section, Subject) */}
               <div>
-                <label>Assignments (Class • Section • Subject)</label>
+                <label>Allotment (Class • Section • Subject)</label>
                 <MultiAssignDropdown
                   options={assignOptions}
                   value={tAssignments}
