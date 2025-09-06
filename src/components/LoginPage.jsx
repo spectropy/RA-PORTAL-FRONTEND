@@ -14,50 +14,25 @@ const ROLES = {
   GUEST: "GUEST",
 };
 
-// 🔐 Dev-only credentials (replace with backend later)
+// 🔐 Dev-only credentials for non-owner roles
 const CREDENTIALS = {
-  OWNER: { username: "owner", password: "owner@123" },
   TEACHER: { username: "teacher", password: "teacher@123" },
   STUDENT: { username: "student", password: "student@123" },
   PARENT: { username: "parent", password: "parent@123" },
   ADMIN: { username: "admin", password: "spectropy@123" },
 };
 
-// 🔐 Reusable Password Input with Eye Toggle
-function PasswordInput({ value, onChange, placeholder }) {
-  const [showPassword, setShowPassword] = useState(false);
-
-  return (
-    <div style={styles.passwordContainer}>
-      <input
-        type={showPassword ? "text" : "password"}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        style={styles.input}
-      />
-      <button
-        type="button"
-        onClick={() => setShowPassword(!showPassword)}
-        style={styles.eyeButton}
-        aria-label={showPassword ? "Hide password" : "Show password"}
-        title={showPassword ? "Hide password" : "Show password"}
-      >
-        {showPassword ? "🙈" : "👁️"}
-      </button>
-    </div>
-  );
-}
-
 export default function LoginPage({ onLogin }) {
   const [showAdminForm, setShowAdminForm] = useState(false);
   const [loginStep, setLoginStep] = useState(null);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [roleUsername, setRoleUsername] = useState("");
+  const [username, setUsername] = useState(""); // Admin username
+  const [password, setPassword] = useState(""); // Admin password
+  const [roleUsername, setRoleUsername] = useState(""); // For Teacher/Parent/Student
   const [rolePassword, setRolePassword] = useState("");
-  const [error, setError] = useState("");
-  const [roleError, setRoleError] = useState("");
+  const [schoolId, setSchoolId] = useState(""); // ← New: School ID input
+  const [error, setError] = useState(""); // Admin error
+  const [roleError, setRoleError] = useState(""); // Role login error
+  const [schoolIdError, setSchoolIdError] = useState(""); // School ID error
 
   // ← Back to role selection
   const handleBack = () => {
@@ -67,11 +42,13 @@ export default function LoginPage({ onLogin }) {
     setPassword("");
     setRoleUsername("");
     setRolePassword("");
+    setSchoolId("");
     setError("");
     setRoleError("");
+    setSchoolIdError("");
   };
 
-  // 🛠️ Admin Login
+  // 🛠️ Admin Login (username + password)
   const handleAdminSubmit = (e) => {
     e.preventDefault();
     if (username === CREDENTIALS.ADMIN.username && password === CREDENTIALS.ADMIN.password) {
@@ -82,35 +59,46 @@ export default function LoginPage({ onLogin }) {
     }
   };
 
-  // 🏫 School Owner Login (Backend)
+   // 🏫 School Owner Login (Backend)
   const handleOwnerLogin = async (e) => {
-    e.preventDefault();
-    setRoleError("");
+  e.preventDefault();
+  setSchoolIdError("");
+  const username = schoolId.trim().toUpperCase(); // Using schoolId state for username
+  const password = rolePassword.trim().toUpperCase(); // Use rolePassword for password field
 
-    try {
-      const response = await fetch('http://localhost:4000/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: roleUsername,
-          password: rolePassword,
-          role: ROLES.OWNER,
-        }),
-      });
+  // Validate format: STATE (2 letters) + YY (2 digits) + NN (2 digits)
+  const idRegex = /^[A-Z]{2}\d{4}$/;
+  if (!idRegex.test(username)) {
+    setSchoolIdError("Invalid format. Use: AA0000 (e.g., TS2501)");
+    return;
+  }
 
-      const data = await response.json();
+  if (username !== password) {
+    setSchoolIdError("Username and Password must be the same School ID.");
+    return;
+  }
 
-      if (!response.ok) {
-        setRoleError(data.error || 'Invalid credentials');
-        return;
-      }
-
-      sessionStorage.setItem('sp_school_id', data.school_id);
-      setLoginStep("owner-dashboard");
-    } catch (err) {
-      setRoleError('Network error. Is backend running?');
+  try {
+    const res = await fetch(`http://localhost:4000/api/schools/${username}`);
+    if (!res.ok) {
+      setSchoolIdError("Invalid School ID. School not found.");
+      return;
     }
-  };
+
+    const schoolData = await res.json();
+
+    // ✅ Save session
+    sessionStorage.setItem("sp_school_id", username);
+    sessionStorage.setItem("sp_school_name", schoolData.school_name || "Unknown School");
+    sessionStorage.setItem("sp_user", JSON.stringify({ role: ROLES.OWNER, school_id: username }));
+
+    // 🚀 Go to dashboard
+    setLoginStep("owner-dashboard");
+  } catch (err) {
+    console.error("Network error:", err);
+    setSchoolIdError("Network error. Is the server running?");
+  }
+};
 
   // 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
   const handleRoleLogin = (role) => async (e) => {
@@ -142,8 +130,8 @@ export default function LoginPage({ onLogin }) {
     return <GuestPage onBack={handleBack} />;
   }
 
-  // --- Reusable Login Form ---
-  const renderLoginForm = (title, emoji, role, onSubmit) => (
+  // --- Reusable Login Form Component ---
+  const renderLoginForm = (title, emoji, onSubmit, children) => (
     <div style={styles.wrap}>
       <div style={styles.card}>
         <header style={styles.header}>
@@ -152,26 +140,9 @@ export default function LoginPage({ onLogin }) {
         </header>
 
         <form onSubmit={onSubmit} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Username</label>
-            <input
-              type="text"
-              value={roleUsername}
-              onChange={(e) => setRoleUsername(e.target.value)}
-              style={styles.input}
-              placeholder={`e.g., ${role.toLowerCase()}`}
-              autoFocus
-            />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <PasswordInput
-              value={rolePassword}
-              onChange={(e) => setRolePassword(e.target.value)}
-              placeholder="Enter password"
-            />
-          </div>
+          {children}
           {roleError && <div style={styles.error}>{roleError}</div>}
+          {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
 
           <div style={styles.formActions}>
             <button type="button" onClick={handleBack} style={styles.cancelBtn}>
@@ -190,18 +161,129 @@ export default function LoginPage({ onLogin }) {
     </div>
   );
 
-  // --- Specific Login Forms ---
-  if (loginStep === "owner-login") {
-    return renderLoginForm("School Owner", "🏫", ROLES.OWNER, handleOwnerLogin);
-  }
+  // --- School Owner: Enter School ID Only ---
+// --- School Owner: Username & Password = School ID ---
+if (loginStep === "owner-login") {
+  return renderLoginForm(
+    "School Owner",
+    "🏫",
+    handleOwnerLogin,
+    <>
+      {/* Username Field */}
+      <div style={styles.inputGroup}>
+        <label style={styles.label}>Username (School ID)</label>
+        <input
+          type="text"
+          value={schoolId}
+          onChange={(e) => setSchoolId(e.target.value)}
+          style={styles.input}
+          placeholder="e.g., TS2501"
+          autoFocus
+        />
+      </div>
+
+      {/* Password Field */}
+      <div style={styles.inputGroup}>
+        <label style={styles.label}>Password (Same School ID)</label>
+        <PasswordInput
+          value={rolePassword}
+          onChange={(e) => setRolePassword(e.target.value)}
+          placeholder="Enter School ID again"
+        />
+      </div>
+
+      {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
+    </>
+  );
+}
+  // --- Teacher Login ---
   if (loginStep === "teacher-login") {
-    return renderLoginForm("Teacher", "👩‍🏫", ROLES.TEACHER, handleRoleLogin("TEACHER"));
+    return renderLoginForm(
+      "Teacher",
+      "👩‍🏫",
+      handleRoleLogin("TEACHER"),
+      <>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Username</label>
+          <input
+            type="text"
+            value={roleUsername}
+            onChange={(e) => setRoleUsername(e.target.value)}
+            style={styles.input}
+            placeholder="e.g., teacher"
+            autoFocus
+          />
+        </div>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>
+    );
   }
+
+  // --- Student Login ---
   if (loginStep === "student-login") {
-    return renderLoginForm("Student", "🎓", ROLES.STUDENT, handleRoleLogin("STUDENT"));
+    return renderLoginForm(
+      "Student",
+      "🎓",
+      handleRoleLogin("STUDENT"),
+      <>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Username</label>
+          <input
+            type="text"
+            value={roleUsername}
+            onChange={(e) => setRoleUsername(e.target.value)}
+            style={styles.input}
+            placeholder="e.g., student"
+            autoFocus
+          />
+        </div>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>
+    );
   }
+
+  // --- Parent Login ---
   if (loginStep === "parent-login") {
-    return renderLoginForm("Parent", "👨‍👩‍👧‍👦", ROLES.PARENT, handleRoleLogin("PARENT"));
+    return renderLoginForm(
+      "Parent",
+      "👨‍👩‍👧‍👦",
+      handleRoleLogin("PARENT"),
+      <>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Username</label>
+          <input
+            type="text"
+            value={roleUsername}
+            onChange={(e) => setRoleUsername(e.target.value)}
+            style={styles.input}
+            placeholder="e.g., parent"
+            autoFocus
+          />
+        </div>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>
+    );
   }
 
   // --- Admin Login Form ---
@@ -314,6 +396,32 @@ export default function LoginPage({ onLogin }) {
           </small>
         </footer>
       </div>
+    </div>
+  );
+}
+
+// --- Password Input Component ---
+function PasswordInput({ value, onChange, placeholder }) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <div style={styles.passwordContainer}>
+      <input
+        type={showPassword ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        style={styles.input}
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword(!showPassword)}
+        style={styles.eyeButton}
+        aria-label={showPassword ? "Hide password" : "Show password"}
+        title={showPassword ? "Hide password" : "Show password"}
+      >
+        {showPassword ? "🙈" : "👁️"}
+      </button>
     </div>
   );
 }
