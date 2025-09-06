@@ -198,8 +198,8 @@ export default function SchoolTable({ rows }) {
                         ) : (
                           <div
                             style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                              display: 'flex',
+                              flexDirection: 'column',
                               gap: '24px',
                             }}
                           >

@@ -34,8 +34,14 @@ export default function ReportButtons({ rows }) {
           'DISTRICT': 'district',
           'STATE': 'state',
           'ACADEMIC_YEAR': 'academic_year',
-          'CLASSES_COUNT': (r) => r.classes?.length || 0,
-          'TEACHERS_COUNT': (r) => r.teachers?.length || 0,
+          'CLASSES_COUNT': (r) => {
+            if (Array.isArray(r.classes)) return r.classes.length;
+            return r.classes_count || 0;
+          },
+          'TEACHERS_COUNT': (r) => {
+            if (Array.isArray(r.teachers)) return r.teachers.length;
+            return r.teachers_count || 0;
+          },
         };
 
         const csvRows = rows.map((r) =>
@@ -102,17 +108,27 @@ export default function ReportButtons({ rows }) {
         // Metadata
         doc.setFontSize(10);
         doc.setTextColor(100);
+        const totalTeachers = rows.reduce((sum, r) => {
+          if (Array.isArray(r.teachers)) return sum + r.teachers.length;
+          return sum + (r.teachers_count || 0);
+        }, 0);
+
+        const totalClasses = rows.reduce((sum, r) => {
+          if (Array.isArray(r.classes)) return sum + r.classes.length;
+          return sum + (r.classes_count || 0);
+        }, 0);
+
         const metaText = [
           `Generated on: ${now}`,
           `Total Schools: ${rows.length}`,
-          `Total Teachers: ${rows.reduce((sum, r) => sum + (r.teachers?.length || 0), 0)}`,
-          `Total Classes: ${rows.reduce((sum, r) => sum + (r.classes?.length || 0), 0)}`,
+          `Total Teachers: ${totalTeachers}`,
+          `Total Classes: ${totalClasses}`,
         ];
         metaText.forEach((text, i) => {
           doc.text(text, 40, 80 + i * 15);
         });
 
-        // Table
+        // Table Headers
         const headers = [
           'SCHOOL_ID',
           'SCHOOL_NAME',
@@ -124,6 +140,7 @@ export default function ReportButtons({ rows }) {
           'TEACHERS',
         ];
 
+        // Key mapping with fallbacks
         const keyMap = {
           'SCHOOL_ID': 'school_id',
           'SCHOOL_NAME': 'school_name',
@@ -131,8 +148,14 @@ export default function ReportButtons({ rows }) {
           'DISTRICT': 'district',
           'STATE': 'state',
           'ACADEMIC_YEAR': 'academic_year',
-          'CLASSES': (r) => r.classes?.length || 0,
-          'TEACHERS': (r) => r.teachers?.length || 0,
+          'CLASSES': (r) => {
+            if (Array.isArray(r.classes)) return r.classes.length;
+            return r.classes_count || 0;
+          },
+          'TEACHERS': (r) => {
+            if (Array.isArray(r.teachers)) return r.teachers.length;
+            return r.teachers_count || 0;
+          },
         };
 
         const body = rows.map((r) =>
