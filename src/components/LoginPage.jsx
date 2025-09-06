@@ -4,6 +4,8 @@ import TeacherDashboard from "./TeacherDashboard";
 import StudentDashboard from "./StudentDashboard";
 import ParentDashboard from "./ParentDashboard";
 import GuestPage from "./GuestPage";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
 
 const ROLES = {
   ADMIN: "SPECTROPY_ADMIN",
@@ -33,6 +35,7 @@ export default function LoginPage({ onLogin }) {
   const [error, setError] = useState(""); // Admin error
   const [roleError, setRoleError] = useState(""); // Role login error
   const [schoolIdError, setSchoolIdError] = useState(""); // School ID error
+  
 
   // ← Back to role selection
   const handleBack = () => {
@@ -79,7 +82,7 @@ export default function LoginPage({ onLogin }) {
   }
 
   try {
-    const res = await fetch(`http://localhost:4000/api/schools/${username}`);
+    const res = await fetch(`${API_BASE}/api/schools/${username}`);
     if (!res.ok) {
       setSchoolIdError("Invalid School ID. School not found.");
       return;
