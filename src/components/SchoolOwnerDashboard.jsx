@@ -23,7 +23,13 @@ export default function SchoolOwnerDashboard({ onBack }) {
         if (!res.ok) throw new Error("School not found");
 
         const data = await res.json();
-        setSchool(data);
+
+        // ✅ Flatten structure: merge school details with classes/teachers
+        setSchool({
+          ...data.school,        // school details (school_id, school_name, etc.)
+          classes: data.classes || [],
+          teachers: data.teachers || []
+        });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -42,7 +48,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     <div style={{ maxWidth: 1100, margin: '24px auto', padding: 16 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1>🏫 {school.school_name}</h1>
+        <h1>🏫 {school.school_name || 'Unknown School'}</h1>
         <button
           onClick={onBack}
           style={{
@@ -166,7 +172,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   );
 }
 
-// ✅ Corrected Styles
+// ✅ Styles (unchanged)
 const card = {
   border: "1px solid #d3d8e6",
   borderRadius: 12,
@@ -182,7 +188,6 @@ const infoTable = {
   marginTop: 8,
 };
 
-// ✅ Properly define styles for td and th
 const tableCell = {
   padding: '8px',
   borderBottom: '1px solid #ddd',
@@ -190,7 +195,6 @@ const tableCell = {
   textAlign: 'left',
 };
 
-// Apply same style to all td and th in tables
 Object.assign(infoTable, {
   td: tableCell,
   th: { ...tableCell, fontWeight: 'bold', background: '#f7f9fc' }

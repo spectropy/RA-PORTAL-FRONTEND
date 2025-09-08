@@ -155,7 +155,30 @@ export default function SchoolForm({ onSubmit }) {
     if (tAssignments.length === 0) {
       return alert('Select at least one (Class • Section • Subject) assignment')
     }
+    if (!schoolId) {
+      return alert('School ID must be generated before adding teachers.')
+    }
+
+    // Generate next teacher number (01-99)
+    const existingTeacherNumbers = teachers
+      .map(t => t.teacherId?.slice(-2)) // get last 2 digits
+      .filter(n => /^\d{2}$/.test(n))
+      .map(n => parseInt(n, 10))
+      .filter(n => n >= 1 && n <= 99)
+
+    let nextNumber = 1
+    while (nextNumber <= 99 && existingTeacherNumbers.includes(nextNumber)) {
+      nextNumber++
+    }
+
+    if (nextNumber > 99) {
+      return alert('Maximum 99 teachers allowed per school.')
+    }
+
+    const teacherId = `${schoolId}${String(nextNumber).padStart(2, '0')}`
+
     const row = {
+      teacherId, // <-- NEW: Unique ID for teacher
       name: tName.trim(),
       contact: tContact.trim(),
       email: tEmail.trim(),
@@ -166,6 +189,7 @@ export default function SchoolForm({ onSubmit }) {
     // reset row inputs
     setTName(''); setTContact(''); setTEmail(''); setTAssignments([])
   }
+
   function removeTeacherRow(idx) {
     setTeachers(prev => prev.filter((_, i) => i !== idx))
   }
@@ -387,12 +411,18 @@ export default function SchoolForm({ onSubmit }) {
                 <table>
                   <thead>
                     <tr>
-                      <th>NAME</th><th>CONTACT</th><th>EMAIL</th><th>ASSIGNMENTS</th><th></th>
+                      <th>ID</th> {/* <-- NEW COLUMN */}
+                      <th>NAME</th>
+                      <th>CONTACT</th>
+                      <th>EMAIL</th>
+                      <th>ALLOTMENT</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {teachers.map((t, idx) => (
                       <tr key={idx}>
+                        <td>{t.teacherId}</td> {/* <-- DISPLAY TEACHER ID */}
                         <td>{t.name}</td>
                         <td>{t.contact}</td>
                         <td>{t.email}</td>
@@ -426,7 +456,8 @@ export default function SchoolForm({ onSubmit }) {
       </div>
 
       <p className="help" style={{ marginTop: 8 }}>
-        SCHOOL_ID format: <b>STATE_ABBR + YY + NN</b> (e.g., TS + 25 + 01 → <b>TS2501</b>).
+        SCHOOL_ID format: <b>STATE_ABBR + YY + NN</b> (e.g., TS + 25 + 01 → <b>TS2501</b>).<br/>
+        TEACHER_ID format: <b>SCHOOL_ID + 01-99</b> (e.g., <b>TS250101</b>, <b>TS250102</b>, ...).
       </p>
     </form>
   )
@@ -474,7 +505,7 @@ function MultiAssignDropdown({ options, value, onChange }) {
       >
         <div className="multi-value">
           {value.length === 0 ? (
-            <span className="opt-muted">Select assignments…</span>
+            <span className="opt-muted">Select allotments…</span>
           ) : value.slice(0,3).map(v => (
             <span className="badge" key={v.key}>{v.class} • {v.section} • {v.subject}</span>
           ))}

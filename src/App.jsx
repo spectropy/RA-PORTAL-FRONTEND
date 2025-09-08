@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 
 import LoginPage from './components/LoginPage.jsx';
 import Dashboard from './Dashboard.jsx'; // Your main page (SchoolForm + Table + Upload)
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 // ===== Auth Context Wrapper =====
 function Protected({ children, allowedRoles = ['SPECTROPY_ADMIN'] }) {

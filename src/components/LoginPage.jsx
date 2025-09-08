@@ -18,7 +18,6 @@ const ROLES = {
 
 // 🔐 Dev-only credentials for non-owner roles
 const CREDENTIALS = {
-  TEACHER: { username: "teacher", password: "teacher@123" },
   STUDENT: { username: "student", password: "student@123" },
   PARENT: { username: "parent", password: "parent@123" },
   ADMIN: { username: "admin", password: "spectropy@123" },
@@ -103,18 +102,92 @@ export default function LoginPage({ onLogin }) {
   }
 };
 
-  // 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
-  const handleRoleLogin = (role) => async (e) => {
-    e.preventDefault();
-    setRoleError("");
+// 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
+const handleRoleLogin = (role) => async (e) => {
+  e.preventDefault();
+  setRoleError("");
 
-    const creds = CREDENTIALS[role];
-    if (roleUsername === creds.username && rolePassword === creds.password) {
-      setLoginStep(`${role.toLowerCase()}-dashboard`);
-    } else {
-      setRoleError(`Invalid ${role.toLowerCase()} credentials`);
+  const schoolId = sessionStorage.getItem("sp_school_id");
+
+  // 🔐 TEACHER: Validate against actual teacher names in the school
+  if (role === "TEACHER") {
+    if (!schoolId) {
+      setRoleError("No school context. Please log in as School Owner first.");
+      return;
     }
-  };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+      if (!res.ok) throw new Error("School not found");
+
+      const schoolData = await res.json();
+      const teachers = Array.isArray(schoolData.teachers) ? schoolData.teachers : [];
+
+      const username = roleUsername.trim();
+      const password = rolePassword.trim();
+
+      // ❌ Username and password must be exactly the same
+      if (username !== password) {
+        setRoleError("Username and password must be the same.");
+        return;
+      }
+
+      // ❌ Check if teacher name exists (exact match, case-sensitive)
+      const matchedTeacher = teachers.find(t => t.name.trim() === username);
+
+      if (!matchedTeacher) {
+        setRoleError("Teacher name not found in this school.");
+        return;
+      }
+
+      // ✅ Login successful — Save full teacher info
+      sessionStorage.setItem("sp_user", JSON.stringify({
+        role: ROLES.TEACHER,
+        school_id: schoolId,
+        teacher_id: matchedTeacher.teacher_id || null,
+        name: matchedTeacher.name,
+        contact: matchedTeacher.contact,
+        email: matchedTeacher.email,
+        teacher_assignments: matchedTeacher.teacher_assignments || []
+      }));
+
+      setLoginStep("teacher-dashboard");
+    } catch (err) {
+      console.error("Error during teacher login:", err);
+      setRoleError("Failed to verify teacher. Is the server running?");
+    }
+
+    return;
+  }
+
+  // 🎓 STUDENT: Hardcoded login
+  if (role === "STUDENT") {
+    if (roleUsername === "student" && rolePassword === "student") {
+      sessionStorage.setItem("sp_user", JSON.stringify({ 
+        role: ROLES.STUDENT,
+        username: "student"
+      }));
+      setLoginStep("student-dashboard");
+    } else {
+      setRoleError("Use 'student' as both username and password.");
+    }
+    return;
+  }
+
+  // 👨‍👩‍👧‍👦 PARENT: Hardcoded login
+  if (role === "PARENT") {
+    if (roleUsername === "parent" && rolePassword === "parent") {
+      sessionStorage.setItem("sp_user", JSON.stringify({ 
+        role: ROLES.PARENT,
+        username: "parent"
+      }));
+      setLoginStep("parent-dashboard");
+    } else {
+      setRoleError("Use 'parent' as both username and password.");
+    }
+    return;
+  }
+};
 
   // --- Dashboard Routes ---
   if (loginStep === "owner-dashboard") {
@@ -207,7 +280,7 @@ if (loginStep === "owner-login") {
       handleRoleLogin("TEACHER"),
       <>
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Username</label>
+          <label style={styles.label}>Username (Teacher Name)</label>
           <input
             type="text"
             value={roleUsername}
@@ -218,7 +291,7 @@ if (loginStep === "owner-login") {
           />
         </div>
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Password</label>
+          <label style={styles.label}>Password (Same Teacher Name)</label>
           <PasswordInput
             value={rolePassword}
             onChange={(e) => setRolePassword(e.target.value)}
