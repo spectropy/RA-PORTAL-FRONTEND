@@ -3,259 +3,234 @@ import React, { useState, useEffect } from "react";
 
 export default function TeacherDashboard({ onBack }) {
   const [teacher, setTeacher] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [allStudents, setAllStudents] = useState([]);
+  const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [classFilter, setClassFilter] = useState("");
-  const [sectionFilter, setSectionFilter] = useState("");
-
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
   useEffect(() => {
-    const fetchTeacherData = async () => {
-      try {
-        // Get teacher data from session
-        const user = sessionStorage.getItem("sp_user");
-        if (!user) {
-          alert("Not authorized. Please log in.");
-          onBack();
-          return;
-        }
+    const user = sessionStorage.getItem("sp_user");
+    const schoolName = sessionStorage.getItem("sp_school_name");
 
-        const userData = JSON.parse(user);
-        if (userData.role !== "TEACHER") {
-          alert("Access denied.");
-          onBack();
-          return;
-        }
+    if (!user) {
+      alert("No user data found. Please log in again.");
+      onBack();
+      return;
+    }
 
-        setTeacher(userData);
-
-        // Fetch all students of the school
-        const schoolId = userData.school_id;
-        const res = await fetch(`${API_BASE}/api/students?school_id=${schoolId}`);
-        
-        if (!res.ok) throw new Error("Failed to fetch students");
-
-        const studentList = await res.json();
-        setAllStudents(studentList);
-
-        // Filter students based on teacher's assignments
-        const assignedClasses = new Set();
-        const assignedSections = new Set();
-
-        if (Array.isArray(userData.teacher_assignments)) {
-          userData.teacher_assignments.forEach((a) => {
-            assignedClasses.add(a.class);
-            assignedSections.add(a.section);
-          });
-        }
-
-        const filteredStudents = studentList.filter((s) =>
-          assignedClasses.has(s.class) && assignedSections.has(s.section)
-        );
-
-        setStudents(filteredStudents);
-      } catch (err) {
-        console.error("Error loading teacher dashboard:", err);
-        alert("Failed to load data. Please try again.");
-      } finally {
-        setLoading(false);
+    try {
+      const parsed = JSON.parse(user);
+      if (parsed.role !== "TEACHER") {
+        alert("Access denied. Teachers only.");
+        onBack();
+        return;
       }
-    };
 
-    fetchTeacherData();
+      setTeacher(parsed);
+      setSchoolName(schoolName || "Unknown School");
+    } catch (err) {
+      console.error("Failed to parse user data:", err);
+      alert("Session corrupted. Please log in again.");
+      onBack();
+    } finally {
+      setLoading(false);
+    }
   }, [onBack]);
 
-  // Get unique classes and sections from teacher's assignments
-  const classes = Array.from(
-    new Set(teacher?.teacher_assignments?.map((a) => a.class) || [])
-  ).sort();
+  if (loading) {
+    return <div style={styles.centered}>Loading teacher dashboard...</div>;
+  }
 
-  const sections = Array.from(
-    new Set(teacher?.teacher_assignments?.map((a) => a.section) || [])
-  ).sort();
-
-  // Filter students by class and section
-  const filtered = students.filter((s) => {
-    return (classFilter ? s.class === classFilter : true) &&
-           (sectionFilter ? s.section === sectionFilter : true);
-  });
-
-  if (loading) return <p style={styles.container}>Loading teacher profile and students...</p>;
-  if (!teacher) return <p style={styles.container}>No teacher data available.</p>;
+  if (!teacher) {
+    return <div style={styles.centered}>No teacher data available.</div>;
+  }
 
   return (
     <div style={styles.container}>
-      <button onClick={onBack} style={styles.backButton}>
-        ← Back
-      </button>
-
-      <h2>👩‍🏫 Teacher Dashboard</h2>
-
-      {/* Teacher Profile */}
-      <div style={styles.profile}>
-        <p><strong>Name:</strong> {teacher.name}</p>
-        <p><strong>Email:</strong> {teacher.email || 'Not provided'}</p>
-        <p><strong>Contact:</strong> {teacher.contact || 'Not provided'}</p>
-        <p><strong>School ID:</strong> {teacher.school_id}</p>
+      {/* Header */}
+      <div style={styles.header}>
+        <div>
+          <h1 style={styles.title}>👩‍🏫 Teacher Dashboard</h1>
+          <p style={styles.subtitle}>
+            Welcome, <strong>{teacher.name}</strong> • {teacher.teacher_id}
+          </p>
+          <p style={styles.school}>
+            School: <strong>{schoolName}</strong>
+          </p>
+        </div>
+        <button onClick={onBack} style={styles.logoutBtn}>
+          ← Logout
+        </button>
       </div>
 
-      {/* Assignments */}
-      <div style={styles.assignments}>
-        <h3>📘 Your Assignments</h3>
+      {/* Assignments Section */}
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>📚 Your Assignments</h2>
         {Array.isArray(teacher.teacher_assignments) && teacher.teacher_assignments.length > 0 ? (
-          <div style={styles.badgeContainer}>
-            {teacher.teacher_assignments.map((a, idx) => (
-              <span key={idx} style={styles.badge}>
-                {a.class} • {a.section} • {a.subject}
-              </span>
+          <div style={styles.assignmentsGrid}>
+            {teacher.teacher_assignments.map((assignment, idx) => (
+              <div key={idx} style={styles.assignmentCard}>
+                <div style={styles.assignmentHeader}>
+                  <span style={styles.classTag}>
+                    {assignment.class} • {assignment.section}
+                  </span>
+                </div>
+                <div style={styles.subject}>
+                  <strong>Subject:</strong> {assignment.subject}
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <p>No class assignments yet.</p>
+          <p style={styles.noData}>You have no assigned classes yet.</p>
         )}
       </div>
 
-      <hr style={styles.divider} />
-
-      {/* Student List */}
-      <h3>📚 Students in Your Classes</h3>
-
-      <div style={styles.filterRow}>
-        <select
-          value={classFilter}
-          onChange={(e) => setClassFilter(e.target.value)}
-          style={styles.select}
-        >
-          <option value="">All Classes</option>
-          {classes.map((cls) => (
-            <option key={cls} value={cls}>{cls}</option>
-          ))}
-        </select>
-
-        <select
-          value={sectionFilter}
-          onChange={(e) => setSectionFilter(e.target.value)}
-          style={styles.select}
-        >
-          <option value="">All Sections</option>
-          {sections.map((sec) => (
-            <option key={sec} value={sec}>{sec}</option>
-          ))}
-        </select>
+      {/* Quick Actions (Placeholder) */}
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>⚡ Quick Actions</h2>
+        <div style={styles.actions}>
+          <button style={styles.actionBtn} disabled>
+            📝 Upload Marks
+          </button>
+          <button style={styles.actionBtn} disabled>
+            📊 View Analytics
+          </button>
+          <button style={styles.actionBtn} disabled>
+            📅 Attendance
+          </button>
+        </div>
+        <p style={styles.info}>
+          <em>Features coming soon!</em>
+        </p>
       </div>
-
-      {loading ? (
-        <p>Loading students...</p>
-      ) : filtered.length === 0 ? (
-        <p>No students found in the selected classes.</p>
-      ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Roll No</th>
-              <th>Name</th>
-              <th>Class</th>
-              <th>Section</th>
-              <th>Gender</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => (
-              <tr key={s.roll_no || s.id}>
-                <td>{s.roll_no || "—"}</td>
-                <td>{s.name}</td>
-                <td>{s.class}</td>
-                <td>{s.section}</td>
-                <td>{s.gender || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </div>
   );
 }
 
-// Styles
+// ✅ Styles
 const styles = {
   container: {
-    padding: 20,
-    fontFamily: 'Arial, sans-serif',
-    maxWidth: 1100,
-    margin: '0 auto',
+    maxWidth: 1200,
+    margin: '24px auto',
+    padding: '0 16px',
   },
-  backButton: {
+  centered: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '80vh',
+    fontSize: '18px',
+    color: '#4a5568',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: '24px 0',
+    borderBottom: '2px solid #e2e8f0',
+    marginBottom: '24px',
+  },
+  title: {
+    margin: '0 0 8px 0',
+    fontSize: '28px',
+    color: '#2d3748',
+  },
+  subtitle: {
+    margin: '0 0 4px 0',
+    fontSize: '16px',
+    color: '#4a5568',
+  },
+  school: {
+    margin: 0,
+    fontSize: '14px',
+    color: '#718096',
+  },
+  logoutBtn: {
     padding: '8px 16px',
-    margin: '0 0 16px',
-    border: '1px solid #4682b4',
-    background: 'white',
-    color: '#4682b4',
-    borderRadius: 6,
+    background: '#e53e3e',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
     cursor: 'pointer',
+    fontSize: '14px',
     fontWeight: '500',
   },
-  profile: {
-    background: '#f0f8ff',
-    padding: 16,
-    borderRadius: 8,
-    border: '1px solid #add8e6',
-    marginBottom: 16,
+  card: {
+    background: 'white',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    padding: '24px',
+    marginBottom: '24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
-  assignments: {
-    background: '#f9f9f9',
-    padding: 16,
-    borderRadius: 8,
-    border: '1px solid #ddd',
-    marginBottom: 16,
-  },
-  badgeContainer: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  badge: {
-    padding: '4px 8px',
-    background: '#1e90ff',
-    color: 'white',
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  divider: {
-    margin: '20px 0',
-    borderColor: '#ddd',
-  },
-  filterRow: {
-    display: 'flex',
-    gap: 10,
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  },
-  select: {
-    padding: '6px 8px',
-    fontSize: 14,
-    border: '1px solid #ccc',
-    borderRadius: 6,
-    minWidth: 140,
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: 10,
-  },
-  th: {
-    textAlign: 'left',
-    padding: '10px',
-    borderBottom: '2px solid #ddd',
-    background: '#f0f8ff',
+  sectionTitle: {
+    margin: '0 0 16px 0',
+    fontSize: '20px',
+    color: '#2d3748',
     fontWeight: '600',
   },
-  td: {
-    padding: '8px',
-    borderBottom: '1px solid #eee',
-    color: '#333',
+  assignmentsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gap: '16px',
+  },
+  assignmentCard: {
+    background: '#f8fafc',
+    border: '1px solid #cbd5e0',
+    borderRadius: '8px',
+    padding: '16px',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  assignmentCardHover: {
+    transform: 'translateY(-2px)',
+    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+  },
+  assignmentHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+  },
+  classTag: {
+    background: '#4299e1',
+    color: 'white',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  subject: {
+    fontSize: '15px',
+    color: '#2d3748',
+    marginTop: '4px',
+  },
+  noData: {
+    color: '#718096',
+    fontSize: '16px',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: '20px',
+  },
+  actions: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap',
+    marginBottom: '12px',
+  },
+  actionBtn: {
+    padding: '10px 20px',
+    background: '#3182ce',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    opacity: 0.7,
+  },
+  info: {
+    fontSize: '13px',
+    color: '#718096',
+    fontStyle: 'italic',
+    margin: 0,
   },
 };

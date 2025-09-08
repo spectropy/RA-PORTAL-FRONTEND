@@ -109,7 +109,7 @@ const handleRoleLogin = (role) => async (e) => {
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
-  // 🔐 TEACHER: Validate against actual teacher names in the school
+  // 🔐 TEACHER: Validate against actual teacher IDs in the school
   if (role === "TEACHER") {
     if (!schoolId) {
       setRoleError("No school context. Please log in as School Owner first.");
@@ -123,8 +123,8 @@ const handleRoleLogin = (role) => async (e) => {
       const schoolData = await res.json();
       const teachers = Array.isArray(schoolData.teachers) ? schoolData.teachers : [];
 
-      const username = roleUsername.trim();
-      const password = rolePassword.trim();
+      const username = roleUsername.trim().toUpperCase();
+      const password = rolePassword.trim().toUpperCase();
 
       // ❌ Username and password must be exactly the same
       if (username !== password) {
@@ -132,11 +132,11 @@ const handleRoleLogin = (role) => async (e) => {
         return;
       }
 
-      // ❌ Check if teacher name exists (exact match, case-sensitive)
-      const matchedTeacher = teachers.find(t => t.name.trim() === username);
+      // ✅ Check if teacher ID exists (exact match)
+      const matchedTeacher = teachers.find(t => t.teacherId && t.teacherId.trim() === username);
 
       if (!matchedTeacher) {
-        setRoleError("Teacher name not found in this school.");
+        setRoleError("Teacher ID not found in this school.");
         return;
       }
 
@@ -144,7 +144,7 @@ const handleRoleLogin = (role) => async (e) => {
       sessionStorage.setItem("sp_user", JSON.stringify({
         role: ROLES.TEACHER,
         school_id: schoolId,
-        teacher_id: matchedTeacher.teacher_id || null,
+        teacher_id: matchedTeacher.teacherId || null,
         name: matchedTeacher.name,
         contact: matchedTeacher.contact,
         email: matchedTeacher.email,
@@ -159,7 +159,7 @@ const handleRoleLogin = (role) => async (e) => {
 
     return;
   }
-
+  
   // 🎓 STUDENT: Hardcoded login
   if (role === "STUDENT") {
     if (roleUsername === "student" && rolePassword === "student") {
