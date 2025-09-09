@@ -1,10 +1,12 @@
-// src/Dashboard.jsx
 import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { getSchools, createSchool } from "./api.js" // Removed uploadExcel since it's no longer used
+import { getSchools, createSchool } from "./api.js"
 import SchoolForm from "./components/SchoolForm.jsx"
 import SchoolTable from "./components/SchoolTable.jsx"
 import ReportButtons from "./components/ReportButtons.jsx"
+import ClassTeacherRegistration from "./components/ClassTeacherRegistration.jsx"
+import StudentRegistration from "./components/StudentRegistration.jsx"
+import ExamsRegistration from "./components/ExamsRegistration.jsx"
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -32,6 +34,7 @@ export default function Dashboard() {
   const [schools, setSchools] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [activeTab, setActiveTab] = useState('school-registration')
 
   async function refresh() {
     setLoading(true)
@@ -60,13 +63,18 @@ export default function Dashboard() {
     }
   }
 
-  // Removed onUpload function since UploadExcel is removed
+  const tabs = [
+    { id: 'school-registration', label: '🏫 School Registration' },
+    { id: 'class-teacher-registration', label: '👩‍🏫 Class/Teacher Registration' },
+    { id: 'student-registration', label: '🎓 Student Registration' },
+    { id: 'exams-registration', label: '📝 Exams Registration' },
+  ];
 
   return (
     <div style={box}>
       {/* Top bar with logout */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <h1 style={h1}>🎓 SPECTROPY — School Registration & Report</h1>
+        <h1 style={h1}>🎓 SPECTROPY — School Management System</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => navigate("/login")}
@@ -96,20 +104,73 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* School Form */}
-      <div style={card}>
-        <SchoolForm onSubmit={onAddSchool} />
+      {/* Tab Navigation */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '10px', 
+        marginBottom: '20px', 
+        overflowX: 'auto',
+        padding: '10px 0',
+        borderBottom: '1px solid #e0e0e0'
+      }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '10px 20px',
+              background: activeTab === tab.id ? '#1e90ff' : '#f8f9fa',
+              color: activeTab === tab.id ? 'white' : '#475569',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px 8px 0 0',
+              cursor: 'pointer',
+              fontWeight: activeTab === tab.id ? 'bold' : 'normal',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* School List */}
-      <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>School List</h2>
-          <ReportButtons rows={schools} />
+      {/* Render content based on active tab */}
+      {activeTab === 'school-registration' && (
+        <div>
+          {/* School Form */}
+          <div style={card}>
+            <SchoolForm onSubmit={onAddSchool} />
+          </div>
+          
+          {/* School List - Now moved inside School Registration tab */}
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>School List</h2>
+              <ReportButtons rows={schools} />
+            </div>
+            {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
+            {error ? <p style={{ color: 'crimson' }}>{error}</p> : null}
+          </div>
         </div>
-        {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
-        {error ? <p style={{ color: 'crimson' }}>{error}</p> : null}
-      </div>
+      )}
+
+      {activeTab === 'class-teacher-registration' && (
+        <div style={card}>
+          <ClassTeacherRegistration schools={schools} />
+        </div>
+      )}
+
+      {activeTab === 'student-registration' && (
+        <div style={card}>
+          <StudentRegistration schools={schools} />
+        </div>
+      )}
+
+      {activeTab === 'exams-registration' && (
+        <div style={card}>
+          <ExamsRegistration schools={schools} />
+        </div>
+      )}
     </div>
   )
 }

@@ -63,7 +63,7 @@ export default function TeacherDashboard({ onBack }) {
 
       {/* Assignments Section */}
       <div style={styles.card}>
-        <h2 style={styles.sectionTitle}>📚 Your Assignments</h2>
+        <h2 style={styles.sectionTitle}>📚 Your ALLOTMENTS</h2>
         {Array.isArray(teacher.teacher_assignments) && teacher.teacher_assignments.length > 0 ? (
           <div style={styles.assignmentsGrid}>
             {teacher.teacher_assignments.map((assignment, idx) => (
