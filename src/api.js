@@ -162,3 +162,19 @@ export async function getAcademicYears() {
   
   return years;
 }
+// ========================
+// 📝 EXAM REGISTRATION
+// ========================
+
+// ... your existing getFoundations, getPrograms, createExam ...
+
+// 👇 ADD THIS FUNCTION
+export async function getExams() {
+  const r = await fetch(`${API_BASE}/api/exams`);
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`GET /api/exams failed: ${r.status} ${t}`);
+  }
+  const j = await r.json();
+  return j;
+}

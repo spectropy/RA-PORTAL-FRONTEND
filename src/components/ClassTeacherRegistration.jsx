@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears } from '../api';
 
+// ===== Constants =====
+const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
+const SECTION_OPTIONS = "ABCDEF".split("");
+const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED", "FF"];
+const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO"];
+const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
+
+const forcedGroupForFoundation = (foundation) => {
+  if (foundation === "IIT-MED") return "PCMB";
+  if (foundation === "IIT") return "PCM";
+  if (foundation === "MED") return "PCB";
+  return "";
+};
+
 export default function ClassTeacherRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
@@ -210,9 +224,19 @@ export default function ClassTeacherRegistration({ schools = [] }) {
   };
 
   const handleClassChange = (e) => {
-    setNewClass({
-      ...newClass,
-      [e.target.name]: e.target.value
+    const { name, value } = e.target;
+    setNewClass(prev => {
+      const updated = { ...prev, [name]: value };
+
+      // Auto-set group if foundation is selected
+      if (name === 'foundation') {
+        const forced = forcedGroupForFoundation(value);
+        if (forced) {
+          updated.group = forced;
+        }
+      }
+
+      return updated;
     });
   };
 
@@ -381,7 +405,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
             )}
           </div>
 
-          {/* Add New Class Form */}
+          {/* ✅ UPDATED: Add New Class Form */}
           <div style={{ marginBottom: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '8px' }}>
             <h4 style={{ margin: '0 0 15px 0' }}>Add New Class</h4>
             <form onSubmit={handleAddClass}>
@@ -390,12 +414,10 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Class *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="class"
                     value={newClass.class}
                     onChange={handleClassChange}
-                    placeholder="e.g., 6, 7, 8"
                     style={{
                       width: '100%',
                       padding: '8px',
@@ -403,19 +425,22 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       borderRadius: '4px'
                     }}
                     required
-                  />
+                  >
+                    <option value="">-- Select Class --</option>
+                    {GRADE_OPTIONS.map(grade => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Section *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="section"
                     value={newClass.section}
                     onChange={handleClassChange}
-                    placeholder="e.g., A, B, C"
                     style={{
                       width: '100%',
                       padding: '8px',
@@ -423,64 +448,78 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       borderRadius: '4px'
                     }}
                     required
-                  />
+                  >
+                    <option value="">-- Select Section --</option>
+                    {SECTION_OPTIONS.map(sec => (
+                      <option key={sec} value={sec}>{sec}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Foundation
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="foundation"
                     value={newClass.foundation}
                     onChange={handleClassChange}
-                    placeholder="e.g., CBSE, ICSE"
                     style={{
                       width: '100%',
                       padding: '8px',
                       border: '1px solid #ccc',
                       borderRadius: '4px'
                     }}
-                  />
+                  >
+                    <option value="">-- Select Foundation --</option>
+                    {FOUNDATION_OPTIONS.map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Program
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="program"
                     value={newClass.program}
                     onChange={handleClassChange}
-                    placeholder="e.g., Regular, Advanced"
                     style={{
                       width: '100%',
                       padding: '8px',
                       border: '1px solid #ccc',
                       borderRadius: '4px'
                     }}
-                  />
+                  >
+                    <option value="">-- Select Program --</option>
+                    {PROGRAM_OPTIONS.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Group
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="group"
                     value={newClass.group}
                     onChange={handleClassChange}
-                    placeholder="e.g., Science, Arts"
                     style={{
                       width: '100%',
                       padding: '8px',
                       border: '1px solid #ccc',
                       borderRadius: '4px'
                     }}
-                  />
+                  >
+                    <option value="">-- Select Group --</option>
+                    {GROUP_OPTIONS.map(gp => (
+                      <option key={gp} value={gp}>{gp}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
@@ -493,6 +532,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                     value={newClass.numStudents}
                     onChange={handleClassChange}
                     placeholder="0"
+                    min="0"
                     style={{
                       width: '100%',
                       padding: '8px',

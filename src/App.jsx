@@ -64,7 +64,6 @@ function AppRoutes() {
     navigate('/login', { replace: true });
   };
 
-  // Optional: Expose logout to Dashboard via context or props if needed
   // For now, you can add a Logout button inside Dashboard conditionally
 
   return (
