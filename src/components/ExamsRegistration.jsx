@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSchoolById, createExam, getExams } from '../api';
-
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 // Define the constants as requested
 const FOUNDATION_OPTIONS = [
   { id: 'IIT-MED', name: 'IIT-MED' },
@@ -69,7 +69,7 @@ const ExamResultsView = ({ selectedExam, onBack }) => {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`/api/exams/${selectedExam.id}/results/upload`, {
+      const response = await fetch(`${API_BASE}/api/exams/${selectedExam.id}/results/upload`, {
         method: 'POST',
         body: formData,
       });
