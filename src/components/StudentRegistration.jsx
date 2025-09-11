@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getSchoolById, uploadStudents, getAcademicYears } from '../api';
 
+// 👇 NEW: Import getStudentsByClassSection (you'll need to create this API function)
+import { getStudentsByClassSection } from '../api';
+
 export default function StudentRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
@@ -12,17 +15,18 @@ export default function StudentRegistration({ schools = [] }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // 👇 NEW: State for students table
+  const [students, setStudents] = useState([]);
+  const [fetchingStudents, setFetchingStudents] = useState(false);
+
   useEffect(() => {
-    // Fetch academic years
     const fetchAcademicYearsData = async () => {
       try {
         const years = await getAcademicYears();
         setAcademicYears(years);
         
-        // Set default to current academic year
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth();
-        // If month is April or later, use current year as start year
         const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
         const defaultAcademicYear = `${startYear}-${startYear + 1}`;
         
@@ -45,6 +49,13 @@ export default function StudentRegistration({ schools = [] }) {
     }
   }, [selectedSchool, selectedAcademicYear]);
 
+  // 👇 NEW: Fetch students when class-section changes
+  useEffect(() => {
+    if (selectedSchool && selectedClassSection) {
+      fetchStudents();
+    }
+  }, [selectedSchool, selectedClassSection]);
+
   const fetchSchoolData = async () => {
     if (!selectedSchool) return;
     
@@ -60,69 +71,93 @@ export default function StudentRegistration({ schools = [] }) {
     }
   };
 
+  // 👇 NEW: Fetch students for selected school + class-section
+  const fetchStudents = async () => {
+    if (!selectedSchool || !selectedClassSection) return;
+
+    setFetchingStudents(true);
+    try {
+      // Split class-section to get class and section
+      const lastDashIndex = selectedClassSection.lastIndexOf('-');
+      if (lastDashIndex <= 0) return;
+
+      const classValue = selectedClassSection.substring(0, lastDashIndex).trim();
+      const sectionValue = selectedClassSection.substring(lastDashIndex + 1).trim();
+
+      const fetchedStudents = await getStudentsByClassSection(
+        selectedSchool,
+        classValue,
+        sectionValue
+      );
+      setStudents(fetchedStudents || []);
+    } catch (err) {
+      console.error('Error fetching students:', err);
+      setError('Failed to load student list');
+    } finally {
+      setFetchingStudents(false);
+    }
+  };
+
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!selectedSchool) {
-    setError('Please select a school first');
-    return;
-  }
-  
-  if (!selectedClassSection) {
-    setError('Please select a class-section');
-    return;
-  }
-  
-  if (!file) {
-    setError('Please select an Excel file to upload');
-    return;
-  }
-
-  setLoading(true);
-  setError('');
-  setSuccess('');
-
-  try {
-    // ✅ Create FormData and append BOTH file and class_section
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('class_section', selectedClassSection); // 👈 ADD THIS
-
-    await uploadStudents(selectedSchool, formData); // 👈 Only pass schoolId and formData
-    setSuccess('Students uploaded successfully!');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    // Reset form
-    setFile(null);
-    setSelectedClassSection('');
-    document.getElementById('file-upload').value = '';
-  } catch (err) {
-    setError(err.message || 'Failed to upload students');
-  } finally {
-    setLoading(false);
-  }
-};
+    if (!selectedSchool) {
+      setError('Please select a school first');
+      return;
+    }
+    
+    if (!selectedClassSection) {
+      setError('Please select a class-section');
+      return;
+    }
+    
+    if (!file) {
+      setError('Please select an Excel file to upload');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('class_section', selectedClassSection);
+
+      await uploadStudents(selectedSchool, formData);
+      setSuccess('Students uploaded successfully!');
+      
+      // 👇 NEW: Refresh student table after successful upload
+      await fetchStudents();
+
+      // Reset file input
+      setFile(null);
+      document.getElementById('file-upload').value = '';
+    } catch (err) {
+      setError(err.message || 'Failed to upload students');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const downloadSample = () => {
-    // Create sample CSV content
     const sampleData = [
-      ['Student ID', 'First Name', 'Last Name', 'Date of Birth', 'Gender', 'Parent Name', 'Parent Phone', 'Parent Email'],
-      ['STD001', 'John', 'Doe', '2010-05-15', 'Male', 'Jane Doe', '9876543210', 'janedoe@email.com'],
-      ['STD002', 'Jane', 'Smith', '2010-08-22', 'Female', 'Robert Smith', '9876543211', 'robertsmith@email.com']
+      ['ROLLNO', 'CLASS', 'NAME', 'PHONENO', 'EMAILID'],
+      ['116001', 'Grade - 6', 'A GAYATHRI', '7981900487', 'parent1@email.com'],
+      ['116002', 'Grade - 6', 'A VASUDEVA REDDY', '6281571454', 'parent2@email.com']
     ];
 
-    // Create CSV content
-    const csvContent = sampleData.map(row => row.join(',')).join('\n');
-    
-    // Create download link
+    const csvContent = sampleData.map(row => `"${row.join('","')}"`).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'student_sample.csv');
+    link.setAttribute('download', 'student_upload_template.csv');
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -219,7 +254,11 @@ export default function StudentRegistration({ schools = [] }) {
             </label>
             <select
               value={selectedClassSection}
-              onChange={(e) => setSelectedClassSection(e.target.value)}
+              onChange={(e) => {
+                setSelectedClassSection(e.target.value);
+                // 👇 Auto-fetch students when selection changes
+                if (e.target.value) fetchStudents();
+              }}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -306,13 +345,66 @@ export default function StudentRegistration({ schools = [] }) {
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                marginBottom: '30px' // 👈 Add space before table
               }}
               disabled={loading}
             >
               {loading ? 'Uploading...' : 'Upload Students'}
             </button>
           </form>
+
+          {/* 👇 NEW: Students Table */}
+          {(selectedClassSection || students.length > 0) && (
+            <div style={{ marginTop: '30px' }}>
+              <h4 style={{ color: '#1e90ff', marginBottom: '15px' }}>
+                👥 Students in {selectedClassSection || 'Selected Class'}
+              </h4>
+              
+              {fetchingStudents ? (
+                <p>Loading students...</p>
+              ) : students.length === 0 ? (
+                <p style={{ fontStyle: 'italic', color: '#666' }}>
+                  No students found. Upload a file to get started.
+                </p>
+              ) : (
+                <div style={{ 
+                  overflowX: 'auto', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '8px'
+                }}>
+                  <table style={{ 
+                    width: '100%', 
+                    borderCollapse: 'collapse',
+                    fontSize: '14px',
+                    minWidth: '600px'
+                  }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Id</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Phone</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Email</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map((student, index) => (
+                        <tr key={student.id || student.student_id} style={{
+                          backgroundColor: index % 2 === 0 ? '#fafafa' : 'white',
+                          borderBottom: '1px solid #eee'
+                        }}>
+                          <td style={{ padding: '12px' }}>{student.student_id || student.roll_no}</td>
+                          <td style={{ padding: '12px' }}>{student.name}</td>
+                          <td style={{ padding: '12px' }}>{student.parent_phone || '-'}</td>
+                          <td style={{ padding: '12px' }}>{student.parent_email || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Instructions */}
           <div style={{ 
@@ -324,11 +416,10 @@ export default function StudentRegistration({ schools = [] }) {
           }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#1e90ff' }}>📋 Upload Instructions</h4>
             <ul style={{ margin: '0', padding: '0 0 0 20px', fontSize: '14px' }}>
-              <li>Download and use the sample template to ensure correct formatting</li>
-              <li>Make sure all required columns are included in your file</li>
-              <li>Save your file as .csv, .xlsx, or .xls format</li>
-              <li>Maximum file size: 10MB</li>
-              <li>All student data will be associated with the selected class-section</li>
+              <li>Download and use the sample template to ensure correct column names</li>
+              <li><strong>Important:</strong> Student's class and section are set by your dropdown selection above, NOT the 'CLASS' column in the file</li>
+              <li>Save file as .csv, .xlsx, or .xls</li>
+              <li>Max file size: 10MB</li>
             </ul>
           </div>
         </>

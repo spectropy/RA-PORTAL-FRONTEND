@@ -106,6 +106,28 @@ export const uploadStudents = async (schoolId, formData) => {
   }
 };
 
+export const getStudentsByClassSection = async (schoolId, classValue, sectionValue) => {
+  const url = new URL(`${API_BASE}/api/schools/${schoolId}/students`);
+  url.searchParams.append('class', classValue);
+  url.searchParams.append('section', sectionValue);
+
+  const res = await fetch(url, {
+    method: 'GET'
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`GET ${url} failed: ${res.status} ${errorText}`);
+  }
+
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return res.json();
+  } else {
+    throw new Error('Expected JSON response');
+  }
+};
+
 // ========================
 // 📝 EXAM REGISTRATION
 // ========================
