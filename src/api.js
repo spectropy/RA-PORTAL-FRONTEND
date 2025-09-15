@@ -158,11 +158,22 @@ export async function createExam(payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+
+  // ✅ CRITICAL FIX: Extract error message from backend JSON response
   if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`POST /api/exams failed: ${r.status} ${t}`);
+    let errorData;
+    try {
+      errorData = await r.json(); // Try to parse as JSON
+    } catch (e) {
+      errorData = { error: await r.text() }; // Fallback: raw text if not JSON
+    }
+
+    const errorMessage = errorData.error || 'Unknown error creating exam';
+    throw new Error(errorMessage); // 👈 This shows REAL backend error!
   }
-  return r.json();
+
+  // ✅ Success: Return the raw exam object (backend returns direct object, NOT { data: ... })
+  return await r.json();
 }
 
 // ========================

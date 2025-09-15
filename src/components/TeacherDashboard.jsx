@@ -8,7 +8,6 @@ export default function TeacherDashboard({ onBack }) {
 
   useEffect(() => {
     const user = sessionStorage.getItem("sp_user");
-    const schoolName = sessionStorage.getItem("sp_school_name");
 
     if (!user) {
       alert("No user data found. Please log in again.");
@@ -24,8 +23,16 @@ export default function TeacherDashboard({ onBack }) {
         return;
       }
 
-      setTeacher(parsed);
-      setSchoolName(schoolName || "Unknown School");
+      // ✅ Ensure teacher_assignments is always an array (defensive)
+      setTeacher({
+        ...parsed,
+        teacher_assignments: Array.isArray(parsed.teacher_assignments)
+          ? parsed.teacher_assignments
+          : [],
+      });
+
+      // ✅ Use school_name from session (set by /api/teachers/login)
+      setSchoolName(parsed.school_name || "Unknown School");
     } catch (err) {
       console.error("Failed to parse user data:", err);
       alert("Session corrupted. Please log in again.");
@@ -56,18 +63,28 @@ export default function TeacherDashboard({ onBack }) {
             School: <strong>{schoolName}</strong>
           </p>
         </div>
-        <button onClick={onBack} style={styles.logoutBtn}>
+        <button
+          onClick={() => {
+            // Clear session on logout
+            sessionStorage.removeItem("sp_user");
+            onBack();
+          }}
+          style={styles.logoutBtn}
+        >
           ← Logout
         </button>
       </div>
 
-      {/* Assignments Section */}
+      {/* Assignments Section — Only This Remains */}
       <div style={styles.card}>
         <h2 style={styles.sectionTitle}>📚 Your ALLOTMENTS</h2>
-        {Array.isArray(teacher.teacher_assignments) && teacher.teacher_assignments.length > 0 ? (
+        {teacher.teacher_assignments.length > 0 ? (
           <div style={styles.assignmentsGrid}>
             {teacher.teacher_assignments.map((assignment, idx) => (
-              <div key={idx} style={styles.assignmentCard}>
+              <div
+                key={idx}
+                style={styles.assignmentCard}
+              >
                 <div style={styles.assignmentHeader}>
                   <span style={styles.classTag}>
                     {assignment.class} • {assignment.section}
@@ -82,25 +99,6 @@ export default function TeacherDashboard({ onBack }) {
         ) : (
           <p style={styles.noData}>You have no assigned classes yet.</p>
         )}
-      </div>
-
-      {/* Quick Actions (Placeholder) */}
-      <div style={styles.card}>
-        <h2 style={styles.sectionTitle}>⚡ Quick Actions</h2>
-        <div style={styles.actions}>
-          <button style={styles.actionBtn} disabled>
-            📝 Upload Marks
-          </button>
-          <button style={styles.actionBtn} disabled>
-            📊 View Analytics
-          </button>
-          <button style={styles.actionBtn} disabled>
-            📅 Attendance
-          </button>
-        </div>
-        <p style={styles.info}>
-          <em>Features coming soon!</em>
-        </p>
       </div>
     </div>
   );
@@ -179,10 +177,7 @@ const styles = {
     borderRadius: '8px',
     padding: '16px',
     transition: 'transform 0.2s, box-shadow 0.2s',
-  },
-  assignmentCardHover: {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+    cursor: 'pointer',
   },
   assignmentHeader: {
     display: 'flex',
@@ -209,28 +204,5 @@ const styles = {
     fontStyle: 'italic',
     textAlign: 'center',
     padding: '20px',
-  },
-  actions: {
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-    marginBottom: '12px',
-  },
-  actionBtn: {
-    padding: '10px 20px',
-    background: '#3182ce',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    opacity: 0.7,
-  },
-  info: {
-    fontSize: '13px',
-    color: '#718096',
-    fontStyle: 'italic',
-    margin: 0,
   },
 };

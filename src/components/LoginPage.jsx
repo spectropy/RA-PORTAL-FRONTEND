@@ -18,8 +18,6 @@ const ROLES = {
 
 // 🔐 Dev-only credentials for non-owner roles
 const CREDENTIALS = {
-  STUDENT: { username: "student", password: "student@123" },
-  PARENT: { username: "parent", password: "parent@123" },
   ADMIN: { username: "admin", password: "spectropy@123" },
 };
 
@@ -109,84 +107,144 @@ const handleRoleLogin = (role) => async (e) => {
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
-  // 🔐 TEACHER: Validate against actual teacher IDs in the school
-  if (role === "TEACHER") {
-    if (!schoolId) {
-      setRoleError("No school context. Please log in as School Owner first.");
+  // --- Teacher Login (Direct) ---
+if (role === "TEACHER") {
+  const username = roleUsername.trim().toUpperCase();
+  const password = rolePassword.trim().toUpperCase();
+
+  if (username !== password) {
+    setRoleError("Teacher ID and password must be the same.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/teachers/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teacher_id: username, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setRoleError(data.error || "Invalid Teacher ID or password.");
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-      if (!res.ok) throw new Error("School not found");
+    // ✅ Save full teacher + school info to session
+    sessionStorage.setItem("sp_user", JSON.stringify({
+      role: ROLES.TEACHER,
+      teacher_id: data.teacher.teacher_id,
+      name: data.teacher.name,
+      contact: data.teacher.contact,
+      email: data.teacher.email,
+      school_id: data.teacher.school_id,
+      school_name: data.teacher.school_name,
+      teacher_assignments: data.teacher.teacher_assignments || []
+    }));
 
-      const schoolData = await res.json();
-      const teachers = Array.isArray(schoolData.teachers) ? schoolData.teachers : [];
-
-      const username = roleUsername.trim().toUpperCase();
-      const password = rolePassword.trim().toUpperCase();
-
-      // ❌ Username and password must be exactly the same
-      if (username !== password) {
-        setRoleError("Username and password must be the same.");
-        return;
-      }
-
-      // ✅ Check if teacher ID exists (exact match)
-      const matchedTeacher = teachers.find(t => t.teacherId && t.teacherId.trim() === username);
-
-      if (!matchedTeacher) {
-        setRoleError("Teacher ID not found in this school.");
-        return;
-      }
-
-      // ✅ Login successful — Save full teacher info
-      sessionStorage.setItem("sp_user", JSON.stringify({
-        role: ROLES.TEACHER,
-        school_id: schoolId,
-        teacher_id: matchedTeacher.teacherId || null,
-        name: matchedTeacher.name,
-        contact: matchedTeacher.contact,
-        email: matchedTeacher.email,
-        teacher_assignments: matchedTeacher.teacher_assignments || []
-      }));
-
-      setLoginStep("teacher-dashboard");
-    } catch (err) {
-      console.error("Error during teacher login:", err);
-      setRoleError("Failed to verify teacher. Is the server running?");
-    }
-
-    return;
+    setLoginStep("teacher-dashboard");
+  } catch (err) {
+    console.error("Network error during teacher login:", err);
+    setRoleError("Network error. Please try again later.");
   }
+  return;
+}
   
   // 🎓 STUDENT: Hardcoded login
-  if (role === "STUDENT") {
-    if (roleUsername === "student" && rolePassword === "student") {
-      sessionStorage.setItem("sp_user", JSON.stringify({ 
-        role: ROLES.STUDENT,
-        username: "student"
-      }));
-      setLoginStep("student-dashboard");
-    } else {
-      setRoleError("Use 'student' as both username and password.");
-    }
+  // --- Student Login (Direct) ---
+if (role === "STUDENT") {
+  const username = roleUsername.trim();
+  const password = rolePassword.trim();
+
+  if (username !== password) {
+    setRoleError("Student ID and password must be the same.");
     return;
   }
 
-  // 👨‍👩‍👧‍👦 PARENT: Hardcoded login
-  if (role === "PARENT") {
-    if (roleUsername === "parent" && rolePassword === "parent") {
-      sessionStorage.setItem("sp_user", JSON.stringify({ 
-        role: ROLES.PARENT,
-        username: "parent"
-      }));
-      setLoginStep("parent-dashboard");
-    } else {
-      setRoleError("Use 'parent' as both username and password.");
+  try {
+    const res = await fetch(`${API_BASE}/api/students/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student_id: username, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setRoleError(data.error || "Invalid Student ID or password.");
+      return;
     }
+
+    // ✅ Save full student + school info to session
+    sessionStorage.setItem("sp_user", JSON.stringify({
+      role: ROLES.STUDENT,
+      student_id: data.student.student_id,
+      roll_no: data.student.roll_no,
+      name: data.student.name,
+      class: data.student.class,
+      section: data.student.section,
+      gender: data.student.gender,
+      parent_phone: data.student.parent_phone,
+      parent_email: data.student.parent_email,
+      school_id: data.student.school_id,
+      school_name: data.student.school_name
+    }));
+
+    setLoginStep("student-dashboard");
+  } catch (err) {
+    console.error("Network error during student login:", err);
+    setRoleError("Network error. Please try again later.");
+  }
+  return;
+}
+
+  // 👨‍👩‍👧‍👦 PARENT: Hardcoded login
+if (role === "PARENT") {
+  const username = roleUsername.trim();
+  const password = rolePassword.trim();
+
+  if (username !== password) {
+    setRoleError("Parent ID and password must be the same (use Student ID).");
     return;
   }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/students/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student_id: username, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setRoleError(data.error || "Invalid Student ID or password.");
+      return;
+    }
+
+    // ✅ Save student data under PARENT role
+    sessionStorage.setItem("sp_user", JSON.stringify({
+      role: ROLES.PARENT,
+      student_id: data.student.student_id,
+      roll_no: data.student.roll_no,
+      name: data.student.name,
+      class: data.student.class,
+      section: data.student.section,
+      gender: data.student.gender,
+      parent_phone: data.student.parent_phone,
+      parent_email: data.student.parent_email,
+      school_id: data.student.school_id,
+      school_name: data.student.school_name
+    }));
+
+    setLoginStep("parent-dashboard"); // ← You’ll need to create ParentDashboard next
+  } catch (err) {
+    console.error("Network error during parent login:", err);
+    setRoleError("Network error. Please try again later.");
+  }
+  return;
+}
 };
 
   // --- Dashboard Routes ---
