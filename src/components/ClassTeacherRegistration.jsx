@@ -15,6 +15,19 @@ const forcedGroupForFoundation = (foundation) => {
   return "";
 };
 
+// ✅ Dynamic subject options based on foundation
+const getSubjectOptions = (foundation) => {
+  if (foundation === "IIT-MED") {
+    return ["Physics", "Chemistry", "Maths", "Biology"];
+  } else if (foundation === "IIT") {
+    return ["Physics", "Chemistry", "Maths"];
+  } else if (foundation === "MED") {
+    return ["Physics", "Chemistry", "Biology"];
+  } else {
+    return ["Physics", "Chemistry", "Maths", "Biology", "English", "Computer Science"];
+  }
+};
+
 export default function ClassTeacherRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
@@ -50,6 +63,9 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     subject: ''
   });
 
+  // ✅ Track foundation of selected class for subject dropdown
+  const [selectedClassFoundation, setSelectedClassFoundation] = useState('');
+
   useEffect(() => {
     // Fetch academic years
     const fetchAcademicYearsData = async () => {
@@ -82,6 +98,29 @@ export default function ClassTeacherRegistration({ schools = [] }) {
       fetchSchoolData();
     }
   }, [selectedSchool, selectedAcademicYear]);
+
+  // ✅ Auto-generate teacher ID based on existing teachers
+  useEffect(() => {
+    if (selectedSchool && schoolData?.teachers?.length > 0) {
+      // Extract numeric suffixes from existing teacher IDs
+      const existingNumbers = schoolData.teachers
+        .map(t => {
+          const match = t.teacher_id.match(new RegExp(`^${selectedSchool}(\\d{2})$`));
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter(n => n > 0);
+
+      const nextNumber = existingNumbers.length > 0
+        ? Math.max(...existingNumbers) + 1
+        : 1;
+
+      const newTeacherId = `${selectedSchool}${String(nextNumber).padStart(2, '0')}`;
+      setNewTeacher(prev => ({ ...prev, teacherId: newTeacherId }));
+    } else if (selectedSchool) {
+      // First teacher for this school
+      setNewTeacher(prev => ({ ...prev, teacherId: `${selectedSchool}01` }));
+    }
+  }, [selectedSchool, schoolData?.teachers]);
 
   const fetchSchoolData = async () => {
     if (!selectedSchool) return;
@@ -247,11 +286,16 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     });
   };
 
+  // ✅ Updated to track class foundation for subject dropdown
   const handleAssignmentChange = (e) => {
-    setAssignment({
-      ...assignment,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setAssignment(prev => ({ ...prev, [name]: value }));
+
+    // If class is changed, find its foundation
+    if (name === 'class' && schoolData?.classes) {
+      const selectedClass = schoolData.classes.find(cls => cls.class === value);
+      setSelectedClassFoundation(selectedClass?.foundation || '');
+    }
   };
 
   return (
@@ -351,7 +395,9 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Section</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Foundation</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Program</th>
+                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Group</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Students</th>
+                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -361,7 +407,39 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.section}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.foundation || '-'}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.program || '-'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.group || '-'}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.num_students || 0}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
+                          <button
+                            onClick={() => alert(`Edit class: ${cls.class}-${cls.section}`)}
+                            style={{
+                              background: '#0e87eaff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => alert(`Delete class: ${cls.class}-${cls.section}`)}
+                            style={{
+                              background: '#ef7a3cff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -386,15 +464,54 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Name</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Contact</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Email</th>
+                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Assigned Subjects</th>
+                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {schoolData.teachers.map((teacher, index) => (
                       <tr key={index}>
-                        <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.teacherId}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.teacher_id}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.name}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.contact || '-'}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.email || '-'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eee' }}>
+                          {(teacher.teacher_assignments || []).length > 0 
+                            ? teacher.teacher_assignments.map(a => `${a.subject}`).join(', ')
+                            : '-'
+                          }
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
+                          <button
+                            onClick={() => alert(`Edit teacher: ${teacher.name}`)}
+                            style={{
+                              background: '#089ff1ff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => alert(`Delete teacher: ${teacher.name}`)}
+                            style={{
+                              background: '#f88155ff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -405,7 +522,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
             )}
           </div>
 
-          {/* ✅ UPDATED: Add New Class Form */}
+          {/* Add New Class Form */}
           <div style={{ marginBottom: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '8px' }}>
             <h4 style={{ margin: '0 0 15px 0' }}>Add New Class</h4>
             <form onSubmit={handleAddClass}>
@@ -574,13 +691,13 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                     type="text"
                     name="teacherId"
                     value={newTeacher.teacherId}
-                    onChange={handleTeacherChange}
-                    placeholder="Teacher ID"
+                    readOnly // ✅ Auto-generated, so make it read-only
                     style={{
                       width: '100%',
                       padding: '8px',
                       border: '1px solid #ccc',
-                      borderRadius: '4px'
+                      borderRadius: '4px',
+                      backgroundColor: '#f0f0f0'
                     }}
                     required
                   />
@@ -686,8 +803,8 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                   >
                     <option value="">-- Select Teacher --</option>
                     {schoolData.teachers && schoolData.teachers.map(teacher => (
-                      <option key={teacher.teacherId} value={teacher.teacherId}>
-                        {teacher.name} ({teacher.teacherId})
+                      <option key={teacher.id} value={teacher.teacher_id}>
+                        {teacher.name} ({teacher.teacher_id})
                       </option>
                     ))}
                   </select>
@@ -747,12 +864,10 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                     Subject *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="subject"
                     value={assignment.subject}
                     onChange={handleAssignmentChange}
-                    placeholder="Subject name"
                     style={{
                       width: '100%',
                       padding: '8px',
@@ -760,7 +875,12 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       borderRadius: '4px'
                     }}
                     required
-                  />
+                  >
+                    <option value="">-- Select Subject --</option>
+                    {getSubjectOptions(selectedClassFoundation).map(subject => (
+                      <option key={subject} value={subject}>{subject}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
