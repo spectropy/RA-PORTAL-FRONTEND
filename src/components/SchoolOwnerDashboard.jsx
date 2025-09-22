@@ -468,10 +468,10 @@ const renderMetricButtons = () => (
               <tr>
                 <th>Class</th>
                 <th>Section</th>
-                <th>Physics</th>
-                <th>Chemistry</th>
-                <th>Maths</th>
-                <th>Biology</th>
+                <th>Physics %</th>
+                <th>Chemistry %</th>
+                <th>Maths %</th>
+                <th>Biology %</th>
                 <th>Total %</th>
                 <th>School Rank</th>
                 <th>Global Rank</th>
@@ -532,10 +532,10 @@ const renderMetricButtons = () => (
             <thead>
               <tr>
                 <th>Exam Pattern</th>
-                <th>Physics</th>
-                <th>Chemistry</th>
-                <th>Maths</th>
-                <th>Biology</th>
+                <th>Physics %</th>
+                <th>Chemistry %</th>
+                <th>Maths %</th>
+                <th>Biology %</th>
                 <th>Total %</th>
                 <th>School Rank</th>
                 <th>Global Rank</th>

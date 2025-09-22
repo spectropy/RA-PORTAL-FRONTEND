@@ -112,11 +112,11 @@ export default function StudentDashboard({ onBack }) {
 
   // ✅ Structure data with one row per subject
   const averagesData = [
-    { subject: 'Physics', physics: count ? Number((totals.physics / count).toFixed(2)) : 0 },
-    { subject: 'Chemistry', chemistry: count ? Number((totals.chemistry / count).toFixed(2)) : 0 },
-    { subject: 'Mathematics', maths: count ? Number((totals.maths / count).toFixed(2)) : 0 },
-    { subject: 'Biology', biology: count ? Number((totals.biology / count).toFixed(2)) : 0 }
-  ];
+  { subject: 'Physics', physics: count ? Number((totals.physics / count).toFixed(2)) : 0, average: count ? Number((totals.physics / count).toFixed(2)) : 0 },
+  { subject: 'Chemistry', chemistry: count ? Number((totals.chemistry / count).toFixed(2)) : 0, average: count ? Number((totals.chemistry / count).toFixed(2)) : 0 },
+  { subject: 'Mathematics', maths: count ? Number((totals.maths / count).toFixed(2)) : 0, average: count ? Number((totals.maths / count).toFixed(2)) : 0 },
+  { subject: 'Biology', biology: count ? Number((totals.biology / count).toFixed(2)) : 0, average: count ? Number((totals.biology / count).toFixed(2)) : 0 }
+];
 
   const sorted = [...averagesData].sort((a, b) => {
     const avgA = a.physics || a.chemistry || a.maths || a.biology;
@@ -183,81 +183,79 @@ export default function StudentDashboard({ onBack }) {
   doc.addPage();
 
   // ======================
-  // 📄 PAGE 2: Cumulative Averages Bar Chart
-  // ======================
-  y = 50; // Reset Y position for new page
+// 📄 PAGE 2: Cumulative Averages Bar Chart
+// ======================
+y = 100; // Start lower to avoid overlap with header
 
-  // Header
-  doc.setFontSize(18);
-  doc.text(`${schoolName} - Student Report Card`, 14, 20);
-  doc.setFontSize(12);
-  doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
+// Header
+doc.setFontSize(18);
+doc.text(`${schoolName} - Student Report Card`, 14, 20);
+doc.setFontSize(12);
+doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
+doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
+doc.text("Cumulative Averages (All Exams)", 14, 50);
+y += 15; // Space after title
 
-  // 📊 Define colors for chart
-  const colors = {
-    Physics: [0, 102, 204],    // Blue
-    Chemistry: [255, 165, 0],  // Orange
-    Mathematics: [0, 128, 0],   // Green
-    Biology: [255, 0, 0]        // Red
-  };
+// 📊 Define colors for chart
+const colors = {
+  Physics: [0, 102, 204],    // Blue
+  Chemistry: [255, 165, 0],  // Orange
+  Mathematics: [0, 128, 0],   // Green
+  Biology: [255, 0, 0]        // Red
+};
 
-  const maxAvg = Math.max(...averagesData.map(d => d.physics || d.chemistry || d.maths || d.biology));
+const maxAvg = Math.max(...averagesData.map(d => d.physics || d.chemistry || d.maths || d.biology));
 
-  // 📊 Cumulative Averages Bar Chart
-  const chartX = 14;
-  const chartY = y + 20;
-  const chartWidth = 180;
-  const chartHeight = 70;
-  const barWidth = 8;
+// Chart dimensions
+const chartX = 14;
+const chartY = y + 10; // Start chart 10 units below title
+const chartWidth = 180;
+const chartHeight = 70;
+const barWidth = 8;
 
-  doc.setFontSize(14);
-  doc.text("Cumulative Averages (All Exams)", chartX, y);
-  doc.setFontSize(9);
-
-  // Draw Y-axis grid and labels
-  for (let val = 0; val <= 40; val += 10) {
-    const yPixel = chartY - (val / maxAvg) * chartHeight;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(chartX, yPixel, chartX + chartWidth, yPixel);
-    doc.text(`${val}`, chartX - 10, yPixel + 3);
-  }
-
-  // Draw X-axis
+// Draw Y-axis grid and labels
+for (let val = 0; val <= 40; val += 10) {
+  const yPixel = chartY - (val / maxAvg) * chartHeight;
   doc.setDrawColor(200, 200, 200);
-  doc.line(chartX, chartY, chartX + chartWidth, chartY);
+  doc.line(chartX, yPixel, chartX + chartWidth, yPixel);
+  doc.text(`${val}`, chartX - 10, yPixel + 3);
+}
 
-  // Draw bars
-  averagesData.forEach((item, i) => {
-    const avg = item.physics || item.chemistry || item.maths || item.biology;
-    const height = (avg / maxAvg) * chartHeight;
-    const x = chartX + i * 45;
+// Draw X-axis
+doc.setDrawColor(200, 200, 200);
+doc.line(chartX, chartY, chartX + chartWidth, chartY);
 
-    const color = colors[item.subject] || [255, 0, 0];
-    doc.setFillColor(color[0], color[1], color[2]);
-    doc.rect(x, chartY - height, barWidth, height, 'F');
+// Draw bars
+averagesData.forEach((item, i) => {
+  const avg = item.physics || item.chemistry || item.maths || item.biology;
+  const height = (avg / maxAvg) * chartHeight;
+  const x = chartX + i * 45;
 
-    // Label below bar
-    doc.text(item.subject, x + barWidth + 2, chartY + 12);
-    doc.text(avg.toFixed(1), x + barWidth + 2, chartY + 22);
-  });
+  const color = colors[item.subject] || [255, 0, 0];
+  doc.setFillColor(color[0], color[1], color[2]);
+  doc.rect(x, chartY - height, barWidth, height, 'F');
 
-  // Draw legend
-  const legendY = chartY + 35;
-  doc.setFontSize(9);
-  doc.text("Legend:", chartX, legendY);
-  doc.setFillColor(255, 0, 0);
-  doc.rect(chartX + 40, legendY - 4, 8, 8, 'F');
-  doc.text("Biology", chartX + 50, legendY);
-  doc.setFillColor(255, 165, 0);
-  doc.rect(chartX + 40, legendY + 8, 8, 8, 'F');
-  doc.text("Chemistry", chartX + 50, legendY + 8);
-  doc.setFillColor(0, 128, 0);
-  doc.rect(chartX + 40, legendY + 16, 8, 8, 'F');
-  doc.text("Mathematics", chartX + 50, legendY + 16);
-  doc.setFillColor(0, 102, 204);
-  doc.rect(chartX + 40, legendY + 24, 8, 8, 'F');
-  doc.text("Physics", chartX + 50, legendY + 24);
+  // Label below bar
+  doc.text(item.subject, x + barWidth + 2, chartY + 12);
+  doc.text(avg.toFixed(1), x + barWidth + 2, chartY + 22);
+});
+
+// Draw legend
+const legendY = chartY + 35;
+doc.setFontSize(9);
+doc.text("Legend:", chartX, legendY);
+doc.setFillColor(255, 0, 0);
+doc.rect(chartX + 40, legendY - 4, 8, 8, 'F');
+doc.text("Biology", chartX + 50, legendY);
+doc.setFillColor(255, 165, 0);
+doc.rect(chartX + 40, legendY + 8, 8, 8, 'F');
+doc.text("Chemistry", chartX + 50, legendY + 8);
+doc.setFillColor(0, 128, 0);
+doc.rect(chartX + 40, legendY + 16, 8, 8, 'F');
+doc.text("Mathematics", chartX + 50, legendY + 16);
+doc.setFillColor(0, 102, 204);
+doc.rect(chartX + 40, legendY + 24, 8, 8, 'F');
+doc.text("Physics", chartX + 50, legendY + 24);
 
   // Add page break
   doc.addPage();
@@ -280,30 +278,30 @@ export default function StudentDashboard({ onBack }) {
   y += 20;
 
   if (strengthSubject) {
-    const strengthText = `Strength: ${strengthSubject.subject} • Avg: ${strengthSubject.average}`;
-    const strengthWidth = doc.getTextWidth(strengthText) + 8;
-    const badgeHeight = 16;
+  const strengthText = `Strength: ${strengthSubject.subject} • Avg: ${strengthSubject.average}`;
+  const strengthWidth = doc.getTextWidth(strengthText) + 8;
+  const badgeHeight = 16;
 
-    doc.setFillColor(135, 206, 235); // Light teal
-    doc.roundedRect(14, y - badgeHeight / 2, strengthWidth, badgeHeight, 4, 4, 'FD');
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text(strengthText, 18, y + 4);
-    y += 25;
-  }
+  doc.setFillColor(135, 206, 235); // Light teal
+  doc.roundedRect(14, y - badgeHeight / 2, strengthWidth, badgeHeight, 4, 4, 'FD');
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.text(strengthText, 18, y + 4);
+  y += 25;
+}
 
-  if (weakSubject) {
-    const weakText = `Weak: ${weakSubject.subject} • Avg: ${weakSubject.average}`;
-    const weakWidth = doc.getTextWidth(weakText) + 8;
-    const badgeHeight = 16;
+if (weakSubject) {
+  const weakText = `Weak: ${weakSubject.subject} • Avg: ${weakSubject.average}`;
+  const weakWidth = doc.getTextWidth(weakText) + 8;
+  const badgeHeight = 16;
 
-    doc.setFillColor(255, 215, 0); // Orange
-    doc.roundedRect(14, y - badgeHeight / 2, weakWidth, badgeHeight, 4, 4, 'FD');
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text(weakText, 18, y + 4);
-    y += 25;
-  }
+  doc.setFillColor(255, 215, 0); // Orange
+  doc.roundedRect(14, y - badgeHeight / 2, weakWidth, badgeHeight, 4, 4, 'FD');
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.text(weakText, 18, y + 4);
+  y += 25;
+}
 
   // Add page break
   doc.addPage();
@@ -389,9 +387,11 @@ export default function StudentDashboard({ onBack }) {
 
       <h2>🎓 Student Dashboard</h2>
       <div style={styles.profile}>
-        <h3>{student.name}</h3><p><strong>Roll No:</strong> {student.roll_no}</p>
-        <p><strong>Class:</strong> {student.class} - {student.section}</p>
-      </div>
+  <p><strong>School:</strong> {student.school_name || '—'}</p>
+  <p><strong>Student Name:</strong> {student.name}</p>
+  <p><strong>Roll No:</strong> {student.roll_no}</p>
+  <p><strong>Class:</strong> {student.class} - {student.section}</p>
+</div>
 
       {/* ===== Performance Metrics Dashboard ===== */}
       {examResults.length > 0 && (
