@@ -240,7 +240,7 @@ const OMRUploadView = ({
                     <th style={tableHeaderStyle}>%</th>
                     <th style={tableHeaderStyle}>Class Rank</th>
                     <th style={tableHeaderStyle}>School Rank</th>
-                    <th style={tableHeaderStyle}>All Schools Rank</th>
+                    <th style={tableHeaderStyle}>Global Rank</th>
                   </tr>
                 </thead>
                 <tbody>
