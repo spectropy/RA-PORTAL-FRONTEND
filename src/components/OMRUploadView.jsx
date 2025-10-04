@@ -38,42 +38,60 @@ const OMRUploadView = ({
   };
 
   // Handle upload for specific exam
-  const handleUpload = async (exam) => {
-    const examId = exam.id;
-    if (!file[examId]) {
-      setUploadError(prev => ({ ...prev, [examId]: 'Please select a file.' }));
-      return;
+const handleUpload = async (exam) => {
+  const examId = exam.id;
+  if (!file[examId]) {
+    setUploadError(prev => ({ ...prev, [examId]: 'Please select a file.' }));
+    return;
+  }
+
+  setUploading(prev => ({ ...prev, [examId]: true }));
+  setUploadError(prev => ({ ...prev, [examId]: '' }));
+
+  const formData = new FormData();
+  formData.append('file', file[examId]);
+
+  const classSection = exam.class_section;
+  const lastDashIndex = classSection.lastIndexOf('-');
+  const examClass = classSection.substring(0, lastDashIndex); // "GRADE-6" or "6"
+  const examSection = classSection.substring(lastDashIndex + 1); // "A"
+
+  // ✅ APPEND EACH EXAM CONTEXT FIELD INDIVIDUALLY (NOT as JSON)
+  formData.append('school_id', exam.school_id);
+  formData.append('program', exam.program);
+  formData.append('exam_pattern', exam.exam_pattern);
+  formData.append('class', examClass);
+  formData.append('section', examSection);
+  formData.append('exam_date', exam.date);
+  formData.append('max_marks_physics', exam.max_marks_physics || 50);
+  formData.append('max_marks_maths', exam.max_marks_maths || 50);
+  formData.append('max_marks_chemistry', exam.max_marks_chemistry || 50);
+  formData.append('max_marks_biology', exam.max_marks_biology || 50);
+
+  try {
+    // ✅ Correct URL (matches your server)
+    const response = await fetch(`${API_BASE}/api/exams/${exam.id}/results/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      setExamResults(prev => ({ ...prev, [examId]: data.results || [] }));
+      setFile(prev => ({ ...prev, [examId]: null }));
+      setUploadError(prev => ({ ...prev, [examId]: '' }));
+      alert(`✅ Results uploaded successfully for ${exam.exam_pattern.replace('_', ' ')}`);
+    } else {
+      setUploadError(prev => ({ ...prev, [examId]: data.error || 'Upload failed.' }));
     }
-
-    setUploading(prev => ({ ...prev, [examId]: true }));
-    setUploadError(prev => ({ ...prev, [examId]: '' }));
-
-    const formData = new FormData();
-    formData.append('file', file[examId]);
-
-    try {
-      const response = await fetch(`${API_BASE}/api/exams/${examId}/results/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setExamResults(prev => ({ ...prev, [examId]: data.results || [] }));
-        setFile(prev => ({ ...prev, [examId]: null }));
-        setUploadError(prev => ({ ...prev, [examId]: '' }));
-        alert(`✅ Results uploaded successfully for ${exam.exam_pattern.replace('_', ' ')}`);
-      } else {
-        setUploadError(prev => ({ ...prev, [examId]: data.error || 'Upload failed.' }));
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      setUploadError(prev => ({ ...prev, [examId]: '⚠️ Network error.' }));
-    } finally {
-      setUploading(prev => ({ ...prev, [examId]: false }));
-    }
-  };
+  } catch (err) {
+    console.error('Upload error:', err);
+    setUploadError(prev => ({ ...prev, [examId]: '⚠️ Network error.' }));
+  } finally {
+    setUploading(prev => ({ ...prev, [examId]: false }));
+  }
+};
 
   const tableHeaderStyle = {
     padding: '10px 8px',

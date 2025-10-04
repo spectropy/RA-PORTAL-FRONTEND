@@ -70,7 +70,11 @@ export default function ExamRegistration({ schools = [] }) {
     examPattern: '',
     examDate: '',
     examName: '',
-    classSection: ''
+    classSection: '',
+    max_marks_physics: '',
+    max_marks_maths: '',
+    max_marks_biology: '',
+    max_marks_chemistry: ''
   });
 
   // File upload state (for OMRUploadView)
@@ -162,7 +166,8 @@ const getExamOptions = () => {
   return allExams;
 };
  // Handle form submission
-const handleSubmit = async (e) => {
+// Handle form submission
+const handleSubmit = (e) => {
   e.preventDefault();
 
   if (!examForm.examPattern || !examForm.examDate || !examForm.classSection) {
@@ -179,79 +184,48 @@ const handleSubmit = async (e) => {
   }
 
   // ✅ Split by LAST dash to handle formats like "GRADE-6-A" or "6-A"
-const classSection = examForm.classSection;
-const lastDashIndex = classSection.lastIndexOf('-');
+  const classSection = examForm.classSection;
+  const lastDashIndex = classSection.lastIndexOf('-');
 
-if (lastDashIndex <= 0 || lastDashIndex === classSection.length - 1) {
-  alert('Invalid Class-Section format. Expected format: "CLASS-SECTION" (e.g., "GRADE-6-A" or "6-A")');
-  return;
-}
-
-const examClass = classSection.substring(0, lastDashIndex).trim(); // e.g., "GRADE-6"
-const examSection = classSection.substring(lastDashIndex + 1).trim(); // e.g., "A"
-
-if (!examClass || !examSection) {
-  alert('Class or Section cannot be empty.');
-  return;
-}
-// ✅ Construct payload for backend API
-const examPayload = {
-  school_id: schoolData?.school?.school_id || selectedSchool,
-  program: selectedExam.program,
-  exam_pattern: selectedExam.exam_pattern,
-  class: examClass,
-  section: examSection,
-  exam_date: examForm.examDate // 👈 ADD THIS — comes from the date input
-};
-
-  try {
-    setLoading(true);
-    setError('');
-
-    console.log('📤 Sending exam registration:', examPayload);
-
-    // ✅ POST to /api/exams
-    const res = await fetch(`${API_BASE}/api/exams`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(examPayload)
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${res.status}: Failed to register exam`);
-    }
-
-    const createdExam = await res.json();
-    console.log('✅ Exam registered successfully:', createdExam);
-
-    // ✅ Now set currentOMRExam — but include the actual exam ID from backend
-    setCurrentOMRExam({
-      ...selectedExam,
-      id: createdExam.id, // 👈 Critical: Use the real exam ID from DB for OMR upload
-      date: examForm.examDate,
-      exam_name: examForm.examName || selectedExam.display_name,
-      class_section: examForm.classSection,
-      school_name: schoolData?.school?.school_name || 'Unknown School',
-      program: selectedExam.program,
-      area: schoolData?.school?.area || 'N/A',
-      school_id: schoolData?.school?.school_id || selectedSchool
-    });
-
-    // Optional: Show success message
-    alert('Exam registered successfully! Proceeding to OMR upload.');
-
-  } catch (err) {
-    console.error('Failed to register exam:', err);
-    setError(`Failed to register exam: ${err.message}`);
-    alert(`Failed to register exam: ${err.message}`);
-  } finally {
-    setLoading(false);
+  if (lastDashIndex <= 0 || lastDashIndex === classSection.length - 1) {
+    alert('Invalid Class-Section format. Expected format: "CLASS-SECTION" (e.g., "GRADE-6-A" or "6-A")');
+    return;
   }
-};
 
+  const examClass = classSection.substring(0, lastDashIndex).trim(); // e.g., "GRADE-6"
+  const examSection = classSection.substring(lastDashIndex + 1).trim(); // e.g., "A"
+
+  console.log('Final class:', examClass); // 👈 Must be "GRADE-6"
+  console.log('Final section:', examSection); // 👈 Must be "A"
+
+  if (!examClass || !examSection) {
+    alert('Class or Section cannot be empty.');
+    return;
+  }
+
+  // ✅ Generate a temporary ID (not stored in DB)
+  const tempExamId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  // ✅ Set currentOMRExam with temp ID and all exam context
+  setCurrentOMRExam({
+    ...selectedExam,
+    id: tempExamId, // 👈 Temporary ID for React state only
+    date: examForm.examDate,
+    exam_name: examForm.examName || selectedExam.display_name,
+    class_section: examForm.classSection,
+    school_name: schoolData?.school?.school_name || 'Unknown School',
+    program: selectedExam.program,
+    area: schoolData?.school?.area || 'N/A',
+    school_id: schoolData?.school?.school_id || selectedSchool,
+    max_marks_physics: examForm.max_marks_physics || 50,
+    max_marks_maths: examForm.max_marks_maths || 50,
+    max_marks_chemistry: examForm.max_marks_chemistry || 50,
+    max_marks_biology: examForm.max_marks_biology || 50
+  });
+
+  // Optional: Show success message
+  alert('Exam configured successfully! Proceeding to OMR upload.');
+};
   // PDF download handler (dummy — replace with your logic)
    const downloadPDF = async (exam) => {
     const examId = exam.id;
@@ -398,105 +372,137 @@ const examPayload = {
       {loading && <p>Loading school data...</p>}
 
       {schoolData && (
-        <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '25px', borderRadius: '8px', border: '1px solid #ddd' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>📋 Register New Exam</h3>
+  <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '25px', borderRadius: '8px', border: '1px solid #ddd' }}>
+    <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>📋 Register New Exam</h3>
 
-          {/* Exam Pattern */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
-              Select Exam *
-            </label>
-            <select
-              name="examPattern"
-              value={examForm.examPattern}
-              onChange={handleFormChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '16px'
-              }}
-              required
-            >
-              <option value="">-- Select Exam --</option>
-              {getExamOptions().map(exam => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.display_name}
-                </option>
-              ))}
-            </select>
-          </div>
+    {/* Exam Pattern */}
+    <div style={{ marginBottom: '20px' }}>
+      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+        Select Exam *
+      </label>
+      <select
+        name="examPattern"
+        value={examForm.examPattern}
+        onChange={handleFormChange}
+        style={{
+          width: '100%',
+          padding: '10px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          fontSize: '16px'
+        }}
+        required
+      >
+        <option value="">-- Select Exam --</option>
+        {getExamOptions().map(exam => (
+          <option key={exam.id} value={exam.id}>
+            {exam.display_name}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          {/* Exam Date */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
-              Exam Date *
-            </label>
-            <input
-              type="date"
-              name="examDate"
-              value={examForm.examDate}
-              onChange={handleFormChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '16px'
-              }}
-              required
-            />
-          </div>
+    {/* Exam Date */}
+    <div style={{ marginBottom: '20px' }}>
+      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+        Exam Date *
+      </label>
+      <input
+        type="date"
+        name="examDate"
+        value={examForm.examDate}
+        onChange={handleFormChange}
+        style={{
+          width: '100%',
+          padding: '10px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          fontSize: '16px'
+        }}
+        required
+      />
+    </div>
 
-          {/* Class-Section */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
-              Class-Section *
-            </label>
-            <select
-              name="classSection"
-              value={examForm.classSection}
-              onChange={handleFormChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '16px'
-              }}
-              required
-            >
-              <option value="">-- Select Class-Section --</option>
-              {schoolData.classes?.map(cls => (
-                <option key={`${cls.class}-${cls.section}`} value={`${cls.class}-${cls.section}`}>
-                  {cls.class} - {cls.section}
-                </option>
-              ))}
-            </select>
-          </div>
+    {/* Class-Section */}
+    <div style={{ marginBottom: '20px' }}>
+      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+        Class-Section *
+      </label>
+      <select
+        name="classSection"
+        value={examForm.classSection}
+        onChange={handleFormChange}
+        style={{
+          width: '100%',
+          padding: '10px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          fontSize: '16px'
+        }}
+        required
+      >
+        <option value="">-- Select Class-Section --</option>
+        {schoolData.classes?.map(cls => (
+          <option key={`${cls.class}-${cls.section}`} value={`${cls.class}-${cls.section}`}>
+            {cls.class} - {cls.section}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
+    {/* Max Marks for Subjects (only shown if exam is selected) */}
+{examForm.examPattern && (
+  <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #eee' }}>
+    <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>📚 Max Marks per Subject</h4>
+    {['Physics', 'Maths', 'Biology', 'Chemistry'].map(subject => {
+      const fieldName = `max_marks_${subject.toLowerCase()}`;
+      return (
+        <div key={subject} style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+            {subject} (Max Marks)
+          </label>
+          <input
+            type="number"
+            name={fieldName}
+            value={examForm[fieldName] || ''}
+            onChange={handleFormChange}
+            min="0"
+            step="1"
             style={{
-              padding: '12px 30px',
-              background: '#28a745',
-              color: 'white',
-              border: 'none',
+              width: '100%',
+              padding: '8px',
+              border: '1px solid #ccc',
               borderRadius: '4px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'block',
-              margin: '0 auto'
+              fontSize: '15px'
             }}
-          >
-            🚀 Register & Upload OMR
-          </button>
-        </form>
-      )}
+            required
+          />
+        </div>
+      );
+    })}
+  </div>
+)}
 
+    {/* Submit Button */}
+    <button
+      type="submit"
+      style={{
+        padding: '12px 30px',
+        background: '#28a745',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        cursor: 'pointer',
+        display: 'block',
+        margin: '0 auto'
+      }}
+    >
+      🚀 Register & Upload OMR
+    </button>
+  </form>
+)}
       {/* OMR Upload View (shown after submit) */}
       {currentOMRExam && (
         <OMRUploadView

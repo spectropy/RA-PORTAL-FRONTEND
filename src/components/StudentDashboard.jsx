@@ -406,7 +406,7 @@ if (weakSubject) {
                 <p style={styles.metricLine}><strong>Percentage:</strong> {(Number(bestExam.percentage) || 0).toFixed(2)}%</p>
                 <p style={styles.metricLine}><strong>Class Rank:</strong> {bestExam.class_rank ?? '—'}</p>
                 <p style={styles.metricLine}><strong>School Rank:</strong> {bestExam.school_rank ?? '—'}</p>
-                <p style={styles.metricLine}><strong>All Schools Rank:</strong> {bestExam.all_schools_rank ?? '—'}</p>
+                <p style={styles.metricLine}><strong>Global Rank:</strong> {bestExam.all_schools_rank ?? '—'}</p>
               </div>
             ) : (
               <p style={{ color: '#718096', fontStyle: 'italic' }}>Not enough data.</p>
@@ -416,9 +416,9 @@ if (weakSubject) {
           {/* Cumulative Averages Bar Chart */}
           <div style={{ width: '100%', height: 260 }}>
   <ResponsiveContainer>
-    <BarChart data={averagesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+    <BarChart data={averagesData}  barSize={200} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
       <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="subject" />
+      <XAxis dataKey="subject" tick={false}/>
       <YAxis />
       <Tooltip formatter={(v) => [v, 'Average']} />
       <Legend />
@@ -478,7 +478,7 @@ if (weakSubject) {
                 <th>%</th>
                 <th>Class Rank</th>
                 <th>School Rank</th>
-                <th>All Schools</th>
+                <th>Global Rank</th>
               </tr>
             </thead>
             <tbody>

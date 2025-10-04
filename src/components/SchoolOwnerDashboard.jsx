@@ -48,17 +48,6 @@ export default function SchoolOwnerDashboard({ onBack }) {
         setSchool(schoolWithRelations);
 
         setAnalyticsLoading(true);
-
-        const avgRes = await fetch(`${API_BASE}/api/analytics/class-average?school_id=${schoolId}`);
-        const subjRes = await fetch(`${API_BASE}/api/analytics/subject-summary?school_id=${schoolId}`);
-
-        if (!avgRes.ok || !subjRes.ok) throw new Error("Failed to load analytics");
-
-        const avgData = await avgRes.json();
-        const subjData = await subjRes.json();
-
-        setClassAverages(Array.isArray(avgData) ? avgData : []);
-        setSubjectSummaries(Array.isArray(subjData) ? subjData : []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -673,10 +662,10 @@ const renderBatchWise = () => {
               <tr>
                 <th>Class</th>
                 <th>Section</th>
-                <th>Physics %</th>
-                <th>Chemistry %</th>
-                <th>Maths %</th>
-                <th>Biology %</th>
+                <th>Physics </th>
+                <th>Chemistry </th>
+                <th>Maths </th>
+                <th>Biology </th>
                 <th>Total %</th>
                 <th>School Rank</th>
                 <th>Global Rank</th>
@@ -912,11 +901,11 @@ const renderClassSectionView = () => {
           <thead>
             <tr>
               <th>Exam Pattern</th>
-              <th>Physics %</th>
-              <th>Chemistry %</th>
-              <th>Maths %</th>
-              <th>Biology %</th>
-              <th>Total %</th>
+              <th>Physics </th>
+              <th>Chemistry </th>
+              <th>Maths </th>
+              <th>Biology </th>
+              <th>Total </th>
               <th>School Rank</th>
               <th>Global Rank</th>
               <th>Action</th>
