@@ -20,6 +20,7 @@ export default function StudentDashboard({ onBack }) {
   const [student, setStudent] = useState(null);
   const [teachers, setTeachers] = useState([]);
   const [examResults, setExamResults] = useState([]); // 👈 NEW
+  const [school, setSchool] = useState(null); // 👈 ADD THIS
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const hasFetched = useRef(false);
@@ -42,53 +43,57 @@ export default function StudentDashboard({ onBack }) {
     if (hasFetched.current) return;
     hasFetched.current = true;
 
-    const fetchStudentData = async () => {
-      try {
-        setStudent(parsedUser);
+   const fetchStudentData = async () => {
+  try {
+    setStudent(parsedUser);
 
-        // 👉 FETCH EXAM RESULTS
-        const resultsRes = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(studentId)}`);
-        if (!resultsRes.ok) throw new Error("Failed to fetch exam results");
-        const resultsData = await resultsRes.json();
-        setExamResults(resultsData || []);
+    // 👉 FETCH EXAM RESULTS
+    const resultsRes = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(studentId)}`);
+    if (!resultsRes.ok) throw new Error("Failed to fetch exam results");
+    const resultsData = await resultsRes.json();
+    setExamResults(resultsData || []);
 
-        // Fetch teachers (unchanged)
-        const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-        if (!schoolRes.ok) throw new Error(`Failed to fetch school details: ${schoolRes.status}`);
-        const schoolData = await schoolRes.json();
+    // 👉 FETCH FULL SCHOOL DATA (includes logo_url, area, etc.)
+    const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+    if (!schoolRes.ok) throw new Error(`Failed to fetch school details: ${schoolRes.status}`);
+    const schoolData = await schoolRes.json();
 
-        const assignedTeachers = [];
-        if (Array.isArray(schoolData.teachers)) {
-          for (const teacher of schoolData.teachers) {
-            if (Array.isArray(teacher.teacher_assignments)) {
-              const assignments = teacher.teacher_assignments.filter(
-                a => a.class === classValue && a.section === sectionValue
-              );
-              if (assignments.length > 0) {
-                assignedTeachers.push({
-                  name: teacher.name,
-                  subject: assignments[0].subject,
-                  email: teacher.email,
-                  phone: teacher.contact,
-                });
-              }
-            }
+    // ✅ Save the full school object (from `schoolData.school`)
+    setSchool(schoolData.school); // 👈 This gives you access to logo_url, area, etc.
+
+    // 👉 Build assigned teachers list
+    const assignedTeachers = [];
+    if (Array.isArray(schoolData.teachers)) {
+      for (const teacher of schoolData.teachers) {
+        if (Array.isArray(teacher.teacher_assignments)) {
+          const assignments = teacher.teacher_assignments.filter(
+            a => a.class === classValue && a.section === sectionValue
+          );
+          if (assignments.length > 0) {
+            assignedTeachers.push({
+              name: teacher.name,
+              subject: assignments[0].subject,
+              email: teacher.email,
+              phone: teacher.contact,
+            });
           }
         }
-        setTeachers(assignedTeachers);
-      } catch (err) {
-        console.error("Error fetching student data:", err);
-        setError("Failed to load student data. Please try again.");
-      } finally {
-        setLoading(false);
       }
-    };
+    }
+    setTeachers(assignedTeachers);
+  } catch (err) {
+    console.error("Error fetching student data:", err);
+    setError("Failed to load student data. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
     fetchStudentData();
   }, []);
 
-  // ===== Derived Metrics for Performance Dashboard =====
-  const { bestExam, averagesData, strengthSubject, weakSubject } = useMemo(() => {
+  // ===== Derived Metrics for Performance Dashboard (FIXED) =====
+const { bestExam, averagesData, strengthSubject, weakSubject } = useMemo(() => {
   if (!Array.isArray(examResults) || examResults.length === 0) {
     return { bestExam: null, averagesData: [], strengthSubject: null, weakSubject: null };
   }
@@ -100,29 +105,48 @@ export default function StudentDashboard({ onBack }) {
 
   const best = [...examResults].sort((a, b) => toNum(b.percentage) - toNum(a.percentage))[0];
 
-  const totals = { physics: 0, chemistry: 0, maths: 0, biology: 0 };
-  const count = examResults.length;
+  // 🔹 Calculate subject percentages per exam, then average
+  let physicsPctSum = 0;
+  let chemistryPctSum = 0;
+  let mathsPctSum = 0;
+  let biologyPctSum = 0;
+  let validCount = 0;
 
   for (const r of examResults) {
-    totals.physics += toNum(r.physics);
-    totals.chemistry += toNum(r.chemistry);
-    totals.maths += toNum(r.maths);
-    totals.biology += toNum(r.biology);
+    const physicsPct = r.max_marks_physics > 0 
+      ? (toNum(r.physics_marks) / toNum(r.max_marks_physics)) * 100 
+      : 0;
+    const chemistryPct = r.max_marks_chemistry > 0 
+      ? (toNum(r.chemistry_marks) / toNum(r.max_marks_chemistry)) * 100 
+      : 0;
+    const mathsPct = r.max_marks_maths > 0 
+      ? (toNum(r.maths_marks) / toNum(r.max_marks_maths)) * 100 
+      : 0;
+    const biologyPct = r.max_marks_biology > 0 
+      ? (toNum(r.biology_marks) / toNum(r.max_marks_biology)) * 100 
+      : 0;
+
+    physicsPctSum += physicsPct;
+    chemistryPctSum += chemistryPct;
+    mathsPctSum += mathsPct;
+    biologyPctSum += biologyPct;
+    validCount++;
   }
 
-  // ✅ Structure data with one row per subject
-  const averagesData = [
-  { subject: 'Physics', physics: count ? Number((totals.physics / count).toFixed(2)) : 0, average: count ? Number((totals.physics / count).toFixed(2)) : 0 },
-  { subject: 'Chemistry', chemistry: count ? Number((totals.chemistry / count).toFixed(2)) : 0, average: count ? Number((totals.chemistry / count).toFixed(2)) : 0 },
-  { subject: 'Mathematics', maths: count ? Number((totals.maths / count).toFixed(2)) : 0, average: count ? Number((totals.maths / count).toFixed(2)) : 0 },
-  { subject: 'Biology', biology: count ? Number((totals.biology / count).toFixed(2)) : 0, average: count ? Number((totals.biology / count).toFixed(2)) : 0 }
-];
+  const avgPhysics = validCount ? Number((physicsPctSum / validCount).toFixed(2)) : 0;
+  const avgChemistry = validCount ? Number((chemistryPctSum / validCount).toFixed(2)) : 0;
+  const avgMaths = validCount ? Number((mathsPctSum / validCount).toFixed(2)) : 0;
+  const avgBiology = validCount ? Number((biologyPctSum / validCount).toFixed(2)) : 0;
 
-  const sorted = [...averagesData].sort((a, b) => {
-    const avgA = a.physics || a.chemistry || a.maths || a.biology;
-    const avgB = b.physics || b.chemistry || b.maths || b.biology;
-    return avgB - avgA;
-  });
+  // ✅ Structure data with subject percentages
+  const averagesData = [
+    { subject: 'Physics', average: avgPhysics },
+    { subject: 'Chemistry', average: avgChemistry },
+    { subject: 'Mathematics', average: avgMaths },
+    { subject: 'Biology', average: avgBiology }
+  ];
+
+  const sorted = [...averagesData].sort((a, b) => b.average - a.average);
   const strength = sorted[0] || null;
   const weak = sorted[sorted.length - 1] || null;
 
@@ -134,224 +158,173 @@ export default function StudentDashboard({ onBack }) {
   };
 }, [examResults]);
 
-  // 👇 DOWNLOAD AS PDF FUNCTION
-  const downloadPDF = () => {
-  if (!student || examResults.length === 0) return;
-
-  const doc = new jsPDF('l'); // Landscape orientation
-  const schoolName = student.school_name || "School Name";
-
-  // ======================
-  // 📄 PAGE 1: Best Performed Exam
-  // ======================
-  let y = 50; // Running Y position
-
-  // Header (repeated on each page)
-  doc.setFontSize(18);
-  doc.text(`${schoolName} - Student Report Card`, 14, 20);
-  doc.setFontSize(12);
-  doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
-
-  // 🏆 Best Performed Exam
-  doc.setFontSize(14);
-  doc.text("Best Performed Exam", 14, y);
-  y += 10;
-
-  if (bestExam) {
-    const labelX = 14;
-    const valueX = 70;
-    const lineHeight = 8;
-
-    const addRow = (label, value) => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(label, labelX, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(value, valueX, y);
-      y += lineHeight;
-    };
-
-    addRow("Exam:", `${bestExam.exam} (${bestExam.program})`);
-    addRow("Date:", bestExam.date || '—');
-    addRow("Percentage:", `${(Number(bestExam.percentage) || 0).toFixed(2)}%`);
-    addRow("Class Rank:", bestExam.class_rank ?? '—');
-    addRow("School Rank:", bestExam.school_rank ?? '—');
-    addRow("All Schools Rank:", bestExam.all_schools_rank ?? '—');
+const downloadPDF = async (studentData, schoolData, examResults) => {
+  // 🔹 Early validation
+  if (!studentData || !schoolData || !examResults?.length) {
+    throw new Error('Missing required data for PDF generation');
   }
 
-  // Add page break
-  doc.addPage();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  const schoolName = schoolData.school_name || "School Name";
+  const studentName = studentData.name || "Student Name";
+  const rollNo = studentData.roll_no || "—";
+  const classSec = `${studentData.class}-${studentData.section}`;
 
-  // ======================
-// 📄 PAGE 2: Cumulative Averages Bar Chart
-// ======================
-y = 100; // Start lower to avoid overlap with header
+  // 🔹 Compute overall average
+  const overallAvg = examResults.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0) / examResults.length;
 
-// Header
-doc.setFontSize(18);
-doc.text(`${schoolName} - Student Report Card`, 14, 20);
-doc.setFontSize(12);
-doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
-doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
-doc.text("Cumulative Averages (All Exams)", 14, 50);
-y += 15; // Space after title
+  // 🔹 Group exams by type
+  const groupedExams = {
+    weekly: [],
+    unit: [],
+    grand: [],
+    other: []
+  };
 
-// 📊 Define colors for chart
-const colors = {
-  Physics: [0, 102, 204],    // Blue
-  Chemistry: [255, 165, 0],  // Orange
-  Mathematics: [0, 128, 0],   // Green
-  Biology: [255, 0, 0]        // Red
-};
-
-const maxAvg = Math.max(...averagesData.map(d => d.physics || d.chemistry || d.maths || d.biology));
-
-// Chart dimensions
-const chartX = 14;
-const chartY = y + 10; // Start chart 10 units below title
-const chartWidth = 180;
-const chartHeight = 70;
-const barWidth = 8;
-
-// Draw Y-axis grid and labels
-for (let val = 0; val <= 40; val += 10) {
-  const yPixel = chartY - (val / maxAvg) * chartHeight;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(chartX, yPixel, chartX + chartWidth, yPixel);
-  doc.text(`${val}`, chartX - 10, yPixel + 3);
-}
-
-// Draw X-axis
-doc.setDrawColor(200, 200, 200);
-doc.line(chartX, chartY, chartX + chartWidth, chartY);
-
-// Draw bars
-averagesData.forEach((item, i) => {
-  const avg = item.physics || item.chemistry || item.maths || item.biology;
-  const height = (avg / maxAvg) * chartHeight;
-  const x = chartX + i * 45;
-
-  const color = colors[item.subject] || [255, 0, 0];
-  doc.setFillColor(color[0], color[1], color[2]);
-  doc.rect(x, chartY - height, barWidth, height, 'F');
-
-  // Label below bar
-  doc.text(item.subject, x + barWidth + 2, chartY + 12);
-  doc.text(avg.toFixed(1), x + barWidth + 2, chartY + 22);
-});
-
-// Draw legend
-const legendY = chartY + 35;
-doc.setFontSize(9);
-doc.text("Legend:", chartX, legendY);
-doc.setFillColor(255, 0, 0);
-doc.rect(chartX + 40, legendY - 4, 8, 8, 'F');
-doc.text("Biology", chartX + 50, legendY);
-doc.setFillColor(255, 165, 0);
-doc.rect(chartX + 40, legendY + 8, 8, 8, 'F');
-doc.text("Chemistry", chartX + 50, legendY + 8);
-doc.setFillColor(0, 128, 0);
-doc.rect(chartX + 40, legendY + 16, 8, 8, 'F');
-doc.text("Mathematics", chartX + 50, legendY + 16);
-doc.setFillColor(0, 102, 204);
-doc.rect(chartX + 40, legendY + 24, 8, 8, 'F');
-doc.text("Physics", chartX + 50, legendY + 24);
-
-  // Add page break
-  doc.addPage();
-
-  // ======================
-  // 📄 PAGE 3: Strength & Weakness
-  // ======================
-  y = 50; // Reset Y position for new page
-
-  // Header
-  doc.setFontSize(18);
-  doc.text(`${schoolName} - Student Report Card`, 14, 20);
-  doc.setFontSize(12);
-  doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
-
-  // 🔭 Strength & Weakness
-  doc.setFontSize(14);
-  doc.text("Strength & Weak Area", 14, y);
-  y += 20;
-
-  if (strengthSubject) {
-  const strengthText = `Strength: ${strengthSubject.subject} • Avg: ${strengthSubject.average}`;
-  const strengthWidth = doc.getTextWidth(strengthText) + 8;
-  const badgeHeight = 16;
-
-  doc.setFillColor(135, 206, 235); // Light teal
-  doc.roundedRect(14, y - badgeHeight / 2, strengthWidth, badgeHeight, 4, 4, 'FD');
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text(strengthText, 18, y + 4);
-  y += 25;
-}
-
-if (weakSubject) {
-  const weakText = `Weak: ${weakSubject.subject} • Avg: ${weakSubject.average}`;
-  const weakWidth = doc.getTextWidth(weakText) + 8;
-  const badgeHeight = 16;
-
-  doc.setFillColor(255, 215, 0); // Orange
-  doc.roundedRect(14, y - badgeHeight / 2, weakWidth, badgeHeight, 4, 4, 'FD');
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text(weakText, 18, y + 4);
-  y += 25;
-}
-
-  // Add page break
-  doc.addPage();
-
-  // ======================
-  // 📄 PAGE 4: Exam Results Table
-  // ======================
-  y = 50; // Reset Y position for new page
-
-  // Header
-  doc.setFontSize(18);
-  doc.text(`${schoolName} - Student Report Card`, 14, 20);
-  doc.setFontSize(12);
-  doc.text(`Name: ${student.name} | Roll No: ${student.roll_no} | Class: ${student.class}-${student.section}`, 14, 30);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 40);
-
-  // 📋 Exam Results Table
-  doc.setFontSize(12);
-  doc.text("Exam Results", 14, y);
-  y += 10;
-
-  const tableColumn = [
-    "Date", "Exam", "Program", "Physics", "Chemistry", "Maths", "Biology", "Total", "%", "Class Rank", "School Rank", "All Schools"
-  ];
-  const tableRows = examResults.map(r => [
-    r.date,
-    r.exam,
-    r.program,
-    (Number(r.physics) || 0).toFixed(2),
-    (Number(r.chemistry) || 0).toFixed(2),
-    (Number(r.maths) || 0).toFixed(2),
-    (Number(r.biology) || 0).toFixed(2),
-    (Number(r.total) || 0).toFixed(2),
-    (Number(r.percentage) || 0).toFixed(2),
-    r.class_rank,
-    r.school_rank,
-    r.all_schools_rank
-  ]);
-
-  doc.autoTable({
-    startY: y,
-    head: [tableColumn],
-    body: tableRows,
-    theme: 'grid',
-    headStyles: { fillColor: [70, 130, 180] },
-    margin: { left: 14, right: 14 },
+  examResults.forEach(exam => {
+    const pattern = exam.exam_pattern || '';
+    if (pattern.startsWith('WEEK_TEST')) {
+      groupedExams.weekly.push(exam);
+    } else if (pattern.startsWith('UNIT_TEST')) {
+      groupedExams.unit.push(exam);
+    } else if (pattern.startsWith('GRAND_TEST')) {
+      groupedExams.grand.push(exam);
+    } else {
+      groupedExams.other.push(exam);
+    }
   });
 
-  // Save PDF
-  doc.save(`ReportCard_${student.name}_${new Date().toISOString().split('T')[0]}.pdf`);
+  // Sort each group by percentage (descending)
+  Object.keys(groupedExams).forEach(key => {
+    groupedExams[key].sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
+  });
+
+  // ======================
+  // 🏫 HEADER: School Name + Area (NO LOGO)
+  // ======================
+  let y = 30;
+
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text(schoolName, 20, y);
+  y += 15;
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Area: ${schoolData.area || 'N/A'}`, 20, y);
+  y += 20;
+
+  // ======================
+  // Student Info
+  // ======================
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Student: ${studentName}`, 20, y);
+  doc.text(`Roll No: ${rollNo}`, pageWidth - 20, y, { align: 'right' });
+  y += 10;
+  doc.text(`Class: ${classSec}`, 20, y);
+  y += 20;
+
+  // ======================
+  // Overall Average (Big & Bold)
+  // ======================
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 100, 0); // Dark green
+  doc.text(`${overallAvg.toFixed(2)}%`, pageWidth / 2, y, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  y += 25;
+
+  // ======================
+  // Helper: Render Exam Group
+  // ======================
+  const renderExamGroup = (title, exams) => {
+    if (exams.length === 0) return;
+
+    const best = exams[0];
+    const avg = exams.reduce((sum, e) => sum + (e.percentage || 0), 0) / exams.length;
+
+    // Section Title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 20, y);
+    y += 10;
+
+    // Avg & Best
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Avg: ${avg.toFixed(2)}%`, 20, y);
+    doc.text(`Best: ${best.percentage.toFixed(2)}% (${best.exam.replace(/_/g, ' ')})`, 80, y);
+    y += 15;
+
+    // Table Header
+    const headers = ["Exam", "Physics", "Chemistry", "Maths", "Biology", "Total Marks", "Grade", "Rank", "%"];
+    const headerX = [20, 60, 80, 100, 120, 140, 160, 175, 190];
+    doc.setFont('helvetica', 'bold');
+    headers.forEach((h, i) => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(h, headerX[i], y);
+    });
+    y += 8;
+    doc.line(20, y, 195, y); // underline
+    y += 5;
+
+    // Only show best exam (like sample PDF)
+    if (best) {
+      const getGrade = (pct) => {
+        if (pct >= 90) return 'A+';
+        if (pct >= 80) return 'A';
+        if (pct >= 70) return 'B';
+        if (pct >= 60) return 'C';
+        return 'D';
+      };
+
+      const row = [
+        best.exam.replace(/_/g, ' '),
+        (best.physics || 0).toFixed(0),
+        (best.chemistry || 0).toFixed(0),
+        (best.maths || 0).toFixed(0),
+        (best.biology || 0).toFixed(0),
+        (best.total || 0).toFixed(0),
+        getGrade(best.percentage),
+        best.class_rank || '-',
+        `${best.percentage.toFixed(2)}%`
+      ];
+
+      row.forEach((cell, i) => {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(String(cell), headerX[i], y);
+      });
+      y += 15;
+    }
+  };
+
+  // Render Groups
+  renderExamGroup("Weekly Tests", groupedExams.weekly);
+  renderExamGroup("Unit Tests", groupedExams.unit);
+  renderExamGroup("Grand Tests", groupedExams.grand);
+
+  // Add signature section on last page
+  doc.addPage(); // Ensure fresh page for signatures
+  const bottomY = doc.internal.pageSize.height - 40;
+  doc.setFontSize(10);
+  doc.text("Parent/Guardian Signature", 30, bottomY);
+  doc.text("School Principal Signature", 90, bottomY);
+  doc.text("Organization Head Signature", 150, bottomY);
+
+  doc.text("Date: ___________", 30, bottomY + 8);
+  doc.text("Date: ___________", 90, bottomY + 8);
+  doc.text("Date: ___________", 150, bottomY + 8);
+
+  // Save
+  doc.save(`ReportCard_${studentName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
   if (loading) {
@@ -414,18 +387,15 @@ if (weakSubject) {
           </div>
 
           {/* Cumulative Averages Bar Chart */}
-          <div style={{ width: '100%', height: 260 }}>
+<div style={{ width: '100%', height: 260 }}>
   <ResponsiveContainer>
-    <BarChart data={averagesData}  barSize={200} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+    <BarChart data={averagesData} barSize={200} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
       <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="subject" tick={false}/>
+      <XAxis dataKey="subject" tick={false} />
       <YAxis />
-      <Tooltip formatter={(v) => [v, 'Average']} />
+      <Tooltip formatter={(v) => [`${v}%`, 'Average']} />
       <Legend />
-      <Bar dataKey="physics" name="Physics" fill="#1f77b4" />
-      <Bar dataKey="chemistry" name="Chemistry" fill="#ff7f0e" />
-      <Bar dataKey="maths" name="Mathematics" fill="#2ca02c" />
-      <Bar dataKey="biology" name="Biology" fill="#d62728" />
+      <Bar dataKey="average" name="Average %" fill="#1f77b4" /> {/* Single bar per subject */}
     </BarChart>
   </ResponsiveContainer>
 </div>
@@ -437,11 +407,11 @@ if (weakSubject) {
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 <div style={styles.pillSuccess}>
                   <span style={{ fontWeight: 700 }}>Strength:</span>&nbsp;{strengthSubject.subject}
-                  &nbsp;•&nbsp;Avg {strengthSubject.average}
+                  &nbsp;•&nbsp;{strengthSubject.average}%
                 </div>
                 <div style={styles.pillWarning}>
                   <span style={{ fontWeight: 700 }}>Weak:</span>&nbsp;{weakSubject.subject}
-                  &nbsp;•&nbsp;Avg {weakSubject.average}
+                  &nbsp;•&nbsp;{weakSubject.average}%
                 </div>
               </div>
             ) : (
@@ -456,56 +426,85 @@ if (weakSubject) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3>📊 Exam Results</h3>
         {examResults.length > 0 && (
-          <button onClick={downloadPDF} style={styles.downloadButton}>
-            📄 Download Report Card (PDF)
-          </button>
+          <button 
+  onClick={async () => {
+    // 🔹 Validation
+    if (!school) {
+      alert('School data not loaded yet. Please wait.');
+      return;
+    }
+    if (examResults.length === 0) {
+      alert('No exam results to download.');
+      return;
+    }
+    try {
+      await downloadPDF(student, school, examResults);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  }}
+  disabled={!school || examResults.length === 0 || loading}
+  style={styles.downloadButton}
+>
+  📄 Download Report Card (PDF)
+</button>
         )}
       </div>
 
       {examResults.length > 0 ? (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Exam</th>
-                <th>Program</th>
-                <th>Physics</th>
-                <th>Chemistry</th>
-                <th>Maths</th>
-                <th>Biology</th>
-                <th>Total</th>
-                <th>%</th>
-                <th>Class Rank</th>
-                <th>School Rank</th>
-                <th>Global Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {examResults.map((r, i) => (
-                <tr key={i}>
-                  <td>{r.date}</td>
-                  <td>{r.exam}</td>
-                  <td>{r.program}</td>
-                  <td>{Number(r.physics || 0).toFixed(2)}</td>
-                  <td>{Number(r.chemistry || 0).toFixed(2)}</td>
-                  <td>{Number(r.maths || 0).toFixed(2)}</td>
-                  <td>{Number(r.biology || 0).toFixed(2)}</td>
-                  <td>{Number(r.total || 0).toFixed(2)}</td>
-                  <td>{Number(r.percentage || 0).toFixed(2)}</td>
-                  <td>{r.class_rank}</td>
-                  <td>{r.school_rank}</td>
-                  <td>{r.all_schools_rank}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p style={{ color: '#718096', fontStyle: 'italic' }}>
-          No exam results available yet.
-        </p>
-      )}
+  <div style={{ overflowX: 'auto' }}>
+    <table style={styles.table}>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Exam</th>
+          <th>Program</th>
+          <th>Physics</th>
+          <th>Chemistry</th>
+          <th>Maths</th>
+          <th>Biology</th>
+          <th>Total</th>
+          <th>%</th>
+          <th>Class Rank</th>
+          <th>School Rank</th>
+          <th>Global Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        {examResults.map((r, i) => {
+          // Helper to format "marks (percentage%)"
+          const formatSubject = (marks, max) => {
+            if (max == null || max === 0) return `${marks || 0}`;
+            const pct = ((marks || 0) / max) * 100;
+            return `${marks || 0} (${pct.toFixed(0)}%)`;
+          };
+
+          return (
+            <tr key={i}>
+              <td>{r.date}</td>
+              <td>{r.exam}</td>
+              <td>{r.program}</td>
+              <td>{formatSubject(r.physics_marks, r.max_marks_physics)}</td>
+              <td>{formatSubject(r.chemistry_marks, r.max_marks_chemistry)}</td>
+              <td>{formatSubject(r.maths_marks, r.max_marks_maths)}</td>
+              <td>{formatSubject(r.biology_marks, r.max_marks_biology)}</td>
+              <td>{Number(r.total || 0).toFixed(2)}</td>
+              <td>{Number(r.percentage || 0).toFixed(2)}%</td>
+              <td>{r.class_rank}</td>
+              <td>{r.school_rank}</td>
+              <td>{r.all_schools_rank}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+) : (
+  <p style={{ color: '#718096', fontStyle: 'italic' }}>
+    No exam results available yet.
+  </p>
+)}
 
       <hr style={styles.divider} />
 

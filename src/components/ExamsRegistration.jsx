@@ -165,7 +165,6 @@ const getExamOptions = () => {
 
   return allExams;
 };
- // Handle form submission
 // Handle form submission
 const handleSubmit = (e) => {
   e.preventDefault();
@@ -182,7 +181,6 @@ const handleSubmit = (e) => {
     alert('Invalid exam selected.');
     return;
   }
-
   // ✅ Split by LAST dash to handle formats like "GRADE-6-A" or "6-A"
   const classSection = examForm.classSection;
   const lastDashIndex = classSection.lastIndexOf('-');
