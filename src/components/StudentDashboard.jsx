@@ -53,6 +53,34 @@ export default function StudentDashboard({ onBack }) {
     const resultsData = await resultsRes.json();
     setExamResults(resultsData || []);
 
+    // ✅ ===== INSERT SORTING LOGIC HERE =====
+    const getExamTypePriority = (examName) => {
+      if (examName.startsWith('WEEK_TEST')) return 0;
+      if (examName.startsWith('UNIT_TEST')) return 1;
+      if (examName.startsWith('GRAND_TEST')) return 2;
+      return 3;
+    };
+
+    const parseExamNumber = (examName) => {
+      const match = examName.match(/.*_(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const sortedResults = [...(resultsData || [])].sort((a, b) => {
+      const prioA = getExamTypePriority(a.exam);
+      const prioB = getExamTypePriority(b.exam);
+      if (prioA !== prioB) return prioA - prioB;
+
+      const numA = parseExamNumber(a.exam);
+      const numB = parseExamNumber(b.exam);
+      if (numA !== numB) return numA - numB;
+
+      return a.exam.localeCompare(b.exam);
+    });
+    // ✅ =====================================
+
+    setExamResults(sortedResults); // 👈 use sortedResults instead of raw resultsData
+
     // 👉 FETCH FULL SCHOOL DATA (includes logo_url, area, etc.)
     const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
     if (!schoolRes.ok) throw new Error(`Failed to fetch school details: ${schoolRes.status}`);
@@ -159,172 +187,292 @@ const { bestExam, averagesData, strengthSubject, weakSubject } = useMemo(() => {
 }, [examResults]);
 
 const downloadPDF = async (studentData, schoolData, examResults) => {
-  // 🔹 Early validation
   if (!studentData || !schoolData || !examResults?.length) {
     throw new Error('Missing required data for PDF generation');
   }
 
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  const schoolName = schoolData.school_name || "School Name";
-  const studentName = studentData.name || "Student Name";
-  const rollNo = studentData.roll_no || "—";
-  const classSec = `${studentData.class}-${studentData.section}`;
-
-  // 🔹 Compute overall average
-  const overallAvg = examResults.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0) / examResults.length;
-
-  // 🔹 Group exams by type
-  const groupedExams = {
-    weekly: [],
-    unit: [],
-    grand: [],
-    other: []
-  };
-
-  examResults.forEach(exam => {
-    const pattern = exam.exam_pattern || '';
-    if (pattern.startsWith('WEEK_TEST')) {
-      groupedExams.weekly.push(exam);
-    } else if (pattern.startsWith('UNIT_TEST')) {
-      groupedExams.unit.push(exam);
-    } else if (pattern.startsWith('GRAND_TEST')) {
-      groupedExams.grand.push(exam);
-    } else {
-      groupedExams.other.push(exam);
-    }
+  // 📄 CREATE LANDSCAPE PDF
+  const doc = new jsPDF({
+    orientation: 'landscape', // ← KEY CHANGE
+    unit: 'mm',
+    format: 'a4'
   });
 
-  // Sort each group by percentage (descending)
-  Object.keys(groupedExams).forEach(key => {
-    groupedExams[key].sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
-  });
+  const pageWidth = doc.internal.pageSize.width; // ~297mm
+  const pageHeight = doc.internal.pageSize.height; // ~210mm
 
-  // ======================
-  // 🏫 HEADER: School Name + Area (NO LOGO)
-  // ======================
-  let y = 30;
-
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text(schoolName, 20, y);
-  y += 15;
-
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Area: ${schoolData.area || 'N/A'}`, 20, y);
-  y += 20;
-
-  // ======================
-  // Student Info
-  // ======================
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Student: ${studentName}`, 20, y);
-  doc.text(`Roll No: ${rollNo}`, pageWidth - 20, y, { align: 'right' });
-  y += 10;
-  doc.text(`Class: ${classSec}`, 20, y);
-  y += 20;
-
-  // ======================
-  // Overall Average (Big & Bold)
-  // ======================
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 100, 0); // Dark green
-  doc.text(`${overallAvg.toFixed(2)}%`, pageWidth / 2, y, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 25;
-
-  // ======================
-  // Helper: Render Exam Group
-  // ======================
-  const renderExamGroup = (title, exams) => {
-    if (exams.length === 0) return;
-
-    const best = exams[0];
-    const avg = exams.reduce((sum, e) => sum + (e.percentage || 0), 0) / exams.length;
-
-    // Section Title
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 20, y);
-    y += 10;
-
-    // Avg & Best
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Avg: ${avg.toFixed(2)}%`, 20, y);
-    doc.text(`Best: ${best.percentage.toFixed(2)}% (${best.exam.replace(/_/g, ' ')})`, 80, y);
-    y += 15;
-
-    // Table Header
-    const headers = ["Exam", "Physics", "Chemistry", "Maths", "Biology", "Total Marks", "Grade", "Rank", "%"];
-    const headerX = [20, 60, 80, 100, 120, 140, 160, 175, 190];
-    doc.setFont('helvetica', 'bold');
-    headers.forEach((h, i) => {
-      if (y > 280) {
-        doc.addPage();
-        y = 20;
-      }
-      doc.text(h, headerX[i], y);
-    });
-    y += 8;
-    doc.line(20, y, 195, y); // underline
-    y += 5;
-
-    // Only show best exam (like sample PDF)
-    if (best) {
-      const getGrade = (pct) => {
-        if (pct >= 90) return 'A+';
-        if (pct >= 80) return 'A';
-        if (pct >= 70) return 'B';
-        if (pct >= 60) return 'C';
-        return 'D';
-      };
-
-      const row = [
-        best.exam.replace(/_/g, ' '),
-        (best.physics || 0).toFixed(0),
-        (best.chemistry || 0).toFixed(0),
-        (best.maths || 0).toFixed(0),
-        (best.biology || 0).toFixed(0),
-        (best.total || 0).toFixed(0),
-        getGrade(best.percentage),
-        best.class_rank || '-',
-        `${best.percentage.toFixed(2)}%`
-      ];
-
-      row.forEach((cell, i) => {
-        if (y > 280) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(String(cell), headerX[i], y);
-      });
-      y += 15;
-    }
+  // 🔹 Helper: Get subject percentage
+  const getSubjectPct = (marks, max) => {
+    if (!max || max <= 0) return 0;
+    return ((marks || 0) / max) * 100;
   };
 
-  // Render Groups
-  renderExamGroup("Weekly Tests", groupedExams.weekly);
-  renderExamGroup("Unit Tests", groupedExams.unit);
-  renderExamGroup("Grand Tests", groupedExams.grand);
+  // ======================
+  // 🎨 THEME COLORS
+  // ======================
+  const BLUE = [30, 80, 150];   // Deep blue
+  const LIGHT_BLUE = [230, 240, 255]; // Light blue background
+  const WHITE = [255, 255, 255];
 
-  // Add signature section on last page
-  doc.addPage(); // Ensure fresh page for signatures
-  const bottomY = doc.internal.pageSize.height - 40;
+  // ======================
+  // 🏫 HEADER (Blue Theme)
+  // ======================
+  let y = 15;
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setFillColor(...BLUE);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, 25, 'F'); // Full header bar
+  doc.text(schoolData.school_name || "School Name", 15, 15);
+
   doc.setFontSize(10);
-  doc.text("Parent/Guardian Signature", 30, bottomY);
-  doc.text("School Principal Signature", 90, bottomY);
-  doc.text("Organization Head Signature", 150, bottomY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Area: ${schoolData.area || 'N/A'}`, 15, 22);
 
-  doc.text("Date: ___________", 30, bottomY + 8);
-  doc.text("Date: ___________", 90, bottomY + 8);
-  doc.text("Date: ___________", 150, bottomY + 8);
+  y = 30;
 
-  // Save
-  doc.save(`ReportCard_${studentName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+  // ======================
+  // 🧑‍🎓 STUDENT INFO BOXES (with Strength & Weak Subject)
+  // ======================
+  const boxX = 15;
+  const boxY = y;
+  const boxW = 45;
+  const boxH = 22;
+  const gap = 5;
+
+  // Calculate strength & weak subjects
+  const subjKeys = [
+    { key: 'physics', label: 'Physics' },
+    { key: 'chemistry', label: 'Chemistry' },
+    { key: 'maths', label: 'Mathematics' },
+    { key: 'biology', label: 'Biology' }
+  ];
+
+  const avgMap = {};
+  for (const subj of subjKeys) {
+    const marksKey = `${subj.key}_marks`;
+    const maxKey = `max_marks_${subj.key}`;
+    const totalPct = examResults.reduce((sum, r) => {
+      return sum + getSubjectPct(r[marksKey], r[maxKey]);
+    }, 0);
+    avgMap[subj.key] = examResults.length ? totalPct / examResults.length : 0;
+  }
+
+  const sortedSubj = Object.entries(avgMap)
+    .sort(([, a], [, b]) => b - a)
+    .map(([key, pct]) => ({ key, pct }));
+
+  const strength = sortedSubj[0]?.key || '—';
+  const weak = sortedSubj[sortedSubj.length - 1]?.key || '—';
+
+  // Box 1: Name
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  doc.rect(boxX, boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Student Name", boxX + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(studentData.name || "—", boxX + 3, boxY + 14);
+
+  // Box 2: Roll No
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  doc.rect(boxX + boxW + gap, boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Roll No", boxX + boxW + gap + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 3, boxY + 14);
+
+  // Box 3: Class
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  doc.rect(boxX + 2 * (boxW + gap), boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Class Section", boxX + 2 * (boxW + gap) + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 3, boxY + 14);
+
+  // Box 4: Best Performance
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  const bestExam = examResults.reduce((best, curr) =>
+    (curr.percentage || 0) > (best.percentage || 0) ? curr : best, {});
+  doc.rect(boxX + 3 * (boxW + gap), boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 3, boxY + 14);
+
+  // Box 5: Strength Subject
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  doc.rect(boxX + 4 * (boxW + gap), boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 3, boxY + 14);
+
+  // Box 6: Weak Subject
+  doc.setFillColor(...WHITE);
+  doc.setTextColor(0, 0, 0);
+  doc.rect(boxX + 5 * (boxW + gap), boxY, boxW, boxH, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 3, boxY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 3, boxY + 14);
+
+  y = boxY + boxH + 10;
+
+  // ======================
+  // 📊 CUMULATIVE SUBJECT AVERAGES (P, C, M, B) — as boxes
+  // ======================
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text("Cumulative Performance", 15, y);
+  y += 8;
+
+  const graphX = 15;
+  const graphY = y;
+  const graphW = 35;
+  const graphH = 25;
+  const graphGap = 8;
+
+  subjKeys.forEach((subj, i) => {
+    const x = graphX + i * (graphW + graphGap);
+    doc.setFillColor(...LIGHT_BLUE);
+    doc.rect(x, graphY, graphW, graphH, 'F');
+    doc.setFillColor(...WHITE);
+    doc.rect(x + 1, graphY + 1, graphW - 2, graphH - 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(subj.label, x + 5, graphY + 8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
+  });
+
+  y = graphY + graphH + 15;
+
+  // ======================
+// 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
+// ======================
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(11);
+doc.text("Exam Results", 15, y);
+y += 10;
+
+const tableData = examResults.map(r => {
+  const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
+  const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
+  const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
+  const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
+
+  return [
+    r.date || "—",
+    r.exam.replace(/_/g, ' ') || "—",
+    `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
+    `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
+    `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
+    `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
+    (r.total || 0).toFixed(0),
+    `${(r.percentage || 0).toFixed(1)}%`,
+    r.class_rank ?? "—",          // Class Rank
+    r.school_rank ?? "—",         // School Rank
+    r.all_schools_rank ?? "—"     // All Schools Rank
+  ];
+});
+
+doc.autoTable({
+  head: [
+    [
+      "Date",
+      "Exam",
+      "Physics",
+      "Chemistry",
+      "Maths",
+      "Biology",
+      "Total",
+      "%",
+      "Class\nRank",
+      "School\nRank",
+      "All Schools\nRank"
+    ]
+  ],
+  body: tableData,
+  startY: y,
+  theme: 'grid',
+  styles: {
+    fontSize: 8,
+    cellPadding: 2,
+    fillColor: WHITE,
+    textColor: 0,
+  },
+  headStyles: {
+    fillColor: BLUE,
+    textColor: 255,
+    fontStyle: 'bold',
+    fontSize: 8,
+    halign: 'center'
+  },
+  columnStyles: {
+    0: { cellWidth: 22 }, // Date
+    1: { cellWidth: 32 }, // Exam
+    2: { cellWidth: 26 }, // Physics
+    3: { cellWidth: 26 }, // Chemistry
+    4: { cellWidth: 26 }, // Maths
+    5: { cellWidth: 26 }, // Biology
+    6: { cellWidth: 20 }, // Total
+    7: { cellWidth: 18 }, // %
+    8: { cellWidth: 18 }, // Class Rank
+    9: { cellWidth: 18 }, // School Rank
+    10: { cellWidth: 20 } // All Schools Rank
+  },
+  margin: { left: 15, right: 15 },
+  tableWidth: 'wrap'
+});
+
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ======================
+  // ✍️ SIGNATURES (at bottom)
+  // ======================
+  const sigY = pageHeight - 30;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+
+  // Signature lines with light blue background
+  doc.setFillColor(...LIGHT_BLUE);
+  doc.rect(15, sigY - 10, 50, 15, 'F');
+  doc.rect(70, sigY - 10, 50, 15, 'F');
+  doc.rect(125, sigY - 10, 50, 15, 'F');
+
+  doc.setTextColor(0, 0, 0);
+  doc.text("Parent/Guardian", 20, sigY);
+  doc.text("School Principal", 75, sigY);
+  doc.text("Organization Head", 130, sigY);
+
+  doc.text("Date: ___________", 20, sigY + 8);
+  doc.text("Date: ___________", 75, sigY + 8);
+  doc.text("Date: ___________", 130, sigY + 8);
+
+  // ======================
+  // 💾 SAVE
+  // ======================
+  const fileName = `ReportCard_${studentData.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
 };
 
   if (loading) {
