@@ -409,7 +409,7 @@ doc.autoTable({
       "%",
       "Class\nRank",
       "School\nRank",
-      "All Schools\nRank"
+      "All India\nRank"
     ]
   ],
   body: tableData,
@@ -526,7 +526,7 @@ doc.autoTable({
                 <p style={styles.metricLine}><strong>Percentage:</strong> {(Number(bestExam.percentage) || 0).toFixed(2)}%</p>
                 <p style={styles.metricLine}><strong>Class Rank:</strong> {bestExam.class_rank ?? '—'}</p>
                 <p style={styles.metricLine}><strong>School Rank:</strong> {bestExam.school_rank ?? '—'}</p>
-                <p style={styles.metricLine}><strong>Global Rank:</strong> {bestExam.all_schools_rank ?? '—'}</p>
+                <p style={styles.metricLine}><strong>All India Rank:</strong> {bestExam.all_schools_rank ?? '—'}</p>
               </div>
             ) : (
               <p style={{ color: '#718096', fontStyle: 'italic' }}>Not enough data.</p>
@@ -615,7 +615,7 @@ doc.autoTable({
           <th>%</th>
           <th>Class Rank</th>
           <th>School Rank</th>
-          <th>Global Rank</th>
+          <th>All India Rank</th>
         </tr>
       </thead>
       <tbody>
