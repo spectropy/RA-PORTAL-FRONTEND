@@ -310,7 +310,7 @@ export default function SchoolTable({ rows, onSchoolDeleted }) {
                                     {schoolDetails[r.school_id].teachers.map((t, idx) => (
                                       <tr key={idx}>
                                         <td style={{ ...tdSmall, fontFamily: 'monospace', fontWeight: 500 }}>
-                                          {t.teacherId || '-'}
+                                          {t.teacher_id || '-'}
                                         </td>
                                         <td style={tdSmall}>{t.name}</td>
                                         <td style={tdSmall}>{t.contact || '-'}</td>

@@ -112,7 +112,7 @@ export default function SchoolForm({ onSubmit }) {
           <input value={district} onChange={e => setDistrict(e.target.value)} placeholder='e.g., Mahabubnagar' />
         </div>
       </div>
-
+      
       {/* submit */}
       <div className="row" style={{ marginTop: 24 }}>
         <button className="btn btn-primary" type='submit'>Add to List</button>

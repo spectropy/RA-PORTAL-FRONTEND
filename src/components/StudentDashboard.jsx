@@ -230,7 +230,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(255, 255, 255);
   doc.text(`Area: ${schoolData.area || 'N/A'}`, 15, 22);
-
+  doc.text(`Powered BY SPECTROPY`, 240, 15);
   y = 30;
 
   // ======================
@@ -275,7 +275,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Student Name", boxX + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(studentData.name || "—", boxX + 3, boxY + 14);
 
   // Box 2: Roll No
@@ -286,7 +286,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Roll No", boxX + boxW + gap + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 3, boxY + 14);
 
   // Box 3: Class
@@ -297,7 +297,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Class Section", boxX + 2 * (boxW + gap) + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 3, boxY + 14);
 
   // Box 4: Best Performance
@@ -310,7 +310,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 3, boxY + 14);
 
   // Box 5: Strength Subject
@@ -321,7 +321,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 3, boxY + 14);
 
   // Box 6: Weak Subject
@@ -332,7 +332,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 3, boxY + 14);
 
   y = boxY + boxH + 10;
@@ -341,7 +341,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   // 📊 CUMULATIVE SUBJECT AVERAGES (P, C, M, B) — as boxes
   // ======================
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(18);
   doc.text("Cumulative Performance", 15, y);
   y += 8;
 
@@ -357,10 +357,11 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
     doc.rect(x, graphY, graphW, graphH, 'F');
     doc.setFillColor(...WHITE);
     doc.rect(x + 1, graphY + 1, graphW - 2, graphH - 2, 'F');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(subj.label, x + 5, graphY + 8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(24);
     doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
   });
 
@@ -370,7 +371,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
 // 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
 // ======================
 doc.setFont('helvetica', 'bold');
-doc.setFontSize(11);
+doc.setFontSize(18);
 doc.text("Exam Results", 15, y);
 y += 10;
 
@@ -415,8 +416,9 @@ doc.autoTable({
   startY: y,
   theme: 'grid',
   styles: {
-    fontSize: 8,
+    fontSize: 10,
     cellPadding: 2,
+    fontStyle: 'bold',
     fillColor: WHITE,
     textColor: 0,
   },
@@ -424,7 +426,7 @@ doc.autoTable({
     fillColor: BLUE,
     textColor: 255,
     fontStyle: 'bold',
-    fontSize: 8,
+    fontSize: 11,
     halign: 'center'
   },
   columnStyles: {
@@ -450,23 +452,20 @@ doc.autoTable({
   // ✍️ SIGNATURES (at bottom)
   // ======================
   const sigY = pageHeight - 30;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'italic');
 
   // Signature lines with light blue background
   doc.setFillColor(...LIGHT_BLUE);
-  doc.rect(15, sigY - 10, 50, 15, 'F');
-  doc.rect(70, sigY - 10, 50, 15, 'F');
-  doc.rect(125, sigY - 10, 50, 15, 'F');
 
   doc.setTextColor(0, 0, 0);
   doc.text("Parent/Guardian", 20, sigY);
-  doc.text("School Principal", 75, sigY);
-  doc.text("Organization Head", 130, sigY);
+  doc.text("School Principal", 130, sigY);
+  doc.text("Organization Head", 240, sigY);
 
   doc.text("Date: ___________", 20, sigY + 8);
-  doc.text("Date: ___________", 75, sigY + 8);
   doc.text("Date: ___________", 130, sigY + 8);
+  doc.text("Date: ___________", 240, sigY + 8);
 
   // ======================
   // 💾 SAVE
