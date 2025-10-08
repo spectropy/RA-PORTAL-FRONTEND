@@ -236,11 +236,11 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   // ======================
   // 🧑‍🎓 STUDENT INFO BOXES (with Strength & Weak Subject)
   // ======================
-  const boxX = 15;
+  const boxX = 12;
   const boxY = y;
-  const boxW = 45;
+  const boxW = 50;
   const boxH = 22;
-  const gap = 5;
+  const gap = 1;
 
   // Calculate strength & weak subjects
   const subjKeys = [
@@ -275,7 +275,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFontSize(9);
   doc.text("Student Name", boxX + 3, boxY + 6);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(12);
   doc.text(studentData.name || "—", boxX + 3, boxY + 14);
   
   // Box 2: Roll No
@@ -284,10 +284,10 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.rect(boxX + boxW + gap, boxY, boxW, boxH, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text("Roll No", boxX + boxW + gap + 3, boxY + 6);
+  doc.text("Roll No", boxX + boxW + gap + 1, boxY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 3, boxY + 14);
+  doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 1, boxY + 14);
 
   // Box 3: Class
   doc.setFillColor(...WHITE);
@@ -295,10 +295,10 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.rect(boxX + 2 * (boxW + gap), boxY, boxW, boxH, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text("Class Section", boxX + 2 * (boxW + gap) + 3, boxY + 6);
+  doc.text("Class Section", boxX + 2 * (boxW + gap) + 1, boxY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 3, boxY + 14);
+  doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 1, boxY + 14);
 
   // Box 4: Best Performance
   doc.setFillColor(...WHITE);
@@ -308,10 +308,10 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.rect(boxX + 3 * (boxW + gap), boxY, boxW, boxH, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 3, boxY + 6);
+  doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 1, boxY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 3, boxY + 14);
+  doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 1, boxY + 14);
 
   // Box 5: Strength Subject
   doc.setFillColor(...WHITE);
@@ -319,10 +319,10 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.rect(boxX + 4 * (boxW + gap), boxY, boxW, boxH, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 3, boxY + 6);
+  doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 1, boxY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 3, boxY + 14);
+  doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 1, boxY + 14);
 
   // Box 6: Weak Subject
   doc.setFillColor(...WHITE);
@@ -330,10 +330,10 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.rect(boxX + 5 * (boxW + gap), boxY, boxW, boxH, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 3, boxY + 6);
+  doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 1, boxY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 3, boxY + 14);
+  doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 1, boxY + 14);
 
   y = boxY + boxH + 10;
 
