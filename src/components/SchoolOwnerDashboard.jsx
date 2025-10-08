@@ -12,7 +12,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [classAverages, setClassAverages] = useState([]);
   const [subjectSummaries, setSubjectSummaries] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-
+  
   // 🔄 Navigation State
   const [view, setView] = useState('overview'); // 'overview', 'batch', 'class-section', 'class-section-exam'
   const [selectedClassSection, setSelectedClassSection] = useState(null); // { class, section }
@@ -22,6 +22,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [examResults, setExamResults] = useState({});
   const [currentOMRExam, setCurrentOMRExam] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false); // 👈 New loading state
+
+  // 📝 Exam Wise View State (isolated from batch flow)
+  const [examWiseClassSection, setExamWiseClassSection] = useState(null);
+  const [examWiseExams, setExamWiseExams] = useState([]);
+  const [examWiseLoading, setExamWiseLoading] = useState(false);
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
@@ -58,34 +63,6 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     fetchSchoolAndAnalytics();
   }, [schoolId]);
-
-  // 🔄 NEW: Fetch exam results when currentOMRExam changes
-  useEffect(() => {
-    if (!currentOMRExam?.id) return;
-
-    const fetchExamResults = async () => {
-      setResultsLoading(true);
-      try {
-        const response = await fetch(`${API_BASE}/api/exams/${currentOMRExam.id}/results`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: Failed to load exam results`);
-        }
-
-        const results = await response.json();
-        setExamResults(prev => ({
-          ...prev,
-          [currentOMRExam.id]: results
-        }));
-      } catch (err) {
-        console.error("Error fetching exam results:", err);
-        setError("Failed to load results: " + err.message);
-      } finally {
-        setResultsLoading(false);
-      }
-    };
-
-    fetchExamResults();
-  }, [currentOMRExam?.id]);
 
   // 📄 PDF Download Handler
   const downloadPDF = (type, data, title) => {
@@ -353,10 +330,9 @@ const renderMetricButtons = () => (
       alignItems: 'center'
     }}>
       {[
-        { label: 'Batch Wise', key: 'batch' },
         { label: 'Subject Wise', key: 'subject' },
         { label: 'Teacher Wise', key: 'teacher' },
-        { label: 'Exam Wise', key: 'exam' },
+        { label: 'Batch(Exam Wise)', key: 'exam' },
         { label: 'Student Wise', key: 'student' }
       ].map(btn => (
         <button
@@ -440,723 +416,650 @@ const renderMetricButtons = () => (
     );
   };
 
-// 🖥️ Render Batch Wise View — FIXED COLUMN TABLE
-const renderBatchWise = () => {
-  const batchData = getBatchWiseData();
+  const renderExamWiseView = () => {
+  // Get unique class-section pairs from school.classes
+  const classSections = Array.isArray(school.classes)
+    ? school.classes.map(c => ({ class: c.class, section: c.section }))
+    : [];
 
-  // 🧮 Compute Grade-wise Subject Averages
-  const gradeSubjectMap = {
-    Physics: {},
-    Chemistry: {},
-    Maths: {},
-    Biology: {}
+  // Handle class-section selection
+  const handleSelectClassSection = async (cls, sec) => {
+    setExamWiseClassSection({ class: cls, section: sec });
+    setExamWiseLoading(true);
+    try {
+      const params = new URLSearchParams({
+        school_id: schoolId,
+        class: cls,
+        section: sec
+      });
+      const res = await fetch(`${API_BASE}/api/exams?${params}`);
+      const exams = await res.json();
+
+      // Deduplicate by exam_pattern + exam_date
+      const seen = new Set();
+      const uniqueExams = exams.filter(exam => {
+        const key = `${exam.exam_pattern}|${exam.exam_date || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setExamWiseExams(uniqueExams);
+    } catch (err) {
+      setError("Failed to load exams: " + err.message);
+      setExamWiseExams([]);
+    } finally {
+      setExamWiseLoading(false);
+    }
   };
 
-  classAverages.forEach(row => {
-    const cls = row.class;
-    if (!gradeSubjectMap.Physics[cls]) {
-      gradeSubjectMap.Physics[cls] = { total: 0, count: 0 };
-      gradeSubjectMap.Chemistry[cls] = { total: 0, count: 0 };
-      gradeSubjectMap.Maths[cls] = { total: 0, count: 0 };
-      gradeSubjectMap.Biology[cls] = { total: 0, count: 0 };
-    }
+  // Handle "View Exam Result"
+  const handleViewExamResult = async (exam) => {
+  setResultsLoading(true);
+  try {
+    const params = new URLSearchParams({
+      school_id: schoolId,
+      class: exam.class,
+      section: exam.section,
+      exam_pattern: exam.exam_pattern,
+      exam_date: exam.exam_date || ''
+    });
+    const res = await fetch(`${API_BASE}/api/exams?${params}`);
+    const results = await res.json();
 
-    if (row.physics_average != null) {
-      gradeSubjectMap.Physics[cls].total += row.physics_average;
-      gradeSubjectMap.Physics[cls].count++;
-    }
-    if (row.chemistry_average != null) {
-      gradeSubjectMap.Chemistry[cls].total += row.chemistry_average;
-      gradeSubjectMap.Chemistry[cls].count++;
-    }
-    if (row.maths_average != null) {
-      gradeSubjectMap.Maths[cls].total += row.maths_average;
-      gradeSubjectMap.Maths[cls].count++;
-    }
-    if (row.biology_average != null) {
-      gradeSubjectMap.Biology[cls].total += row.biology_average;
-      gradeSubjectMap.Biology[cls].count++;
-    }
-  });
-
-  // Final grade averages per subject
-  const allGrades = [...new Set(classAverages.map(r => r.class))].sort((a, b) => parseInt(a) - parseInt(b));
-
-  const gradeAverages = {};
-  allGrades.forEach(cls => {
-    gradeAverages[cls] = {
-      Physics: gradeSubjectMap.Physics[cls]?.count > 0 ? 
-        (gradeSubjectMap.Physics[cls].total / gradeSubjectMap.Physics[cls].count).toFixed(2) : '—',
-      Chemistry: gradeSubjectMap.Chemistry[cls]?.count > 0 ? 
-        (gradeSubjectMap.Chemistry[cls].total / gradeSubjectMap.Chemistry[cls].count).toFixed(2) : '—',
-      Maths: gradeSubjectMap.Maths[cls]?.count > 0 ? 
-        (gradeSubjectMap.Maths[cls].total / gradeSubjectMap.Maths[cls].count).toFixed(2) : '—',
-      Biology: gradeSubjectMap.Biology[cls]?.count > 0 ? 
-        (gradeSubjectMap.Biology[cls].total / gradeSubjectMap.Biology[cls].count).toFixed(2) : '—',
-    };
-  });
-
-  // School-wide averages
-  const schoolSubjectTotals = {
-    Physics: { total: 0, count: 0 },
-    Chemistry: { total: 0, count: 0 },
-    Maths: { total: 0, count: 0 },
-    Biology: { total: 0, count: 0 }
-  };
-
-  classAverages.forEach(row => {
-    if (row.physics_average != null) {
-      schoolSubjectTotals.Physics.total += row.physics_average;
-      schoolSubjectTotals.Physics.count++;
-    }
-    if (row.chemistry_average != null) {
-      schoolSubjectTotals.Chemistry.total += row.chemistry_average;
-      schoolSubjectTotals.Chemistry.count++;
-    }
-    if (row.maths_average != null) {
-      schoolSubjectTotals.Maths.total += row.maths_average;
-      schoolSubjectTotals.Maths.count++;
-    }
-    if (row.biology_average != null) {
-      schoolSubjectTotals.Biology.total += row.biology_average;
-      schoolSubjectTotals.Biology.count++;
-    }
-  });
-
-  const schoolAverages = {
-    Physics: schoolSubjectTotals.Physics.count > 0 ? 
-      (schoolSubjectTotals.Physics.total / schoolSubjectTotals.Physics.count).toFixed(2) : '—',
-    Chemistry: schoolSubjectTotals.Chemistry.count > 0 ? 
-      (schoolSubjectTotals.Chemistry.total / schoolSubjectTotals.Chemistry.count).toFixed(2) : '—',
-    Maths: schoolSubjectTotals.Maths.count > 0 ? 
-      (schoolSubjectTotals.Maths.total / schoolSubjectTotals.Maths.count).toFixed(2) : '—',
-    Biology: schoolSubjectTotals.Biology.count > 0 ? 
-      (schoolSubjectTotals.Biology.total / schoolSubjectTotals.Biology.count).toFixed(2) : '—',
-  };
-
-  // Grade Total Average
-  const gradeTotalAverages = {};
-  allGrades.forEach(cls => {
-    const values = [
-      parseFloat(gradeAverages[cls].Physics),
-      parseFloat(gradeAverages[cls].Chemistry),
-      parseFloat(gradeAverages[cls].Maths),
-      parseFloat(gradeAverages[cls].Biology)
-    ].filter(val => !isNaN(val));
-
-    gradeTotalAverages[cls] = values.length > 0 ? 
-      (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : '—';
-  });
-
-  // School Total Average
-  const schoolTotalValues = [
-    parseFloat(schoolAverages.Physics),
-    parseFloat(schoolAverages.Chemistry),
-    parseFloat(schoolAverages.Maths),
-    parseFloat(schoolAverages.Biology)
-  ].filter(val => !isNaN(val));
-
-  const schoolTotalAverage = schoolTotalValues.length > 0 ? 
-    (schoolTotalValues.reduce((a, b) => a + b, 0) / schoolTotalValues.length).toFixed(2) : '—';
-
-  // ✅ Fixed Column Styles
-  const colWidth = {
-    grade: '150px',
-    physics: '120px',
-    chemistry: '120px',
-    maths: '120px',
-    biology: '120px',
-    total: '120px'
-  };
-
-  const thStyle = {
-    padding: '12px 8px',
-    background: '#f1f5f9',
-    borderBottom: '2px solid #d3d8e6',
-    fontWeight: '600',
-    color: '#1e293b',
-    whiteSpace: 'nowrap',
-    fontSize: '14px',
-    textAlign: 'center'
-  };
-
-  const tdStyle = {
-    padding: '12px 8px',
-    borderBottom: '1px solid #eee',
-    color: '#333',
-    whiteSpace: 'nowrap',
-    fontSize: '14px',
-    textAlign: 'center'
-  };
-
+    const examKey = `examwise_${exam.class}_${exam.section}_${exam.exam_pattern}_${exam.exam_date || 'latest'}`;
+    setExamResults(prev => ({ ...prev, [examKey]: results }));
+    setCurrentOMRExam({
+      ...exam,
+      id: examKey,
+      key: examKey
+    });
+    setView('examwise-results'); // ✅ ADD THIS LINE
+  } catch (err) {
+    setError("Failed to load results: " + err.message);
+  } finally {
+    setResultsLoading(false);
+  }
+};
+  // Main Exam Wise view
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2>📊 Batch Wise Performance</h2>
+        <h2>📝 Exam Wise Results</h2>
         <button onClick={() => setView('overview')} style={backButton}>← Back to Overview</button>
       </div>
 
-      {/* 👇 Compact Subject Grade Table — FIXED COLUMNS */}
-      <div style={{
-        marginBottom: '40px',
-        padding: '24px',
-        background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        borderRadius: '12px'
-      }}>
-        <h3 style={{ color: '#1e293b', textAlign: 'center', marginBottom: '20px' }}>
-          📊 Subject Average by Grade
-        </h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{
-            ...dataTable,
-            tableLayout: 'fixed',
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            textAlign: 'center',
-            margin: '0 auto'
-          }}>
-            <thead>
-              <tr>
-                <th style={{ ...thStyle, width: colWidth.grade }}>Grade</th>
-                <th style={{ ...thStyle, width: colWidth.physics }}>Physics</th>
-                <th style={{ ...thStyle, width: colWidth.chemistry }}>Chemistry</th>
-                <th style={{ ...thStyle, width: colWidth.maths }}>Maths</th>
-                <th style={{ ...thStyle, width: colWidth.biology }}>Biology</th>
-                <th style={{ ...thStyle, width: colWidth.total }}>Total Avg</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allGrades.map(cls => (
-                <tr key={cls}>
-                  <td style={{ ...tdStyle, width: colWidth.grade, fontWeight: 'bold' }}>Grade {cls}</td>
-                  <td style={{ ...tdStyle, width: colWidth.physics }}>{gradeAverages[cls].Physics}%</td>
-                  <td style={{ ...tdStyle, width: colWidth.chemistry }}>{gradeAverages[cls].Chemistry}%</td>
-                  <td style={{ ...tdStyle, width: colWidth.maths }}>{gradeAverages[cls].Maths}%</td>
-                  <td style={{ ...tdStyle, width: colWidth.biology }}>{gradeAverages[cls].Biology}%</td>
-                  <td style={{ ...tdStyle, width: colWidth.total, fontWeight: 'bold' }}>{gradeTotalAverages[cls]}%</td>
-                </tr>
-              ))}
-              <tr style={{ background: '#f1f5f9', fontWeight: 'bold', fontSize: '15px' }}>
-                <td style={{ ...tdStyle, width: colWidth.grade }}>School Average</td>
-                <td style={{ ...tdStyle, width: colWidth.physics }}>{schoolAverages.Physics}%</td>
-                <td style={{ ...tdStyle, width: colWidth.chemistry }}>{schoolAverages.Chemistry}%</td>
-                <td style={{ ...tdStyle, width: colWidth.maths }}>{schoolAverages.Maths}%</td>
-                <td style={{ ...tdStyle, width: colWidth.biology }}>{schoolAverages.Biology}%</td>
-                <td style={{ ...tdStyle, width: colWidth.total }}>{schoolTotalAverage}%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div style={{ marginBottom: '24px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+          Select Class - Section:
+        </label>
+        <select
+          onChange={(e) => {
+            const [cls, sec] = e.target.value.split('|');
+            if (cls && sec) handleSelectClassSection(cls, sec);
+          }}
+          style={{
+            padding: '10px',
+            fontSize: '16px',
+            borderRadius: '6px',
+            border: '1px solid #cbd5e1',
+            minWidth: '250px'
+          }}
+        >
+          <option value="">-- Choose Class - Section --</option>
+          {classSections.map((cs, i) => (
+            <option key={i} value={`${cs.class}|${cs.section}`}>
+              {cs.class} - {cs.section}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* 👇 Batch Summary Table */}
-      <div>
-        <h3 style={{ color: '#1e293b', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-          📋 Batch Summary (Drill Down)
-        </h3>
-        {batchData.length > 0 ? (
-          <table style={dataTable}>
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>Section</th>
-                <th>Physics </th>
-                <th>Chemistry </th>
-                <th>Maths </th>
-                <th>Biology </th>
-                <th>Total %</th>
-                <th>School Rank</th>
-                <th>Global Rank</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batchData.map((batch, i) => (
-                <tr key={i}>
-                  <td>{batch.class}</td>
-                  <td>{batch.section}</td>
-                  <td>{batch.physics}</td>
-                  <td>{batch.chemistry}</td>
-                  <td>{batch.maths}</td>
-                  <td>{batch.biology}</td>
-                  <td>{batch.total.toFixed(2)}</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>
-                    <button
-                      onClick={() => handleViewClassSection(batch.class, batch.section)}
-                      style={{
-                        padding: '4px 8px',
-                        background: '#0ea5e9',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      View Class-Section
-                    </button>
-                  </td>
+      {examWiseClassSection && (
+        <>
+          <h3 style={{ marginBottom: '16px', color: '#1e293b' }}>
+            Exams for {examWiseClassSection.class} - {examWiseClassSection.section}
+          </h3>
+          {examWiseLoading ? (
+            <p>Loading exams...</p>
+          ) : examWiseExams.length > 0 ? (
+            <table style={dataTable}>
+              <thead>
+                <tr>
+                  <th>Program</th>
+                  <th>Exam Date</th>
+                  <th>Exam Pattern</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p>No batch data available.</p>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {examWiseExams.map((exam, i) => (
+                  <tr key={i}>
+                    <td>{exam.program || '-'}</td>
+                    <td>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : '-'}</td>
+                    <td>{exam.exam_pattern || '-'}</td>
+                    <td>
+                      <button
+                        onClick={() => handleViewExamResult(exam)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '13px'
+                        }}
+                      >
+                        View Exam Result
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No exams found for this class-section.</p>
+          )}
+        </>
+      )}
     </div>
   );
 };
 
-  // 🖥️ Render Class-Section View — ENHANCED WITH TEACHER NAMES
-const renderClassSectionView = () => {
-  const exams = getClassSectionExams();
-
-  if (exams.length === 0) {
-    return (
-      <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2>📊 Performance for {selectedClassSection.class} - {selectedClassSection.section}</h2>
-          <button onClick={goBack} style={backButton}>← Back to Batch</button>
-        </div>
-        <p>No exam data for this batch.</p>
-      </div>
-    );
+const renderExamWiseResultsView = () => {
+  if (!currentOMRExam) {
+    setView('exam'); // fallback
+    return null;
   }
 
-  // 🔍 1. Find Best Performed Exam
-  const bestExam = exams.reduce((prev, current) => 
-    (current.total_percentage > prev.total_percentage) ? current : prev
-  );
+  const results = examResults[currentOMRExam.id] || [];
 
-  // 📊 2. Calculate Cumulative Subject Averages
-  const subjectTotals = exams.reduce((acc, exam) => {
-    acc.Physics += exam.physics_average || 0;
-    acc.Chemistry += exam.chemistry_average || 0;
-    acc.Maths += exam.maths_average || 0;
-    acc.Biology += exam.biology_average || 0;
-    acc.count += 1;
-    return acc;
-  }, { Physics: 0, Chemistry: 0, Maths: 0, Biology: 0, count: 0 });
-
-  const cumulativeAverages = {
-    Physics: subjectTotals.Physics / subjectTotals.count,
-    Chemistry: subjectTotals.Chemistry / subjectTotals.count,
-    Maths: subjectTotals.Maths / subjectTotals.count,
-    Biology: subjectTotals.Biology / subjectTotals.count
-  };
-
-  // 👩‍🏫 3. Map Subjects to Teacher Names
-  const teacherMap = {};
-  const subjects = ['Physics', 'Chemistry', 'Maths', 'Biology'];
-
-  subjects.forEach(subject => {
-    // Find teacher teaching this subject in this class + group
-    const teacher = school.teachers?.find(t => 
-      t.class === selectedClassSection.class &&
-      t.section === selectedClassSection.section && // group, e.g., "PCM"
-      t.subject_specialization?.toLowerCase() === subject.toLowerCase()
-    );
-
-    teacherMap[subject] = teacher?.teacher_name || 'Not Assigned';
+  // ===== 1. SUBJECT AVERAGES (as PERCENTAGES) =====
+  const totalStudents = results.length;
+  const subjectSums = { physics: 0, chemistry: 0, maths: 0, biology: 0 };
+  results.forEach(r => {
+    subjectSums.physics += r.physics_marks || 0;
+    subjectSums.chemistry += r.chemistry_marks || 0;
+    subjectSums.maths += r.maths_marks || 0;
+    subjectSums.biology += r.biology_marks || 0;
   });
 
-  // 🎯 4. Determine Strength & Weak Subjects
-  const subjectsArray = Object.entries(cumulativeAverages).sort((a, b) => b[1] - a[1]);
-  const strengthSubject = subjectsArray[0]; // Highest
-  const weakSubject = subjectsArray[subjectsArray.length - 1]; // Lowest
+  // 🔢 Calculate percentages using max_marks from currentOMRExam or default 50
+  const maxPhysics = parseInt(currentOMRExam.max_marks_physics) || 50;
+  const maxChemistry = parseInt(currentOMRExam.max_marks_chemistry) || 50;
+  const maxMaths = parseInt(currentOMRExam.max_marks_maths) || 50;
+  const maxBiology = parseInt(currentOMRExam.max_marks_biology) || 50;
 
-  // 📊 Bar Chart Component with Teacher Names
-  const BarChart = ({ data, maxBarWidth = 120 }) => {
-    const maxValue = Math.max(...Object.values(data));
-    return (
-      <div style={{ marginTop: '16px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-        <h4 style={{ margin: '0 0 16px 0', color: '#1e293b', fontWeight: 600 }}>Cumulative Subject Averages</h4>
-        {Object.entries(data).map(([subject, avg], idx) => {
-          const percentage = avg;
-          const barWidth = (percentage / maxValue) * maxBarWidth;
-          const teacherName = teacherMap[subject] || 'N/A';
-
-          return (
-            <div key={idx} style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 500, color: '#334155' }}>
-                <span>
-                  {subject} <span style={{ fontWeight: 400, color: '#64748b', fontSize: '13px' }}>({teacherName})</span>
-                </span>
-                <span>{percentage.toFixed(2)}%</span>
-              </div>
-              <div style={{
-                width: '100%',
-                backgroundColor: '#e2e8f0',
-                borderRadius: '4px',
-                marginTop: '4px',
-                height: '16px',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${barWidth}px`,
-                  maxWidth: '100%',
-                  height: '100%',
-                  background: subject === strengthSubject[0] ? '#10b981' : 
-                             subject === weakSubject[0] ? '#ef4444' : '#3b82f6',
-                  borderRadius: '4px',
-                  transition: 'width 0.6s ease'
-                }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
+  const subjectAverages = {
+    physics: totalStudents > 0 ? ((subjectSums.physics / totalStudents) / maxPhysics * 100).toFixed(2) : '0.00',
+    chemistry: totalStudents > 0 ? ((subjectSums.chemistry / totalStudents) / maxChemistry * 100).toFixed(2) : '0.00',
+    maths: totalStudents > 0 ? ((subjectSums.maths / totalStudents) / maxMaths * 100).toFixed(2) : '0.00',
+    biology: totalStudents > 0 ? ((subjectSums.biology / totalStudents) / maxBiology * 100).toFixed(2) : '0.00'
   };
 
+  // ===== 2. SUBJECT-WISE TOPPERS — SINGLE MERGED TABLE =====
+  const getTopStudents = (subjectKey) => {
+    return [...results]
+      .sort((a, b) => (b[subjectKey] || 0) - (a[subjectKey] || 0))
+      .slice(0, 5)
+      .map((r, idx) => ({
+        rank: idx + 1,
+        name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || '-',
+        marks: r[subjectKey] || 0,
+        percentage: maxMarks => maxMarks > 0 ? parseFloat(((r[subjectKey] || 0) / maxMarks * 100).toFixed(2)) : 0
+      }));
+  };
+
+  const physicsToppers = getTopStudents('physics_marks');
+  const chemistryToppers = getTopStudents('chemistry_marks');
+  const mathsToppers = getTopStudents('maths_marks');
+  const biologyToppers = getTopStudents('biology_marks');
+
+  // Build merged rows (rank 1 to 5)
+  const topperRows = Array.from({ length: 5 }, (_, i) => ({
+    rank: i + 1,
+    physics: physicsToppers[i] || { name: '-', marks: 0, percentage: () => 0 },
+    chemistry: chemistryToppers[i] || { name: '-', marks: 0, percentage: () => 0 },
+    maths: mathsToppers[i] || { name: '-', marks: 0, percentage: () => 0 },
+    biology: biologyToppers[i] || { name: '-', marks: 0, percentage: () => 0 }
+  }));
+
+  // ===== 3. GRADE-WISE DISTRIBUTION =====
+  const gradeRanges = [
+    { label: '91-100', min: 91, max: 100 },
+    { label: '81-90', min: 81, max: 90 },
+    { label: '71-80', min: 71, max: 80 },
+    { label: '61-70', min: 61, max: 70 },
+    { label: '51-60', min: 51, max: 60 },
+    { label: '41-50', min: 41, max: 50 },
+    { label: '0-40', min: 0, max: 40 }
+  ];
+
+  const gradeCounts = {};
+  gradeRanges.forEach(range => {
+    gradeCounts[range.label] = {
+      physics: 0,
+      chemistry: 0,
+      maths: 0,
+      biology: 0
+    };
+  });
+
+  results.forEach(r => {
+    const subjects = [
+      { key: 'physics_marks', name: 'physics', max: maxPhysics },
+      { key: 'chemistry_marks', name: 'chemistry', max: maxChemistry },
+      { key: 'maths_marks', name: 'maths', max: maxMaths },
+      { key: 'biology_marks', name: 'biology', max: maxBiology }
+    ];
+    subjects.forEach(sub => {
+      const marks = r[sub.key] || 0;
+      const percentage = sub.max > 0 ? (marks / sub.max) * 100 : 0;
+
+      for (const range of gradeRanges) {
+        if (percentage >= range.min && percentage <= range.max) {
+          gradeCounts[range.label][sub.name]++;
+          break;
+        }
+      }
+    });
+  });
+
   return (
-    <div style={card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2>📊 Performance for {selectedClassSection.class} - {selectedClassSection.section}</h2>
-        <button onClick={goBack} style={backButton}>← Back to Batch</button>
+    <div style={{ marginTop: '30px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2>📄 {currentOMRExam.class}-{currentOMRExam.section} | {currentOMRExam.exam_pattern}</h2>
+        <button
+          onClick={() => setView('exam')}
+          style={backButton}
+        >
+          ← Back to Exams
+        </button>
       </div>
 
-      {/* 🚀 PERFORMANCE METRICS DASHBOARD */}
-      <div style={{
-        background: '#f0fdf4',
-        border: '1px solid #bbf7d0',
-        borderRadius: '12px',
-        padding: '24px',
-        marginBottom: '30px',
-        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
-      }}>
-        <h3 style={{ margin: '0 0 20px 0', color: '#065f46', fontSize: '18px', fontWeight: 600 }}>
-          📈 Performance Snapshot
-        </h3>
+      {/* === ANALYSIS SECTION === */}
+      <div style={{ marginTop: '40px' }}>
 
-        {/* Best Exam */}
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '24px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            flex: '1 1 300px',
-            background: '#dbeafe',
-            padding: '16px',
-            borderRadius: '8px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#1d4ed8', fontWeight: 600 }}>🏆 Best Performed Exam</h4>
-            <p style={{ margin: '4px 0', fontSize: '16px' }}><strong>Pattern:</strong> {bestExam.exam_pattern}</p>
-            <p style={{ margin: '4px 0', fontSize: '16px' }}><strong>Score:</strong> {bestExam.total_percentage.toFixed(2)}%</p>
-            <p style={{ margin: '4px 0', fontSize: '16px' }}><strong>School Rank:</strong> -</p>
-            <p style={{ margin: '4px 0', fontSize: '16px' }}><strong>Global Rank:</strong> -</p>
-          </div>
-
-          {/* Strength & Weak */}
-          <div style={{
-            flex: '1 1 300px',
-            display: 'flex',
-            gap: '16px'
-          }}>
-            <div style={{
-              flex: 1,
-              background: '#dcfce7',
-              padding: '16px',
-              borderRadius: '8px',
-              border: '1px solid #bbf7d0'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#059669', fontWeight: 600 }}>💪 Strength Subject</h4>
-              <p style={{ margin: '8px 0 0 0', fontSize: '18px', fontWeight: 'bold', color: '#059669' }}>
-                {strengthSubject[0]} <span style={{ fontWeight: 400, fontSize: '14px', color: '#059669' }}>({teacherMap[strengthSubject[0]]})</span>
-              </p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '14px' }}>{strengthSubject[1].toFixed(2)}%</p>
-            </div>
-            <div style={{
-              flex: 1,
-              background: '#fee2e2',
-              padding: '16px',
-              borderRadius: '8px',
-              border: '1px solid #fecaca'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#dc2626', fontWeight: 600 }}>⚠️ Weak Subject</h4>
-              <p style={{ margin: '8px 0 0 0', fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>
-                {weakSubject[0]} <span style={{ fontWeight: 400, fontSize: '14px', color: '#dc2626' }}>({teacherMap[weakSubject[0]]})</span>
-              </p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '14px' }}>{weakSubject[1].toFixed(2)}%</p>
-            </div>
+        {/* 1. Subject Averages (Percentages) */}
+        <div style={{ marginBottom: '30px', padding: '20px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: '#1e293b', textAlign: 'center' }}>📊 Subject Averages (%)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+            {Object.entries(subjectAverages).map(([subject, avg]) => (
+              <div key={subject} style={{
+                textAlign: 'center',
+                padding: '12px',
+                minWidth: '120px',
+                background: '#fff',
+                borderRadius: '8px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'capitalize' }}>{subject}</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0f172a' }}>{avg}%</div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>Avg %</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Bar Chart with Teacher Names */}
-        <BarChart data={cumulativeAverages} />
-      </div>
+        {/* 2. Subject-wise Toppers — SINGLE TABLE */}
+        <div style={{ marginBottom: '30px', padding: '20px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: '0', color: '#065f46', textAlign: 'center' }}>🏆 Subject-wise Toppers (Top 5)</h3>
+          </div>
 
-      {/* 📋 EXAM TABLE — Existing Logic */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={dataTable}>
-          <thead>
-            <tr>
-              <th>Exam Pattern</th>
-              <th>Physics </th>
-              <th>Chemistry </th>
-              <th>Maths </th>
-              <th>Biology </th>
-              <th>Total </th>
-              <th>School Rank</th>
-              <th>Global Rank</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {exams.map((exam, i) => (
-              <tr key={i}>
-                <td>{exam.exam_pattern}</td>
-                <td>{exam.physics_average.toFixed(2)}</td>
-                <td>{exam.chemistry_average.toFixed(2)}</td>
-                <td>{exam.maths_average.toFixed(2)}</td>
-                <td>{exam.biology_average.toFixed(2)}</td>
-                <td>{exam.total_percentage.toFixed(2)}</td>
-                <td>-</td>
-                <td>-</td>
-                <td>
-                  <button
-                    onClick={() => handleViewClassSectionExam(exam)}
-                    style={{
-                      padding: '4px 8px',
-                      background: '#10b981',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px'
-                    }}
-                  >
-                    View Exam
-                  </button>
-                </td>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', border: '1px solid #d1fae5' }}>
+            <thead>
+              <tr>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '50px' }}>Rank</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Physics</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Chemistry</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Maths</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Biology</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {topperRows.map((row, i) => (
+                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fafafa' : 'white' }}>
+                  <td style={tableCellStyle}>{row.rank}</td>
+                  <td style={tableCellStyle}>{row.physics.name}</td>
+                  <td style={tableCellStyle}>{row.physics.marks}</td>
+                  <td style={tableCellStyle}>{row.chemistry.name}</td>
+                  <td style={tableCellStyle}>{row.chemistry.marks}</td>
+                  <td style={tableCellStyle}>{row.maths.name}</td>
+                  <td style={tableCellStyle}>{row.maths.marks}</td>
+                  <td style={tableCellStyle}>{row.biology.name}</td>
+                  <td style={tableCellStyle}>{row.biology.marks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 3. Grade-wise Distribution */}
+        <div style={{ padding: '20px', background: '#fffbeb', borderRadius: '10px', border: '1px solid #fde68a' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: '#b45309', textAlign: 'center' }}>📈 Grade-wise Distribution (Per Subject)</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...tableHeaderStyle, background: '#fef3c7' }}>Percentage Range</th>
+                  <th style={{ ...tableHeaderStyle, background: '#fef3c7' }}>Physics</th>
+                  <th style={{ ...tableHeaderStyle, background: '#fef3c7' }}>Chemistry</th>
+                  <th style={{ ...tableHeaderStyle, background: '#fef3c7' }}>Maths</th>
+                  <th style={{ ...tableHeaderStyle, background: '#fef3c7' }}>Biology</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradeRanges.map(range => (
+                  <tr key={range.label} style={{ backgroundColor: 'white' }}>
+                    <td style={{ ...tableCellStyle, background: '#fff9c4', fontWeight: '500' }}>{range.label}</td>
+                    <td style={tableCellStyle}>{gradeCounts[range.label].physics}</td>
+                    <td style={tableCellStyle}>{gradeCounts[range.label].chemistry}</td>
+                    <td style={tableCellStyle}>{gradeCounts[range.label].maths}</td>
+                    <td style={tableCellStyle}>{gradeCounts[range.label].biology}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+       
+       <button
+  onClick={() => {
+    if (!results.length) return alert('No data to analyze');
+
+    const doc = new jsPDF(); // A4 Portrait
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    let yPos = 20;
+    
+    // === BLUE HEADER BANNER (as per Fig 2) ===
+    doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
+    doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
+
+    // School Name (Left)
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255); // White text
+    doc.text(school.school_name || 'Unknown School', 14, 12);
+
+    // Area (Below school name)
+    doc.setFontSize(10);
+    doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
+
+    // Powered BY SPECTROPY (Right)
+    doc.setFontSize(10);
+    doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+    yPos += 8;
+
+    // === Title ===
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0); // Black text
+    doc.text(`Exam Analysis Report`, margin + 60, yPos );
+    yPos += 6;
+    doc.setFontSize(10);
+    doc.text(`${currentOMRExam.class}-${currentOMRExam.section} | ${currentOMRExam.exam_pattern}`, margin + 60, yPos);
+    yPos += 6;
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 60, yPos);
+    yPos += 8;
+
+    // === 1. Subject Averages (as Percentages) + Overall Toppers (Top 5) — SIDE BY SIDE ===
+    doc.setFontSize(14);
+    doc.text('Subject Averages (%)', margin, yPos);
+    yPos += 6;
+
+    // Subject Averages Table
+    const avgTableData = Object.entries(subjectAverages).map(([subject, avg]) => [
+      subject.charAt(0).toUpperCase() + subject.slice(1),
+      `${avg}%`
+    ]);
+
+    doc.autoTable({
+      startY: yPos,
+      head: [['Subject', 'Average %']],
+      body: avgTableData,
+      theme: 'grid',
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [65, 105, 225] },
+      columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 30 } }
+    });
+    const avgTableEndY = doc.lastAutoTable.finalY;
+
+    // Overall Toppers (Top 5) Table — Placed beside Subject Averages
+    doc.setFontSize(14);
+    doc.text('Overall Toppers (Top 5)', margin + 90, yPos - 6); // 👈 Offset X to place beside
+    yPos += 6;
+
+    // Sort results by percentage (descending)
+    const overallToppers = [...results]
+      .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+      .slice(0, 5)
+      .map((r, i) => [
+        i + 1,
+        `${r.first_name || ''} ${r.last_name || ''}`.trim() || '-',
+        `${r.percentage || 0}%`
+      ]);
+
+    doc.autoTable({
+      startY: yPos - 8,
+      head: [['Rank', 'Name', 'Percentage']],
+      body: overallToppers,
+      theme: 'grid',
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [34, 197, 94], fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 15 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 25 }
+      },
+      margin: { left: margin + 90 }
+    });
+
+    // Get height of both tables for correct positioning
+    const topperTableEndY = doc.lastAutoTable.finalY;
+    yPos = Math.max(avgTableEndY, topperTableEndY) + 12;
+
+    // === 2. Subject-wise Toppers (Top 5) — MERGED TABLE ===
+    doc.setFontSize(14);
+    doc.text('Subject-wise Toppers (Top 5)', margin, yPos);
+    yPos += 6;
+
+    // Build merged table rows
+    const topperRows = Array.from({ length: 5 }, (_, i) => {
+      const p = physicsToppers[i] || { name: '-', marks: 0 };
+      const c = chemistryToppers[i] || { name: '-', marks: 0 };
+      const m = mathsToppers[i] || { name: '-', marks: 0 };
+      const b = biologyToppers[i] || { name: '-', marks: 0 };
+      return [i + 1, p.name, p.marks, c.name, c.marks, m.name, m.marks, b.name, b.marks];
+    });
+
+    doc.autoTable({
+      startY: yPos,
+      head: [
+        ['Rank', 'Physics\nName', 'Marks', 'Chemistry\nName', 'Marks', 'Maths\nName', 'Marks', 'Biology\nName', 'Marks']
+      ],
+      body: topperRows,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [34, 197, 94], fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 15 },
+        1: { cellWidth: 25 }, 2: { cellWidth: 15 },
+        3: { cellWidth: 25 }, 4: { cellWidth: 15 },
+        5: { cellWidth: 25 }, 6: { cellWidth: 15 },
+        7: { cellWidth: 25 }, 8: { cellWidth: 15 }
+      }
+    });
+    yPos = doc.lastAutoTable.finalY + 12;
+
+    // === 3. Grade-wise Distribution ===
+    doc.setFontSize(14);
+    doc.text('Performace Distribution', margin, yPos);
+    yPos += 6;
+
+    const gradeTableData = gradeRanges.map(range => [
+      range.label,
+      gradeCounts[range.label].physics,
+      gradeCounts[range.label].chemistry,
+      gradeCounts[range.label].maths,
+      gradeCounts[range.label].biology
+    ]);
+
+    doc.autoTable({
+      startY: yPos,
+      head: [['Range(%)', 'Physics', 'Chemistry', 'Maths', 'Biology']],
+      body: gradeTableData,
+      theme: 'grid',
+      styles: { fontSize: 12 ,halign: 'center'},
+      headStyles: { fillColor: [65, 105, 225] },
+      columnStyles: { 0: { cellWidth: 25 } }
+    });
+
+    // === Save ===
+    doc.save(`Exam_Analysis_${currentOMRExam.id}.pdf`);
+  }}
+  style={{
+    padding: '8px 16px',
+    background: '#10b981',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500'
+  }}
+>
+  📥 Download Analysis PDF
+</button>
+      {/* === STUDENT RESULTS TABLE === */}
+      {resultsLoading ? (
+        <div style={{ padding: '40px', textAlign: 'center', fontSize: '16px', color: '#6b7280' }}>
+          🔄 Loading exam results...
+        </div>
+      ) : results.length > 0 ? (
+        <>
+          <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => {
+                const doc = new jsPDF('landscape');
+                doc.setFontSize(18);
+                doc.text(`Exam Results - ${currentOMRExam.exam_pattern}`, 14, 22);
+                doc.setFontSize(12);
+                doc.text(`Class: ${currentOMRExam.class} - ${currentOMRExam.section}`, 14, 30);
+                const headers = [
+                  'Student ID', 'Name', 'Total Q', 'Correct', 'Wrong', 'Unattempted',
+                  'Physics', 'Chemistry', 'Maths', 'Biology', 'Total Marks', '%',
+                  'Class Rank', 'School Rank', 'All Schools Rank'
+                ];
+                const body = results.map(r => [
+                  r.student_id || '-',
+                  `${r.first_name || ''} ${r.last_name || ''}`.trim() || '-',
+                  r.total_questions || 0,
+                  r.correct_answers || 0,
+                  r.wrong_answers || 0,
+                  r.unattempted || 0,
+                  r.physics_marks || 0,
+                  r.chemistry_marks || 0,
+                  r.maths_marks || 0,
+                  r.biology_marks || 0,
+                  r.total_marks || 0,
+                  `${r.percentage || 0}%`,
+                  r.class_rank || '-',
+                  r.school_rank || '-',
+                  r.all_schools_rank || '-'
+                ]);
+                doc.autoTable({
+                  startY: 40,
+                  head: [headers],
+                  body,
+                  theme: 'grid',
+                  styles: { fontSize: 8 },
+                  headStyles: { fillColor: [30, 144, 255] }
+                });
+                doc.save(`Exam_Results_${currentOMRExam.id}.pdf`);
+              }}
+              style={{
+                padding: '10px 20px',
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              📥 Download Student Results PDF
+            </button>
+          </div>
+          <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th style={tableHeaderStyle}>Student ID</th>
+                  <th style={tableHeaderStyle}>Name</th>
+                  <th style={tableHeaderStyle}>Total Q</th>
+                  <th style={tableHeaderStyle}>Correct</th>
+                  <th style={tableHeaderStyle}>Wrong</th>
+                  <th style={tableHeaderStyle}>Unattempted</th>
+                  <th style={tableHeaderStyle}>Physics</th>
+                  <th style={tableHeaderStyle}>Chemistry</th>
+                  <th style={tableHeaderStyle}>Maths</th>
+                  <th style={tableHeaderStyle}>Biology</th>
+                  <th style={tableHeaderStyle}>Total Marks</th>
+                  <th style={tableHeaderStyle}>%</th>
+                  <th style={tableHeaderStyle}>Class Rank</th>
+                  <th style={tableHeaderStyle}>School Rank</th>
+                  <th style={tableHeaderStyle}>All Schools Rank</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((r, i) => (
+                  <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fafafa' : 'white' }}>
+                    <td style={tableCellStyle}>{r.student_id || '-'}</td>
+                    <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
+                    <td style={tableCellStyle}>{r.total_questions || 0}</td>
+                    <td style={tableCellStyle}>{r.correct_answers || 0}</td>
+                    <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
+                    <td style={tableCellStyle}>{r.unattempted || 0}</td>
+                    <td style={tableCellStyle}>{r.physics_marks || 0}</td>
+                    <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
+                    <td style={tableCellStyle}>{r.maths_marks || 0}</td>
+                    <td style={tableCellStyle}>{r.biology_marks || 0}</td>
+                    <td style={tableCellStyle}>{r.total_marks || 0}</td>
+                    <td style={tableCellStyle}>{r.percentage || 0}%</td>
+                    <td style={tableCellStyle}>{r.class_rank || '-'}</td>
+                    <td style={tableCellStyle}>{r.school_rank || '-'}</td>
+                    <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+          📭 No results available.
+        </div>
+      )}
     </div>
   );
 };
-  // 🖥️ Render Class-Section-Exam View (Results ONLY — NO UPLOAD)
-  const renderClassSectionExamView = () => {
-    if (!currentOMRExam) return null;
-
-    const results = examResults[currentOMRExam.id] || [];
-
-    return (
-      <div style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2>📄 {selectedClassSection.class}-{selectedClassSection.section} | {currentOMRExam.exam_pattern}</h2>
-          <button onClick={goBack} style={backButton}>← Back to Performance</button>
-        </div>
-
-        {resultsLoading ? (
-          <div style={{
-            padding: '40px',
-            textAlign: 'center',
-            fontSize: '16px',
-            color: '#6b7280'
-          }}>
-            🔄 Loading exam results...
-          </div>
-        ) : results.length > 0 ? (
-          <>
-            <div style={{ 
-              marginBottom: '20px', 
-              display: 'flex', 
-              justifyContent: 'flex-end' 
-            }}>
-              <button
-                onClick={() => {
-                  if (!results.length) return alert('No data to download');
-                  const doc = new jsPDF.default('landscape');
-
-                  doc.setFontSize(18);
-                  doc.text(`Exam Results - ${currentOMRExam.exam_pattern.replace('_', ' ')} (${currentOMRExam.class} - ${currentOMRExam.section})`, 14, 22);
-                  doc.setFontSize(12);
-                  doc.text(`School: ${currentOMRExam.school_id} | Program: ${currentOMRExam.program}`, 14, 30);
-
-                  const headers = [
-                    'Student ID',
-                    'Student Name',
-                    'Total Q',
-                    'Correct',
-                    'Wrong',
-                    'Unattempted',
-                    'Physics',
-                    'Chemistry',
-                    'Maths',
-                    'Biology',
-                    'Total Marks',
-                    'Percentage',
-                    'Class Rank',
-                    'School Rank',
-                    'All Schools Rank'
-                  ];
-
-                  const body = results.map(r => [
-                    r.student_id || '-',
-                    `${r.first_name || ''} ${r.last_name || ''}`.trim() || '-',
-                    r.total_questions || 0,
-                    r.correct_answers || 0,
-                    r.wrong_answers || 0,
-                    r.unattempted || 0,
-                    r.physics_marks || 0,
-                    r.chemistry_marks || 0,
-                    r.maths_marks || 0,
-                    r.biology_marks || 0,
-                    r.total_marks || 0,
-                    `${r.percentage || 0}%`,
-                    r.class_rank || '-',
-                    r.school_rank || '-',
-                    r.all_schools_rank || '-'
-                  ]);
-
-                  doc.autoTable({
-                    startY: 40,
-                    head: [headers],
-                    body,
-                    theme: 'grid',
-                    styles: { fontSize: 8, cellPadding: 2 },
-                    headStyles: { fillColor: [30, 144, 255], fontSize: 9 },
-                    alternateRowStyles: { fillColor: [245, 245, 245] },
-                    didDrawPage: (data) => {
-                      doc.setFontSize(10);
-                      doc.setTextColor(100);
-                      doc.text(
-                        `Generated on: ${new Date().toLocaleString()}`,
-                        data.settings.margin.left,
-                        doc.internal.pageSize.height - 10
-                      );
-                    }
-                  });
-
-                  doc.save(`Exam_Results_${currentOMRExam.id}_${new Date().toISOString().split('T')[0]}.pdf`);
-                }}
-                style={{
-                  padding: '12px 24px',
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                📥 Download as PDF
-              </button>
-            </div>
-
-            <div style={{ 
-              border: '1px solid #ddd', 
-              borderRadius: '8px',
-              background: 'white',
-              overflowX: 'auto',
-              maxWidth: '100%',
-              margin: '0 auto'
-            }}>
-              <table style={{ 
-                width: '100%', 
-                borderCollapse: 'collapse', 
-                fontSize: '14px',
-                tableLayout: 'auto',
-                wordWrap: 'break-word',
-                whiteSpace: 'normal',
-                margin: 0,
-                padding: 0,
-                minWidth: '100%'
-              }}>
-                <thead>
-                  <tr>
-                    <th style={tableHeaderStyle}>Student ID</th>
-                    <th style={tableHeaderStyle}>Student Name</th>
-                    <th style={tableHeaderStyle}>Total Q</th>
-                    <th style={tableHeaderStyle}>Correct</th>
-                    <th style={tableHeaderStyle}>Wrong </th>
-                    <th style={tableHeaderStyle}>Unattempted</th>
-                    <th style={tableHeaderStyle}>Physics</th>
-                    <th style={tableHeaderStyle}>Chemistry</th>
-                    <th style={tableHeaderStyle}>Maths</th>
-                    <th style={tableHeaderStyle}>Biology</th>
-                    <th style={tableHeaderStyle}>Total Marks</th>
-                    <th style={tableHeaderStyle}>%</th>
-                    <th style={tableHeaderStyle}>Class Rank</th>
-                    <th style={tableHeaderStyle}>School Rank</th>
-                    <th style={tableHeaderStyle}>All Schools Rank</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.map((r, index) => (
-                    <tr key={index} style={{ 
-                      borderBottom: '1px solid #eee',
-                      backgroundColor: index % 2 === 0 ? '#fafafa' : 'white'
-                    }}>
-                      <td style={tableCellStyle}>{r.student_id || '-'}</td>
-                      <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
-                      <td style={tableCellStyle}>{r.total_questions || 0}</td>
-                      <td style={tableCellStyle}>{r.correct_answers || 0}</td>
-                      <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
-                      <td style={tableCellStyle}>{r.unattempted || 0}</td>
-                      <td style={tableCellStyle}>{r.physics_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.maths_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.biology_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.total_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.percentage || 0}%</td>
-                      <td style={tableCellStyle}>{r.class_rank || '-'}</td>
-                      <td style={tableCellStyle}>{r.school_rank || '-'}</td>
-                      <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            background: '#f8fafc',
-            borderRadius: '8px',
-            border: '1px dashed #cbd5e1',
-            color: '#64748b',
-            fontSize: '16px'
-          }}>
-            📭 No results uploaded yet for this exam.
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // 🖼️ Render Based on View State
   const renderContent = () => {
     switch (view) {
-      case 'batch':
-        return renderBatchWise();
-      case 'class-section':
-        return renderClassSectionView();
-      case 'class-section-exam':
-        return renderClassSectionExamView();
       case 'subject':
         return <div style={card}><h2>📚 Subject Wise (Coming Soon)</h2></div>;
       case 'teacher':
         return <div style={card}><h2>🧑‍🏫 Teacher Wise (Coming Soon)</h2></div>;
       case 'exam':
-        return <div style={card}><h2>📝 Exam Wise (Coming Soon)</h2></div>;
+        return renderExamWiseView();
+      case 'examwise-results':
+        return renderExamWiseResultsView();
       case 'student':
         return <div style={card}><h2>🎓 Student Wise (Coming Soon)</h2></div>;
       default:
@@ -1300,6 +1203,7 @@ const tableCellStyle = {
   padding: '10px 8px',
   border: '1px solid #e2e8f0',
   textAlign: 'center',
-  fontSize: '13px',
+  fontSize: '18px',
+  font: 'bold',
   color: '#1e293b'
 };

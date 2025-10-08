@@ -277,7 +277,7 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.text(studentData.name || "—", boxX + 3, boxY + 14);
-
+  
   // Box 2: Roll No
   doc.setFillColor(...WHITE);
   doc.setTextColor(0, 0, 0);
