@@ -18,7 +18,15 @@ const ROLES = {
 
 // 🔐 Dev-only credentials for non-owner roles
 const CREDENTIALS = {
-  ADMIN: { username: "admin", password: "spectropy@123" },
+  ADMIN: [
+    { username: "admin", password: "spectropy@123" },
+    { username: "Krishna", password: "Krishna@123" },
+    { username: "Sumathi", password: "Sumathi@123" },
+    { username: "Pooja", password: "Pooja@123" },
+    { username: "Rahul", password: "Rahul@123" },
+    { username: "Ramesh", password: "Ramesh@123" },
+    { username: "Teja", password: "Teja@123" },
+  ],
 };
 
 export default function LoginPage({ onLogin }) {
@@ -48,16 +56,24 @@ export default function LoginPage({ onLogin }) {
     setSchoolIdError("");
   };
 
-  // 🛠️ Admin Login (username + password)
   const handleAdminSubmit = (e) => {
-    e.preventDefault();
-    if (username === CREDENTIALS.ADMIN.username && password === CREDENTIALS.ADMIN.password) {
-      setError("");
-      onLogin({ role: ROLES.ADMIN });
-    } else {
-      setError("Invalid admin credentials");
-    }
-  };
+  e.preventDefault();
+  const matchedAdmin = CREDENTIALS.ADMIN.find(
+    (admin) => admin.username === username && admin.password === password
+  );
+
+  if (matchedAdmin) {
+    setError("");
+    // ✅ Save admin identity in session (optional but useful)
+    sessionStorage.setItem("sp_user", JSON.stringify({
+      role: ROLES.ADMIN,
+      username: matchedAdmin.username
+    }));
+    onLogin({ role: ROLES.ADMIN, username: matchedAdmin.username });
+  } else {
+    setError("Invalid admin credentials");
+  }
+};
 
    // 🏫 School Owner Login (Backend)
   const handleOwnerLogin = async (e) => {

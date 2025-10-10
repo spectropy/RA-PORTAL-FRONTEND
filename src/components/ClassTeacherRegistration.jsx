@@ -464,7 +464,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Name</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Contact</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Email</th>
-                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Assigned Subjects</th>
+                      <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Subjects Allotments</th>
                       <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #eee' }}>Actions</th>
                     </tr>
                   </thead>
@@ -475,11 +475,30 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.name}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.contact || '-'}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{teacher.email || '-'}</td>
-                        <td style={{ padding: '8px', border: '1px solid #eee' }}>
-                          {(teacher.teacher_assignments || []).length > 0 
-                            ? teacher.teacher_assignments.map(a => `${a.subject}`).join(', ')
-                            : '-'
-                          }
+                        <td style={{ padding: '8px', border: '1px solid #eee', verticalAlign: 'top' }}>
+                          {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 ? (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {teacher.teacher_assignments.map((assignment, idx) => (
+                              <span
+                               key={idx}
+                                style={{
+                                display: 'inline-block',
+                                background: '#78adf1ff',
+                                color: 'white',
+                                padding: '2px 4px',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                whiteSpace: 'nowrap'
+                               }}
+                               >
+                              {assignment.class} • {assignment.section} • {assignment.subject}
+                             </span>
+                             ))}
+                          </div>
+                        ) : (
+                       <span>-</span>
+                       )}
                         </td>
                         <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
                           <button

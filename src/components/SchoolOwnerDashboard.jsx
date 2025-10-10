@@ -713,13 +713,13 @@ const renderExamWiseResultsView = () => {
               <tr>
                 <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '50px' }}>Rank</th>
                 <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Physics</th>
-                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>%</th>
                 <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Chemistry</th>
-                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>%</th>
                 <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Maths</th>
-                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>%</th>
                 <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '100px' }}>Biology</th>
-                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>Marks</th>
+                <th style={{ ...tableHeaderStyle, background: '#ecfdf5', width: '60px' }}>%</th>
               </tr>
             </thead>
             <tbody>
@@ -1013,7 +1013,7 @@ const renderExamWiseResultsView = () => {
                   <th style={tableHeaderStyle}>%</th>
                   <th style={tableHeaderStyle}>Class Rank</th>
                   <th style={tableHeaderStyle}>School Rank</th>
-                  <th style={tableHeaderStyle}>All Schools Rank</th>
+                  <th style={tableHeaderStyle}>All India Rank</th>
                 </tr>
               </thead>
               <tbody>
