@@ -12,7 +12,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [classAverages, setClassAverages] = useState([]);
   const [subjectSummaries, setSubjectSummaries] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  
+  const [classExamData, setClassExamData] = useState({}); // key: "class|section"
+  const [examLoading, setExamLoading] = useState(false);
   // 🔄 Navigation State
   const [view, setView] = useState('overview'); // 'overview', 'batch', 'class-section', 'class-section-exam'
   const [selectedClassSection, setSelectedClassSection] = useState(null); // { class, section }
@@ -27,6 +28,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [examWiseClassSection, setExamWiseClassSection] = useState(null);
   const [examWiseExams, setExamWiseExams] = useState([]);
   const [examWiseLoading, setExamWiseLoading] = useState(false);
+  const [studentIdInput, setStudentIdInput] = useState('');
+  const [studentIdInputError, setStudentIdInputError] = useState('');
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
@@ -39,233 +42,122 @@ export default function SchoolOwnerDashboard({ onBack }) {
     }
 
     const fetchSchoolAndAnalytics = async () => {
-      try {
-        const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-        if (!schoolRes.ok) throw new Error("School not found");
-        const schoolData = await schoolRes.json();
-
-        const schoolWithRelations = {
-          ...schoolData.school,
-          classes: schoolData.classes || [],
-          teachers: schoolData.teachers || []
-        };
-
-        setSchool(schoolWithRelations);
-
-        setAnalyticsLoading(true);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-        setAnalyticsLoading(false);
-      }
+  try {
+    const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+    if (!schoolRes.ok) throw new Error("School not found");
+    const schoolData = await schoolRes.json();
+    const schoolWithRelations = {
+      ...schoolData.school,
+      classes: schoolData.classes || [],
+      teachers: schoolData.teachers || []
     };
+    setSchool(schoolWithRelations);
+    
+    // ✅ Pass the data directly
+    await loadLatestExamMetrics(schoolWithRelations);
+    
+    setAnalyticsLoading(true);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+    setAnalyticsLoading(false);
+  }
+};
 
     fetchSchoolAndAnalytics();
   }, [schoolId]);
 
-  // 📄 PDF Download Handler
-  const downloadPDF = (type, data, title) => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+ const loadLatestExamMetrics = async (schoolData) => {
+  // Use schoolData instead of the state variable `school`
+  if (!Array.isArray(schoolData.classes) || schoolData.classes.length === 0) return;
 
-    if (type === 'class-averages' && data.length > 0) {
-      doc.autoTable({
-        startY: 40,
-        head: [['Class', 'Group', 'Exam Pattern', 'Physics', 'Chemistry', 'Maths', 'Biology', 'Total %']],
-        body: data.map(row => [
-          row.class || '-',
-          row.group || '-',
-          row.exam_pattern || '-',
-          (row.physics_average ?? 0).toFixed(2),
-          (row.chemistry_average ?? 0).toFixed(2),
-          (row.maths_average ?? 0).toFixed(2),
-          (row.biology_average ?? 0).toFixed(2),
-          (row.total_percentage ?? 0).toFixed(2)
-        ])
-      });
-    } else if (type === 'subject-summaries' && data.length > 0) {
-      doc.autoTable({
-        startY: 40,
-        head: [['Class', 'Subject', 'Exam Pattern', 'Avg %', 'Teachers']],
-        body: data.map(row => [
-          row.class || '-',
-          row.subject || '-',
-          row.exam_pattern || '-',
-          (row.total_percentage ?? 0).toFixed(2),
-          Array.isArray(row.teachers_assigned_names) ? row.teachers_assigned_names.join(', ') : '-'
-        ])
-      });
-    }
-
-    doc.save(`${type}-${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
-  // 🔍 Navigate to Class-Section View
-  const handleViewClassSection = (cls, sec) => {
-    setSelectedClassSection({ class: cls, section: sec });
-    setView('class-section');
-  };
-
-  // 🔍 Navigate to Class-Section-Exam View
-  const handleViewClassSectionExam = async (exam) => {
-  if (!selectedClassSection || !schoolId) {
-    setError("Missing class, section, or school ID");
-    return;
-  }
+  setExamLoading(true);
+  const metrics = {};
 
   try {
-    // 👇 STEP 0: Look up REAL section from school.classes using class + group
-    // selectedClassSection.section currently holds "PCM" (which is GROUP)
-    const matchingClasses = school.classes.filter(c => 
-      c.class === selectedClassSection.class && 
-      c.group === selectedClassSection.section  // 👈 because "section" here is actually GROUP
+    await Promise.all(
+      schoolData.classes.map(async (cls) => {
+        const params = new URLSearchParams({
+          school_id: schoolId,
+          class: cls.class,
+          section: cls.section
+        });
+        const res = await fetch(`${API_BASE}/api/exams?${params}`);
+        const exams = await res.json();
+        if (Array.isArray(exams) && exams.length > 0) {
+          const latest = exams.reduce((prev, current) => {
+            const prevDate = prev.exam_date ? new Date(prev.exam_date) : new Date(0);
+            const currDate = current.exam_date ? new Date(current.exam_date) : new Date(0);
+            return currDate > prevDate ? current : prev;
+          });
+          metrics[`${cls.class}|${cls.section}`] = {
+            phygrade_per_avg: latest.phygrade_per_avg,
+            mathgrade_per_avg: latest.mathgrade_per_avg,
+            chemgrade_per_avg: latest.chemgrade_per_avg,
+            biograde_per_avg: latest.biograde_per_avg,
+            totalgrade_per_avg: latest.totalgrade_per_avg,
+            all_india_rank: latest.all_india_rank
+          };
+        }
+      })
     );
-
-    if (matchingClasses.length === 0) {
-      throw new Error(`No class found for ${selectedClassSection.class} - ${selectedClassSection.section}`);
-    }
-
-    // 👇 Use the first matching section (or handle multiple if needed)
-    const realSection = matchingClasses[0].section;
-
-    console.log('🔍 Searching for exam with:', {
-      school_id: schoolId,
-      exam_pattern: exam.exam_pattern,
-      class: selectedClassSection.class,
-      section: realSection  // 👈 Use REAL section like "A", "B", "C"
-    });
-
-    // 👇 STEP 1: Fetch real exam ID from exams table
-    const queryParams = new URLSearchParams({
-      school_id: schoolId,
-      exam_pattern: exam.exam_pattern,
-      class: selectedClassSection.class,
-      section: realSection  // 👈 FIXED: use real section
-    });
-
-    const response = await fetch(`${API_BASE}/api/exams?${queryParams}`);
-    if (!response.ok) throw new Error("Failed to find exam");
-
-    const exams = await response.json();
-    if (exams.length === 0) {
-      console.warn("❌ No exams found. Available exams in DB for this class-section:", {
-        school_id: schoolId,
-        class: selectedClassSection.class,
-        section: realSection
-      });
-
-      // 👇 Fetch ALL exams for this class-section to debug
-      const fallbackQuery = new URLSearchParams({
-        school_id: schoolId,
-        class: selectedClassSection.class,
-        section: realSection
-      });
-      const allExamsRes = await fetch(`${API_BASE}/api/exams?${fallbackQuery}`);
-      const allExams = await allExamsRes.json();
-      console.log("📋 All exams for this class-section:", allExams.map(e => e.exam_pattern));
-
-      throw new Error(`No exam found for pattern: ${exam.exam_pattern}`);
-    }
-
-    const realExam = exams[0];
-
-    // 👇 STEP 2: Create exam object with REAL id
-    const examWithRealId = {
-      ...exam,
-      id: realExam.id,
-      class: selectedClassSection.class,
-      section: realSection,  // 👈 Use real section
-      school_id: schoolId,
-      program: realExam.program,
-      exam_template: realExam.exam_template
-    };
-
-    setSelectedExam(examWithRealId);
-    setView('class-section-exam');
-    setCurrentOMRExam(examWithRealId);
-
-    // 👇 STEP 3: Fetch results immediately
-    setResultsLoading(true);
-    const resultsRes = await fetch(`${API_BASE}/api/exams/${realExam.id}/results`);
-    if (!resultsRes.ok) throw new Error("Failed to load exam results");
-
-    const results = await resultsRes.json();
-    setExamResults(prev => ({
-      ...prev,
-      [realExam.id]: results
-    }));
-    setResultsLoading(false);
-
+    setClassExamData(metrics);
   } catch (err) {
-    setError("Failed to load exam: " + err.message);
-    console.error("💥 Exam loading error:", err);
-    setResultsLoading(false);
+    console.error("Failed to load exam metrics:", err);
+    setError("Failed to load performance data");
+  } finally {
+    setExamLoading(false);
   }
 };
-  // 🔄 Reset View — FIXED NAVIGATION
-  const goBack = () => {
-    if (view === 'class-section-exam') {
-      setView('class-section');
-      setSelectedExam(null);
-      setCurrentOMRExam(null);
-    } else if (view === 'class-section') {
-      setView('batch'); // 👈 Go back to batch view (not overview)
-    } else if (view === 'batch') {
-      setView('overview'); // 👈 Then to overview
-      setSelectedClassSection(null);
-    }
-  };
 
-  // 📊 Get Batch-wise Aggregates (from classAverages)
-  const getBatchWiseData = () => {
-    const map = new Map();
+// Compute overall subject averages across all classes
+const computeOverallAnalysis = () => {
+  if (!classExamData || Object.keys(classExamData).length === 0) {
+    return null;
+  }
 
-    classAverages.forEach(row => {
-      const key = `${row.class}-${row.group}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          class: row.class,
-          section: row.group,
-          physics: [],
-          chemistry: [],
-          maths: [],
-          biology: []
-        });
+  const subjects = ['phygrade_per_avg', 'mathgrade_per_avg', 'chemgrade_per_avg', 'biograde_per_avg'];
+  const totals = { phygrade_per_avg: 0, mathgrade_per_avg: 0, chemgrade_per_avg: 0, biograde_per_avg: 0 };
+  let count = 0;
+
+  Object.values(classExamData).forEach(exam => {
+    let valid = true;
+    for (const sub of subjects) {
+      if (exam[sub] == null || exam[sub] === '' || isNaN(parseFloat(exam[sub]))) {
+        valid = false;
+        break;
       }
-      const batch = map.get(key);
-      batch.physics.push(row.physics_average);
-      batch.chemistry.push(row.chemistry_average);
-      batch.maths.push(row.maths_average);
-      batch.biology.push(row.biology_average);
-    });
+    }
+    if (valid) {
+      subjects.forEach(sub => {
+        totals[sub] += parseFloat(exam[sub]);
+      });
+      count++;
+    }
+  });
 
-    return Array.from(map.values()).map(batch => ({
-      ...batch,
-      physics: (batch.physics.reduce((a,b) => a+b, 0) / batch.physics.length).toFixed(2),
-      chemistry: (batch.chemistry.reduce((a,b) => a+b, 0) / batch.chemistry.length).toFixed(2),
-      maths: (batch.maths.reduce((a,b) => a+b, 0) / batch.maths.length).toFixed(2),
-      biology: (batch.biology.reduce((a,b) => a+b, 0) / batch.biology.length).toFixed(2),
-      total: (
-        parseFloat(batch.physics) +
-        parseFloat(batch.chemistry) +
-        parseFloat(batch.maths) +
-        parseFloat(batch.biology)
-      ) / 4
-    }));
+  if (count === 0) return null;
+
+  const averages = {
+    Physics: (totals.phygrade_per_avg / count).toFixed(2),
+    Maths: (totals.mathgrade_per_avg / count).toFixed(2),
+    Chemistry: (totals.chemgrade_per_avg / count).toFixed(2),
+    Biology: (totals.biograde_per_avg / count).toFixed(2)
   };
 
-  // 📊 Get Exam-wise Data for Selected Class-Section
-  const getClassSectionExams = () => {
-    if (!selectedClassSection) return [];
-    return classAverages.filter(row =>
-      row.class === selectedClassSection.class &&
-      row.group === selectedClassSection.section
-    );
-  };
+  // Find best subject
+  let bestSubject = 'Physics';
+  let bestAvg = parseFloat(averages.Physics);
+  for (const [sub, avg] of Object.entries(averages)) {
+    if (parseFloat(avg) > bestAvg) {
+      bestAvg = parseFloat(avg);
+      bestSubject = sub;
+    }
+  }
+
+  return { bestSubject, subjectAverages: averages };
+};
 
   if (loading) return <p>Loading school data...</p>;
   if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
@@ -288,10 +180,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
         onError={(e) => { e.target.src = '/placeholder-logo.png'; }}
       />
       <h1 style={{ color: '#0891b2', margin: '0 0 8px 0' }}>
-        {school.school_name || 'Unknown School'}
+        {school.school_name || 'Unknown School'} {school.school_id || 'id is not set'}
       </h1>
       <p style={{ margin: '4px 0', color: '#374151' }}>
-        {school.area || 'Area Not Set'}
+        {school.area || 'Area Not Set'}, {school.district || 'distict is not set'}, {school.state ||'state is not set'}, {school.academic_year || 'academic year not set'}
       </p>
       <p style={{ fontSize: '18px', fontWeight: '500', color: '#065f46' }}>
         👋 Dear Correspondent, Welcome to your School RA Portal
@@ -330,9 +222,8 @@ const renderMetricButtons = () => (
       alignItems: 'center'
     }}>
       {[
-        { label: 'Subject Wise', key: 'subject' },
-        { label: 'Teacher Wise', key: 'teacher' },
         { label: 'Batch(Exam Wise)', key: 'exam' },
+        { label: 'Teacher Wise', key: 'teacher' },
         { label: 'Student Wise', key: 'student' }
       ].map(btn => (
         <button
@@ -369,30 +260,305 @@ const renderMetricButtons = () => (
   </div>
 );
 
-  // 📚 Render IIT Foundation Batches Table
-  const renderIITBatches = () => {
-    const totalStrength = Array.isArray(school.classes)
-      ? school.classes.reduce((sum, c) => sum + (c.num_students || 0), 0)
-      : 0;
+ const renderIITBatches = () => {
+  const analysis = computeOverallAnalysis();
+  const totalStrength = Array.isArray(school.classes)
+    ? school.classes.reduce((sum, c) => sum + (c.num_students || 0), 0)
+    : 0;
+  // 📥 Download Performance Analysis + Batches Table as Single A4 PDF
+const downloadIITAnalysisPDF = () => {
+  if (!school || !Array.isArray(school.classes) || school.classes.length === 0) {
+    alert('No data to export');
+    return;
+  }
 
-    return (
-      <div style={card}>
-        <h2>📚 IIT Foundation Batches ({Array.isArray(school.classes) ? school.classes.length : 0})</h2>
-        {Array.isArray(school.classes) && school.classes.length > 0 ? (
-          <>
-            <table style={dataTable}>
-              <thead>
-                <tr>
-                  <th>Class</th>
-                  <th>Section</th>
-                  <th>Foundation</th>
-                  <th>Program</th>
-                  <th>Group</th>
-                  <th>Students</th>
-                </tr>
-              </thead>
-              <tbody>
-                {school.classes.map((c, i) => (
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = doc.internal.pageSize.width;
+  let y = 15;
+
+  // ===== HEADER BANNER =====
+  doc.setFillColor(37, 79, 162); // Deep blue
+  doc.rect(0, 0, pageWidth, 25, 'F');
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text(school.school_name || 'Unknown School', 14, 10);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Powered BY SPECTROPY', pageWidth - 60, 13);
+
+  y = 35;
+
+  // ===== PERFORMANCE ANALYSIS TITLE =====
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text('Performance Analysis', pageWidth / 2, y, { align: 'center' });
+  y += 12;
+
+  // ===== BEST SUBJECT =====
+  // Compute best subject from classExamData
+  const subjects = ['phygrade_per_avg', 'mathgrade_per_avg', 'chemgrade_per_avg', 'biograde_per_avg'];
+  const subjectNames = { phygrade_per_avg: 'Physics', mathgrade_per_avg: 'Maths', chemgrade_per_avg: 'Chemistry', biograde_per_avg: 'Biology' };
+  const totals = { phygrade_per_avg: 0, mathgrade_per_avg: 0, chemgrade_per_avg: 0, biograde_per_avg: 0 };
+  let validCount = 0;
+
+  school.classes.forEach(cls => {
+    const key = `${cls.class}|${cls.section}`;
+    const exam = classExamData[key] || {};
+    let isValid = true;
+    for (const sub of subjects) {
+      if (exam[sub] == null || exam[sub] === '' || isNaN(parseFloat(exam[sub]))) {
+        isValid = false;
+        break;
+      }
+    }
+    if (isValid) {
+      subjects.forEach(sub => {
+        totals[sub] += parseFloat(exam[sub]);
+      });
+      validCount++;
+    }
+  });
+
+  let bestSubject = 'Physics';
+  if (validCount > 0) {
+    const averages = {};
+    subjects.forEach(sub => {
+      averages[sub] = totals[sub] / validCount;
+    });
+    bestSubject = subjects.reduce((a, b) => averages[a] > averages[b] ? a : b);
+    bestSubject = subjectNames[bestSubject];
+  }
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Best Subject: ${bestSubject}`, pageWidth / 2, y, { align: 'center' });
+  y += 12;
+
+  // ===== SUBJECT AVERAGES CARDS =====
+  doc.setFont('helvetica', 'bold');
+  doc.text('Subject Averages (%):', 14, y);
+  y += 8;
+
+  const colWidth = (pageWidth - 28) / 4;
+  if (validCount > 0) {
+    subjects.forEach((sub, i) => {
+      const x = 14 + i * colWidth;
+      const avg = (totals[sub] / validCount).toFixed(2);
+      const name = subjectNames[sub];
+
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x, y, colWidth - 4, 24, 'F');
+      doc.setDrawColor(220, 220, 220);
+      doc.rect(x, y, colWidth - 4, 24, 'S');
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(name, x + colWidth / 2 - 2, y + 6, { align: 'center' });
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`${avg}%`, x + colWidth / 2 - 2, y + 14, { align: 'center' });
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Avg %', x + colWidth / 2 - 2, y + 20, { align: 'center' });
+    });
+    y += 30;
+  } else {
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text('No exam data available', 14, y);
+    y += 10;
+  }
+
+  // ===== IIT BATCHES TABLE =====
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('IIT Foundation Batches', 14, y);
+  y += 8;
+
+  const tableColumn = [
+    'Class', 'Section', 'Foundation', 'Program', 'Group', 'Students',
+    'Physics %', 'Maths %', 'Chemistry %', 'Biology %', 'Total %', 'All India Rank'
+  ];
+
+  const tableRows = school.classes.map(cls => {
+    const key = `${cls.class}|${cls.section}`;
+    const exam = classExamData[key] || {};
+    return [
+      cls.class || '-',
+      cls.section || '-',
+      cls.foundation || '-',
+      cls.program || '-',
+      cls.group || '-',
+      cls.num_students || 0,
+      exam.phygrade_per_avg ? parseFloat(exam.phygrade_per_avg).toFixed(2) : '-',
+      exam.mathgrade_per_avg ? parseFloat(exam.mathgrade_per_avg).toFixed(2) : '-',
+      exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-',
+      exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-',
+      exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-',
+      exam.all_india_rank ?? '-'
+    ];
+  });
+
+  // Add total row
+  const totalStrength = school.classes.reduce((sum, c) => sum + (c.num_students || 0), 0);
+  tableRows.push([
+    '', '', '', '', 'Total Strength:', totalStrength,
+    '', '', '', '', '', ''
+  ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [tableColumn],
+    body: tableRows,
+    theme: 'grid',
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { 
+      fillColor: [37, 79, 162], 
+      textColor: [255, 255, 255], 
+      fontSize: 8 
+    },
+    columnStyles: {
+      0: { cellWidth: 15 }, // Class
+      1: { cellWidth: 15 }, // Section
+      2: { cellWidth: 20 }, // Foundation
+      3: { cellWidth: 20 }, // Program
+      4: { cellWidth: 15 }, // Group
+      5: { cellWidth: 15 }, // Students
+      6: { cellWidth: 15 }, // Physics %
+      7: { cellWidth: 15 }, // Maths %
+      8: { cellWidth: 18 }, // Chemistry %
+      9: { cellWidth: 18 }, // Biology %
+      10: { cellWidth: 15 }, // Total %
+      11: { cellWidth: 20 }  // All India Rank
+    },
+    didParseCell: (data) => {
+      if (data.row.index === tableRows.length - 1 && data.column.index < 4) {
+        data.cell.styles.fontStyle = 'normal';
+        data.cell.styles.fillColor = [241, 245, 249];
+      }
+      if (data.row.index === tableRows.length - 1 && data.column.index === 4) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [241, 245, 249];
+      }
+    }
+  });
+
+  // Save PDF
+  doc.save(`IIT_Foundation_Analysis_${school.school_id || 'school'}.pdf`);
+};
+  return (
+    <div style={card}>
+      <button
+          onClick={downloadIITAnalysisPDF}
+          disabled={examLoading}
+          style={{
+            padding: '8px 16px',
+            background: examLoading ? '#94a3b8' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: examLoading ? 'not-allowed' : 'pointer',
+            fontSize: '14px',
+            fontWeight: '500',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          {examLoading ? '⏳ Loading...' : '📄 Download PDF'}
+        </button>
+      {/* ===== PERFORMANCE ANALYSIS SECTION ===== */}
+      {analysis && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          background: '#f8fafc',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0'
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', color: '#1e293b', textAlign: 'center' }}>
+            📊 Performance Analysis
+          </h3>
+
+          {/* Best Subject */}
+          <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+            <strong>🏆 Best Subject:</strong> {analysis.bestSubject}
+          </div>
+
+          {/* Subject Averages as Cards */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-around',
+            flexWrap: 'wrap',
+            gap: '16px'
+          }}>
+            {Object.entries(analysis.subjectAverages).map(([subject, avg]) => (
+              <div
+                key={subject}
+                style={{
+                  width: '120px',
+                  padding: '14px',
+                  background: 'white',
+                  borderRadius: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  textAlign: 'center',
+                  border: '1px solid #e2e8f0'
+                }}
+              >
+                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{subject}</div>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginTop: '4px' }}>
+                  {avg}%
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>Avg %</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
+      <h2>📚 IIT Foundation Batches ({Array.isArray(school.classes) ? school.classes.length : 0})</h2>
+      {examLoading ? (
+        <p>Loading performance data...</p>
+      ) : Array.isArray(school.classes) && school.classes.length > 0 ? (
+        <>
+          <table style={dataTable}>
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Section</th>
+                <th>Foundation</th>
+                <th>Program</th>
+                <th>Group</th>
+                <th>Students</th>
+                <th>Physics %</th>
+                <th>Maths %</th>
+                <th>Chemistry %</th>
+                <th>Biology %</th>
+                <th>Total %</th>
+                <th>All India Rank</th>
+              </tr>
+            </thead>
+            <tbody>
+              {school.classes.map((c, i) => {
+                const key = `${c.class}|${c.section}`;
+                const exam = classExamData[key] || {};
+
+                return (
                   <tr key={i}>
                     <td>{c.class || '-'}</td>
                     <td>{c.section || '-'}</td>
@@ -400,21 +566,29 @@ const renderMetricButtons = () => (
                     <td>{c.program || '-'}</td>
                     <td>{c.group || '-'}</td>
                     <td>{c.num_students || 0}</td>
+                    <td>{exam.phygrade_per_avg ? parseFloat(exam.phygrade_per_avg).toFixed(2) : '-'}</td>
+                    <td>{exam.mathgrade_per_avg ? parseFloat(exam.mathgrade_per_avg).toFixed(2) : '-'}</td>
+                    <td>{exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-'}</td>
+                    <td>{exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-'}</td>
+                    <td>{exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-'}</td>
+                    <td>{exam.all_india_rank !== undefined && exam.all_india_rank !== null ? exam.all_india_rank : '-'}</td>
                   </tr>
-                ))}
-                <tr style={{ background: '#f1f5f9', fontWeight: 'bold' }}>
-                  <td colSpan="5" style={{ textAlign: 'right' }}>Total Strength:</td>
-                  <td>{totalStrength}</td>
-                </tr>
-              </tbody>
-            </table>
-          </>
-        ) : (
-          <p>No batches added yet.</p>
-        )}
-      </div>
-    );
-  };
+                );
+              })}
+              <tr style={{ background: '#f1f5f9', fontWeight: 'bold' }}>
+                <td colSpan="5" style={{ textAlign: 'right' }}>Total Strength:</td>
+                <td>{totalStrength}</td>
+                <td colSpan="6"></td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p>No batches added yet.</p>
+      )}
+    </div>
+  );
+};
 
  const renderExamWiseView = () => {
   // Get unique class-section pairs
@@ -1459,11 +1633,78 @@ const renderExamWiseResultsView = () => {
   );
 };
 
+const renderStudentWiseView = () => {
+
+  const handleViewStudent = () => {
+    const id = studentIdInput.trim();
+    if (!id) {
+      setStudentIdInputError('Please enter a valid Student ID.');
+      return;
+    }
+    setStudentIdInputError('');
+    // ✅ Redirect to StudentDashboard with student_id and context
+    window.location.href = `/student-dashboard?student_id=${encodeURIComponent(id)}&from=school`;
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2>🎓 Student Wise Performance</h2>
+        <button onClick={() => setView('overview')} style={backButton}>
+          ← Back to Overview
+        </button>
+      </div>
+
+      <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
+        <p style={{ marginBottom: '16px', color: '#475569' }}>
+          Enter a Student ID to view their detailed performance dashboard.
+        </p>
+
+        <input
+          type="text"
+          value={studentIdInput}
+          onChange={(e) => {
+            setStudentIdInput(e.target.value);
+            if (studentIdInputError) setStudentIdInputError('');
+          }}
+          placeholder="Enter Student ID (e.g., S12345)"
+          style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '16px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            marginBottom: '12px'
+          }}
+        />
+
+        {studentIdInputError && (
+          <p style={{ color: 'red', marginBottom: '12px' }}>{studentIdInputError}</p>
+        )}
+
+        <button
+          onClick={handleViewStudent}
+          style={{
+            padding: '10px 24px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: '500',
+            width: '100%'
+          }}
+        >
+          🔍 View Student Dashboard
+        </button>
+      </div>
+    </div>
+  );
+};
   // 🖼️ Render Based on View State
   const renderContent = () => {
     switch (view) {
-      case 'subject':
-        return <div style={card}><h2>📚 Subject Wise (Coming Soon)</h2></div>;
       case 'teacher':
         return <div style={card}><h2>🧑‍🏫 Teacher Wise (Coming Soon)</h2></div>;
       case 'exam':
@@ -1471,28 +1712,15 @@ const renderExamWiseResultsView = () => {
       case 'examwise-results':
         return renderExamWiseResultsView();
       case 'student':
-        return <div style={card}><h2>🎓 Student Wise (Coming Soon)</h2></div>;
+        return renderStudentWiseView();
       default:
         return (
           <>
             {renderSchoolHeader()}
-            <div style={card}>
-              <h2>📌 School Details</h2>
-              <table style={infoTable}>
-                <tbody>
-                  <tr><td><strong>School Name:</strong></td><td>{school.school_name || '-'}</td></tr>
-                  <tr><td><strong>School ID:</strong></td><td>{school.school_id || '-'}</td></tr>
-                  <tr><td><strong>Area:</strong></td><td>{school.area || '-'}</td></tr>
-                  <tr><td><strong>District:</strong></td><td>{school.district || '-'}</td></tr>
-                  <tr><td><strong>State:</strong></td><td>{school.state || '-'}</td></tr>
-                  <tr><td><strong>Academic Year:</strong></td><td>{school.academic_year || '-'}</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            {renderIITBatches()}
 
             {renderMetricButtons()}
+
+            {renderIITBatches()}
           </>
         );
     }
