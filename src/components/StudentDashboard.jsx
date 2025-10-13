@@ -16,11 +16,6 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
-// At top of StudentDashboard.jsx
-const getStudentIdFromUrl = () => {
-  const url = new URL(window.location);
-  return url.searchParams.get('student_id');
-};
 
 export default function StudentDashboard({ onBack }) {
   const [student, setStudent] = useState(null);
