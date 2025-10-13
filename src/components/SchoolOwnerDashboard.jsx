@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import StudentDashboard from './StudentDashboard'; // adjust path as needed
+import TeacherDashboard from './TeacherDashboard';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -32,6 +33,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [studentIdInput, setStudentIdInput] = useState('');
   const [studentIdInputError, setStudentIdInputError] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [teacherIdInput, setTeacherIdInput] = useState('');
+  const [teacherIdInputError, setTeacherIdInputError] = useState('');
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
@@ -1709,11 +1713,81 @@ const renderStudentWiseView = () => {
     </div>
   );
 };
+
+const renderTeacherWiseView = () => {
+  const handleViewTeacher = () => {
+    const id = teacherIdInput.trim();
+    if (!id) {
+      setTeacherIdInputError('Please enter a valid Teacher ID.');
+      return;
+    }
+    setTeacherIdInputError('');
+    setSelectedTeacherId(id);
+    setView('teacher-dashboard'); // 👈 new view
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2>👨‍🏫 Teacher Wise Performance</h2>
+        <button onClick={() => setView('overview')} style={backButton}>
+          ← Back to Overview
+        </button>
+      </div>
+
+      <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
+        <p style={{ marginBottom: '16px', color: '#475569' }}>
+          Enter a Teacher ID to view their detailed performance dashboard.
+        </p>
+
+        <input
+          type="text"
+          value={teacherIdInput}
+          onChange={(e) => {
+            setTeacherIdInput(e.target.value);
+            if (teacherIdInputError) setTeacherIdInputError('');
+          }}
+          placeholder="Enter Teacher ID (e.g., T12345)"
+          style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '16px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            marginBottom: '12px'
+          }}
+        />
+
+        {teacherIdInputError && (
+          <p style={{ color: 'red', marginBottom: '12px' }}>{teacherIdInputError}</p>
+        )}
+
+        <button
+          onClick={handleViewTeacher}
+          style={{
+            padding: '10px 24px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: '500',
+            width: '100%'
+          }}
+        >
+          🔍 View Teacher Dashboard
+        </button>
+      </div>
+    </div>
+  );
+};
+
   // 🖼️ Render Based on View State
   const renderContent = () => {
     switch (view) {
       case 'teacher':
-        return <div style={card}><h2>🧑‍🏫 Teacher Wise (Coming Soon)</h2></div>;
+        return renderTeacherWiseView();
       case 'exam':
         return renderExamWiseView();
       case 'examwise-results':

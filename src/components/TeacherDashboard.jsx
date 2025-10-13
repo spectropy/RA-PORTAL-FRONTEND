@@ -1,6 +1,8 @@
 // src/components/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
 // Helper: Compute exam patterns AND teacher-specific best week tests
 function computeExamAnalytics(exams, teacherAssignments) {
   const assignments = Array.isArray(teacherAssignments) ? teacherAssignments : [];
