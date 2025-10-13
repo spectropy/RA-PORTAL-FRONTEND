@@ -1,7 +1,6 @@
 // src/components/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
-
-const res = await fetch(`${BACKEND_URL}/api/exams?school_id=${parsed.school_id}`);
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 // Helper: Compute exam patterns AND teacher-specific best week tests
 function computeExamAnalytics(exams, teacherAssignments) {
