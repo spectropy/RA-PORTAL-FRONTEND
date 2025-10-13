@@ -150,7 +150,8 @@ export default function TeacherDashboard({ onBack }) {
         setTeacher(teacherData);
         setSchoolName(parsed.school_name || "Unknown School");
 
-        const res = await fetch(`/api/exams?school_id=${parsed.school_id}`);
+        // In loadTeacherAndExams:
+        const res = await fetch(`${API_BASE}/api/exams?school_id=${parsed.school_id}`); 
         if (res.ok) {
           const exams = await res.json();
           setExamResults(exams);
