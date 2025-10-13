@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import StudentDashboard from './StudentDashboard'; // adjust path as needed
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -30,6 +31,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [examWiseLoading, setExamWiseLoading] = useState(false);
   const [studentIdInput, setStudentIdInput] = useState('');
   const [studentIdInputError, setStudentIdInputError] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
@@ -988,9 +990,9 @@ y += 12;
               borderRadius: '8px',
               border: '1px solid #e2e8f0'
             }}>
-              <h4 style={{ marginBottom: '12px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', }}>📊 Performance Analysis</h4>
+              <h3 style={{ margin: '0 0 12px 0', color: '#1e293b', textAlign: 'center' }}>📊 Performance Analysis</h3>
               {/* Best Subject */}
-              <div style={{ marginTop: '20px', marginBottom: '16px' }}>
+              <div style={{marginBottom: '16px', textAlign: 'center'}}>
                 <strong>🏆 Best Subject:</strong> {analysis.bestSubject || '—'}
               </div>
               <h4 style={{
@@ -1580,49 +1582,52 @@ const renderExamWiseResultsView = () => {
             </button>
           </div>
           <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr>
-                  <th style={tableHeaderStyle}>Student ID</th>
-                  <th style={tableHeaderStyle}>Name</th>
-                  <th style={tableHeaderStyle}>Total Q</th>
-                  <th style={tableHeaderStyle}>Correct</th>
-                  <th style={tableHeaderStyle}>Wrong</th>
-                  <th style={tableHeaderStyle}>Unattempted</th>
-                  <th style={tableHeaderStyle}>Physics</th>
-                  <th style={tableHeaderStyle}>Chemistry</th>
-                  <th style={tableHeaderStyle}>Maths</th>
-                  <th style={tableHeaderStyle}>Biology</th>
-                  <th style={tableHeaderStyle}>Total Marks</th>
-                  <th style={tableHeaderStyle}>%</th>
-                  <th style={tableHeaderStyle}>Class Rank</th>
-                  <th style={tableHeaderStyle}>School Rank</th>
-                  <th style={tableHeaderStyle}>All India Rank</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r, i) => (
-                  <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fafafa' : 'white' }}>
-                    <td style={tableCellStyle}>{r.student_id || '-'}</td>
-                    <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
-                    <td style={tableCellStyle}>{r.total_questions || 0}</td>
-                    <td style={tableCellStyle}>{r.correct_answers || 0}</td>
-                    <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
-                    <td style={tableCellStyle}>{r.unattempted || 0}</td>
-                    <td style={tableCellStyle}>{r.physics_marks || 0}</td>
-                    <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
-                    <td style={tableCellStyle}>{r.maths_marks || 0}</td>
-                    <td style={tableCellStyle}>{r.biology_marks || 0}</td>
-                    <td style={tableCellStyle}>{r.total_marks || 0}</td>
-                    <td style={tableCellStyle}>{r.percentage || 0}%</td>
-                    <td style={tableCellStyle}>{r.class_rank || '-'}</td>
-                    <td style={tableCellStyle}>{r.school_rank || '-'}</td>
-                    <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+    <thead>
+      <tr>
+        <th style={tableHeaderStyle}>Student ID</th>
+        <th style={tableHeaderStyle}>Name</th>
+        <th style={tableHeaderStyle}>Total Q</th>
+        <th style={tableHeaderStyle}>Correct</th>
+        <th style={tableHeaderStyle}>Wrong</th>
+        <th style={tableHeaderStyle}>Unattempted</th>
+        <th style={tableHeaderStyle}>Physics</th>
+        <th style={tableHeaderStyle}>Chemistry</th>
+        <th style={tableHeaderStyle}>Maths</th>
+        <th style={tableHeaderStyle}>Biology</th>
+        <th style={tableHeaderStyle}>Total Marks</th>
+        <th style={tableHeaderStyle}>%</th>
+        <th style={tableHeaderStyle}>Class Rank</th>
+        <th style={tableHeaderStyle}>School Rank</th>
+        <th style={tableHeaderStyle}>All India Rank</th>
+      </tr>
+    </thead>
+    <tbody>
+      {(() => {
+        const sortedResults = [...results].sort((a, b) => b.percentage - a.percentage);
+        return sortedResults.map((r, i) => (
+          <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fafafa' : 'white' }}>
+            <td style={tableCellStyle}>{r.student_id || '-'}</td>
+            <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
+            <td style={tableCellStyle}>{r.total_questions || 0}</td>
+            <td style={tableCellStyle}>{r.correct_answers || 0}</td>
+            <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
+            <td style={tableCellStyle}>{r.unattempted || 0}</td>
+            <td style={tableCellStyle}>{r.physics_marks || 0}</td>
+            <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
+            <td style={tableCellStyle}>{r.maths_marks || 0}</td>
+            <td style={tableCellStyle}>{r.biology_marks || 0}</td>
+            <td style={tableCellStyle}>{r.total_marks || 0}</td>
+            <td style={tableCellStyle}>{r.percentage || 0}%</td>
+            <td style={tableCellStyle}>{r.class_rank || '-'}</td>
+            <td style={tableCellStyle}>{r.school_rank || '-'}</td>
+            <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
+          </tr>
+        ));
+      })()}
+    </tbody>
+  </table>
+</div>
         </>
       ) : (
         <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
@@ -1634,7 +1639,6 @@ const renderExamWiseResultsView = () => {
 };
 
 const renderStudentWiseView = () => {
-
   const handleViewStudent = () => {
     const id = studentIdInput.trim();
     if (!id) {
@@ -1642,10 +1646,13 @@ const renderStudentWiseView = () => {
       return;
     }
     setStudentIdInputError('');
-    // ✅ Redirect to StudentDashboard with student_id and context
-    window.location.href = `/student-dashboard?student_id=${encodeURIComponent(id)}&from=school`;
+    setSelectedStudentId(id);
+    setView('student'); // ✅ Now safe — `setView` comes from parent scope
   };
-
+  console.log("📌 Rendering student view? view =", view, "selectedStudentId =", selectedStudentId);
+  if (view === 'student' && selectedStudentId && selectedStudentId.trim() !== '') {
+  return <StudentDashboard studentId={selectedStudentId.trim()} onBack={() => setView('overview')} />;
+} 
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>

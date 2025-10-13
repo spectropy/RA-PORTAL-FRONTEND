@@ -17,86 +17,126 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 
-export default function StudentDashboard({ onBack }) {
+export default function StudentDashboard({ onBack, studentId: externalStudentId }) {
+  console.log("🔍 StudentDashboard PROPS:", { externalStudentId });
+  console.log("🔍 typeof externalStudentId:", typeof externalStudentId);
+  console.log("🔍 is truthy?", !!externalStudentId);
+  console.log("🔍 trimmed:", externalStudentId?.trim());
+
   const [student, setStudent] = useState(null);
   const [teachers, setTeachers] = useState([]);
-  const [examResults, setExamResults] = useState([]); // 👈 NEW
-  const [school, setSchool] = useState(null); // 👈 ADD THIS
+  const [examResults, setExamResults] = useState([]);
+  const [school, setSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const hasFetched = useRef(false);
 
+  // ✅ Define mode OUTSIDE useEffect
+  const isViewingAsSchoolOwner = !!externalStudentId && externalStudentId.trim() !== '';
+  console.log("✅ isViewingAsSchoolOwner =", isViewingAsSchoolOwner);
+
   useEffect(() => {
-    const user = sessionStorage.getItem("sp_user");
-    const parsedUser = user ? JSON.parse(user) : null;
-
-    const studentId = parsedUser?.student_id || null;
-    const schoolId = parsedUser?.school_id || null;
-    const classValue = parsedUser?.class || null;
-    const sectionValue = parsedUser?.section || null;
-
-    if (!studentId || !schoolId || !classValue || !sectionValue) {
-      setError("No student or school context found. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
+    // ✅ Now safe to use isViewingAsSchoolOwner inside
     if (hasFetched.current) return;
     hasFetched.current = true;
 
-   const fetchStudentData = async () => {
+    const fetchData = async () => {
   try {
-    setStudent(parsedUser);
+    let studentData = null;
+    let schoolId = null;
+    let classValue = null;
+    let sectionValue = null;
+    let examResultsRaw = [];
 
-    // 👉 FETCH EXAM RESULTS
-    const resultsRes = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(studentId)}`);
-    if (!resultsRes.ok) throw new Error("Failed to fetch exam results");
-    const resultsData = await resultsRes.json();
-    setExamResults(resultsData || []);
+    if (isViewingAsSchoolOwner) {
+      const id = externalStudentId.trim();
+      if (!id) throw new Error("Student ID is required.");
 
-    // ✅ ===== INSERT SORTING LOGIC HERE =====
+      // Fetch exam results
+      const res = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("No exam data found for this student.");
+      examResultsRaw = await res.json();
+      if (!examResultsRaw.length) throw new Error("No exam records found.");
+
+      const first = examResultsRaw[0];
+      studentData = {
+        student_id: id,
+        name: first.first_name + first.last_name,
+        roll_no: id,
+        class: first.class || "—",
+        section: first.section || "—",
+        school_id: first.school_id || "—",
+        school_name: "—"
+      };
+
+      // Optional: enrich school name
+      if (first.school_id) {
+        const schRes = await fetch(`${API_BASE}/api/schools/${first.school_id}`);
+        if (schRes.ok) {
+          const sch = await schRes.json();
+          studentData.school_name = sch.school?.school_name || "—";
+        }
+      }
+
+      schoolId = first.school_id;
+      classValue = first.class;
+      sectionValue = first.section;
+      setStudent(studentData);
+    } else {
+      // Student self-view
+      const user = sessionStorage.getItem("sp_user");
+      const parsedUser = user ? JSON.parse(user) : null;
+      if (!parsedUser?.student_id || !parsedUser?.school_id || !parsedUser?.class || !parsedUser?.section) {
+        throw new Error("No student or school context found. Please log in again.");
+      }
+
+      studentData = parsedUser;
+      schoolId = parsedUser.school_id;
+      classValue = parsedUser.class;
+      sectionValue = parsedUser.section;
+      setStudent(parsedUser);
+
+      // Fetch exam results
+      const res = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(parsedUser.student_id)}`);
+      if (!res.ok) throw new Error("Failed to fetch your exam results.");
+      examResultsRaw = await res.json();
+    }
+
+    // 🔹 Sort exam results (same logic for both)
     const getExamTypePriority = (examName) => {
       if (examName.startsWith('WEEK_TEST')) return 0;
       if (examName.startsWith('UNIT_TEST')) return 1;
       if (examName.startsWith('GRAND_TEST')) return 2;
       return 3;
     };
-
     const parseExamNumber = (examName) => {
       const match = examName.match(/.*_(\d+)$/);
       return match ? parseInt(match[1], 10) : 0;
     };
-
-    const sortedResults = [...(resultsData || [])].sort((a, b) => {
+    const sortedResults = [...examResultsRaw].sort((a, b) => {
       const prioA = getExamTypePriority(a.exam);
       const prioB = getExamTypePriority(b.exam);
       if (prioA !== prioB) return prioA - prioB;
-
       const numA = parseExamNumber(a.exam);
       const numB = parseExamNumber(b.exam);
       if (numA !== numB) return numA - numB;
-
       return a.exam.localeCompare(b.exam);
     });
-    // ✅ =====================================
+    setExamResults(sortedResults);
 
-    setExamResults(sortedResults); // 👈 use sortedResults instead of raw resultsData
-
-    // 👉 FETCH FULL SCHOOL DATA (includes logo_url, area, etc.)
+    // 🔹 Fetch school (for logo, teachers, etc.)
     const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-    if (!schoolRes.ok) throw new Error(`Failed to fetch school details: ${schoolRes.status}`);
+    if (!schoolRes.ok) throw new Error("Failed to fetch school details");
     const schoolData = await schoolRes.json();
+    setSchool(schoolData.school);
 
-    // ✅ Save the full school object (from `schoolData.school`)
-    setSchool(schoolData.school); // 👈 This gives you access to logo_url, area, etc.
-
-    // 👉 Build assigned teachers list
+    // 🔹 Teachers
     const assignedTeachers = [];
     if (Array.isArray(schoolData.teachers)) {
       for (const teacher of schoolData.teachers) {
         if (Array.isArray(teacher.teacher_assignments)) {
           const assignments = teacher.teacher_assignments.filter(
-            a => a.class === classValue && a.section === sectionValue
+            (a) => a.class === classValue && a.section === sectionValue
           );
           if (assignments.length > 0) {
             assignedTeachers.push({
@@ -111,15 +151,14 @@ export default function StudentDashboard({ onBack }) {
     }
     setTeachers(assignedTeachers);
   } catch (err) {
-    console.error("Error fetching student data:", err);
-    setError("Failed to load student data. Please try again.");
+    console.error("Fetch error:", err);
+    setError(err.message || "Failed to load data.");
   } finally {
     setLoading(false);
   }
 };
-
-    fetchStudentData();
-  }, []);
+    fetchData();
+  }, [externalStudentId, isViewingAsSchoolOwner]); // ✅ Now valid — both are in scope
 
   // ===== Derived Metrics for Performance Dashboard (FIXED) =====
 const { bestExam, averagesData, strengthSubject, weakSubject } = useMemo(() => {
