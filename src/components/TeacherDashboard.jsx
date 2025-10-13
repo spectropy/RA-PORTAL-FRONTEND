@@ -1,6 +1,8 @@
 // src/components/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
 
+const res = await fetch(`${BACKEND_URL}/api/exams?school_id=${parsed.school_id}`);
+
 // Helper: Compute exam patterns AND teacher-specific best week tests
 function computeExamAnalytics(exams, teacherAssignments) {
   const assignments = Array.isArray(teacherAssignments) ? teacherAssignments : [];
