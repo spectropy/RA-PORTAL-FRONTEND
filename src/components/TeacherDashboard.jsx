@@ -1,5 +1,7 @@
 // src/components/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable'; // 👈 Import autotable
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -116,7 +118,7 @@ function computeExamAnalytics(exams, teacherAssignments) {
   return { examPatterns, bestWeekTestsByGrade };
 }
 
-export default function TeacherDashboard({ onBack }) {
+export default function TeacherDashboard({ onBack, teacherId: externalTeacherId }) {
   const [teacher, setTeacher] = useState(null);
   const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -124,58 +126,207 @@ export default function TeacherDashboard({ onBack }) {
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
 
-  useEffect(() => {
-    const loadTeacherAndExams = async () => {
-      const user = sessionStorage.getItem("sp_user");
-      if (!user) {
-        alert("No user data found. Please log in again.");
-        onBack();
-        return;
-      }
+  const isViewingAsSchoolOwner = !!externalTeacherId;
 
-      try {
-        const parsed = JSON.parse(user);
-        if (parsed.role !== "TEACHER") {
-          alert("Access denied. Teachers only.");
-          onBack();
-          return;
+  useEffect(() => {
+  const loadTeacherAndExams = async () => {
+    try {
+      let teacherData = null;
+      let schoolName = "Unknown School";
+      let schoolId = null;
+
+      if (isViewingAsSchoolOwner) {
+        // 🔹 SCHOOL OWNER MODE: fetch by teacherId
+        if (!externalTeacherId) {
+          throw new Error("Teacher ID is required.");
         }
 
-        const teacherData = {
+        // Fetch teacher profile (you'll need this endpoint — see below)
+        const teacherRes = await fetch(`${API_BASE}/api/teachers/${encodeURIComponent(externalTeacherId)}`);
+        if (!teacherRes.ok) {
+          if (teacherRes.status === 404) throw new Error("Teacher not found.");
+          throw new Error("Failed to load teacher profile.");
+        }
+        const teacherProfile = await teacherRes.json();
+        teacherData = teacherProfile.teacher;
+        schoolName = teacherProfile.school_name || "Unknown School";
+        schoolId = teacherData.school_id;
+      } else {
+        // 🔹 TEACHER SELF-VIEW MODE (existing logic)
+        const user = sessionStorage.getItem("sp_user");
+        if (!user) {
+          throw new Error("No user data found. Please log in again.");
+        }
+        const parsed = JSON.parse(user);
+        if (parsed.role !== "TEACHER") {
+          throw new Error("Access denied. Teachers only.");
+        }
+        teacherData = {
           ...parsed,
           teacher_assignments: Array.isArray(parsed.teacher_assignments)
             ? parsed.teacher_assignments
             : [],
         };
-        setTeacher(teacherData);
-        setSchoolName(parsed.school_name || "Unknown School");
-
-        // In loadTeacherAndExams:
-        const res = await fetch(`${API_BASE}/api/exams?school_id=${parsed.school_id}`); 
-        if (res.ok) {
-          const exams = await res.json();
-          setExamResults(exams);
-
-          // ✅ Pass teacher assignments to compute teacher-specific analysis
-          const { examPatterns, bestWeekTestsByGrade } = computeExamAnalytics(
-            exams,
-            teacherData.teacher_assignments
-          );
-
-          setExamPatterns(examPatterns);
-          setBestWeekTestsByGrade(bestWeekTestsByGrade);
-        }
-      } catch (err) {
-        console.error("Error:", err);
-        alert("Session corrupted. Please log in again.");
-        onBack();
-      } finally {
-        setLoading(false);
+        schoolName = parsed.school_name || "Unknown School";
+        schoolId = parsed.school_id;
       }
-    };
 
-    loadTeacherAndExams();
-  }, [onBack]);
+      setTeacher(teacherData);
+      setSchoolName(schoolName);
+
+      // 🔹 Fetch all exams for the school
+      const examsRes = await fetch(`${API_BASE}/api/exams?school_id=${schoolId}`);
+      if (!examsRes.ok) throw new Error("Failed to fetch exam data.");
+      const exams = await examsRes.json();
+      setExamResults(exams);
+
+      // 🔹 Compute analytics
+      const { examPatterns, bestWeekTestsByGrade } = computeExamAnalytics(
+        exams,
+        teacherData.teacher_assignments
+      );
+      setExamPatterns(examPatterns);
+      setBestWeekTestsByGrade(bestWeekTestsByGrade);
+    } catch (err) {
+      console.error("Error loading teacher dashboard:", err);
+      alert(err.message || "Failed to load dashboard.");
+      onBack?.();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadTeacherAndExams();
+}, [onBack, externalTeacherId, isViewingAsSchoolOwner]);
+
+const downloadPDF = () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  const margin = 14;
+  let y = 20;
+  // === BLUE HEADER BANNER (as per Fig 2) ===
+    doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
+    doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
+
+    // School Name (Left)
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255); // White text
+    doc.text(`${schoolName}` || 'Unknown School', 14, 12);
+
+    // Powered BY SPECTROPY (Right)
+    doc.setFontSize(10);
+    doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+  y += 10;
+
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(0,0,0);
+  doc.setFont('bold');
+  doc.text("IIT Foundation Teacher Report", pageWidth / 2, y, { align: 'center' });
+  y += 10;
+  doc.setFontSize(12);
+  doc.text(`Teacher: ${teacher.name}`, margin, y); y += 6;
+  doc.text(`ID: ${teacher.teacher_id}`, margin, y); y += 6;
+  doc.line(margin, y, pageWidth - margin, y); 
+  doc.setFontSize(8);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 150, y - 29);
+  y += 10;
+
+  // Allotments
+  doc.setFontSize(14);
+  doc.setFont(undefined,'bold');
+  doc.text("Your ALLOTMENTS", margin, y);
+  doc.setFont(undefined, 'italic');
+  y += 8;
+  if (teacher.teacher_assignments.length > 0) {
+    teacher.teacher_assignments.forEach(a => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`${a.class}-${a.section} | ${a.subject}`, margin, y);
+      y += 6;
+    });
+  } else {
+    doc.text("No assigned classes.", margin, y);
+    y += 6;
+  }
+  y += 8;
+
+  // Performance Analysis
+  if (bestWeekTestsByGrade.length > 0) {
+    doc.setFont(undefined, 'bold');
+    doc.text("Performance Analysis: Best Week Test by Grade", margin, y);
+    doc.setFont(undefined, 'normal');
+    y += 10;
+
+    const perfColumns = ["Grade", "Best Exam Pattern", "Best Average (%)"];
+    const perfRows = bestWeekTestsByGrade.map(item => [
+      `Grade ${item.grade}`,
+      item.bestExamPattern,
+      `${item.bestAverage}%`
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [perfColumns],
+      body: perfRows,
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 3, halign:'center' },
+      headStyles: { fillColor: [66, 153, 225] },
+      margin: { left: margin, right: margin }
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+  }
+
+  // Exam Table
+  if (examPatterns.length > 0) {
+    doc.setFont(undefined, 'bold');
+    doc.text("Exam Performance Averages", margin, y);
+    doc.setFont(undefined, 'normal');
+    y += 10;
+
+    const teacherClassSections = [...new Set(
+      teacher.teacher_assignments.map(a => `${a.class}-${a.section}`)
+    )];
+    const subjects = ["Physics", "Chemistry", "Biology", "Mathematics"];
+    const dynamicCols = [];
+    const tableColumns = ["Exam Pattern"];
+
+    for (const subject of subjects) {
+      for (const cs of teacherClassSections) {
+        if (teacher.teacher_assignments.some(a => a.subject === subject && `${a.class}-${a.section}` === cs)) {
+          dynamicCols.push({ subject, classSection: cs });
+          tableColumns.push(`${subject} (${cs})`);
+        }
+      }
+    }
+
+    const tableRows = examPatterns.map(pattern => {
+      const row = [pattern.exam_pattern];
+      dynamicCols.forEach(col => {
+        const avg = pattern.averagesByClassSection[col.classSection]?.[col.subject] || "N/A";
+        row.push(avg !== "N/A" ? `${avg}%` : "N/A");
+      });
+      return row;
+    });
+
+    doc.autoTable({
+      startY: y,
+      head: [tableColumns],
+      body: tableRows,
+      theme: 'striped',
+      styles: { fontSize: 10, cellPadding: 2.5, halign: 'center' },
+      headStyles: { fillColor: [66, 153, 225] },
+      margin: { left: margin, right: margin },
+      willDrawCell: (data) => {
+        if (data.cell && data.cell.text === 'N/A') {
+          data.cell.styles.textColor = [0, 0, 0];
+        }
+      }
+    });
+  }
+
+  doc.save(`Teacher_Report_${teacher.teacher_id}_${new Date().toISOString().slice(0, 10)}.pdf`);
+};
 
   if (loading) {
     return <div style={styles.centered}>Loading teacher dashboard...</div>;
@@ -206,29 +357,43 @@ export default function TeacherDashboard({ onBack }) {
     return patternData.averagesByClassSection[classSection]?.[subject] || null;
   };
 
-  return (
+   return (
     <div style={styles.container}>
-      {/* Header */}
+      {/* Header with Download PDF button */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>👩‍🏫 Teacher Dashboard</h1>
-          <p style={styles.subtitle}>
-            Welcome, <strong>{teacher.name}</strong> • {teacher.teacher_id}
-          </p>
-          <p style={styles.school}>
-            School: <strong>{schoolName}</strong>
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("sp_user");
-            onBack();
-          }}
-          style={styles.logoutBtn}
-        >
-          ← Logout
-        </button>
-      </div>
+  <div>
+    <h1 style={styles.title}>👩‍🏫 Teacher Dashboard</h1>
+    <p style={styles.subtitle}>
+      Welcome, <strong>{teacher.name}</strong> • {teacher.teacher_id}
+    </p>
+    <p style={styles.school}>
+      School: <strong>{schoolName}</strong>
+    </p>
+  </div>
+  <div style={{ display: 'flex', gap: '10px' }}>
+    <button onClick={downloadPDF} style={styles.downloadBtn}>
+      📄 Download PDF Report
+    </button>
+    {/* ✅ Only show Logout if NOT viewing as school owner */}
+    {!isViewingAsSchoolOwner && (
+      <button
+        onClick={() => {
+          sessionStorage.removeItem("sp_user");
+          onBack();
+        }}
+        style={styles.logoutBtn}
+      >
+        ← Logout
+      </button>
+    )}
+    {/* ✅ Always show "Back" for school owners */}
+    {isViewingAsSchoolOwner && (
+      <button onClick={onBack} style={styles.backBtn}>
+        ← Back to Overview
+      </button>
+    )}
+  </div>
+</div>
 
       {/* Assignments Section */}
       <div style={styles.card}>
@@ -427,6 +592,16 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
   },
+  downloadBtn: {
+  padding: '8px 16px',
+  background: '#3182ce',
+  color: 'white',
+  border: 'none',
+  borderRadius: '8px',
+  cursor: 'pointer',
+  fontSize: '14px',
+  fontWeight: '500',
+},
   card: {
     background: 'white',
     border: '1px solid #e2e8f0',

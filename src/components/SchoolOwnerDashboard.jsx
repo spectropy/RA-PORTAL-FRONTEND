@@ -279,7 +279,7 @@ const downloadIITAnalysisPDF = () => {
   }
 
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscope',
     unit: 'mm',
     format: 'a4'
   });
@@ -304,10 +304,12 @@ const downloadIITAnalysisPDF = () => {
   y = 35;
 
   // ===== PERFORMANCE ANALYSIS TITLE =====
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('Performance Analysis', pageWidth / 2, y, { align: 'center' });
+  doc.text('IIT Foundation School Performance Report', pageWidth / 2, y, { align: 'center' });
+  doc.setFontSize(8);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 60, 30);
   y += 12;
 
   // ===== BEST SUBJECT =====
@@ -345,13 +347,11 @@ const downloadIITAnalysisPDF = () => {
     bestSubject = subjectNames[bestSubject];
   }
 
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Best Subject: ${bestSubject}`, pageWidth / 2, y, { align: 'center' });
   y += 12;
 
   // ===== SUBJECT AVERAGES CARDS =====
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
   doc.text('Subject Averages (%):', 14, y);
   y += 8;
 
@@ -389,16 +389,17 @@ const downloadIITAnalysisPDF = () => {
     doc.text('No exam data available', 14, y);
     y += 10;
   }
-
+  y += 5;
   // ===== IIT BATCHES TABLE =====
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0,0,0);
   doc.text('IIT Foundation Batches', 14, y);
   y += 8;
 
   const tableColumn = [
     'Class', 'Section', 'Foundation', 'Program', 'Group', 'Students',
-    'Physics %', 'Maths %', 'Chemistry %', 'Biology %', 'Total %', 'All India Rank'
+    'Physics %', 'Maths %', 'Chemistry %', 'Biology %', 'Total %'
   ];
 
   const tableRows = school.classes.map(cls => {
@@ -416,7 +417,6 @@ const downloadIITAnalysisPDF = () => {
       exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-',
       exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-',
       exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-',
-      exam.all_india_rank ?? '-'
     ];
   });
 
@@ -432,25 +432,24 @@ const downloadIITAnalysisPDF = () => {
     head: [tableColumn],
     body: tableRows,
     theme: 'grid',
-    styles: { fontSize: 7, cellPadding: 2 },
+    styles: { fontSize: 10, cellPadding: 2 ,halign:'center'},
     headStyles: { 
       fillColor: [37, 79, 162], 
       textColor: [255, 255, 255], 
       fontSize: 8 
     },
     columnStyles: {
-      0: { cellWidth: 15 }, // Class
-      1: { cellWidth: 15 }, // Section
-      2: { cellWidth: 20 }, // Foundation
-      3: { cellWidth: 20 }, // Program
-      4: { cellWidth: 15 }, // Group
-      5: { cellWidth: 15 }, // Students
-      6: { cellWidth: 15 }, // Physics %
-      7: { cellWidth: 15 }, // Maths %
-      8: { cellWidth: 18 }, // Chemistry %
-      9: { cellWidth: 18 }, // Biology %
-      10: { cellWidth: 15 }, // Total %
-      11: { cellWidth: 20 }  // All India Rank
+      0: { cellWidth: 22 }, // Class
+      1: { cellWidth: 22 }, // Section
+      2: { cellWidth: 28 }, // Foundation
+      3: { cellWidth: 28 }, // Program
+      4: { cellWidth: 22 }, // Group
+      5: { cellWidth: 22 }, // Students
+      6: { cellWidth: 22 }, // Physics %
+      7: { cellWidth: 22 }, // Maths %
+      8: { cellWidth: 26 }, // Chemistry %
+      9: { cellWidth: 26 }, // Biology %
+      10:{ cellWidth: 22 }, // Total %
     },
     didParseCell: (data) => {
       if (data.row.index === tableRows.length - 1 && data.column.index < 4) {
@@ -556,7 +555,6 @@ const downloadIITAnalysisPDF = () => {
                 <th>Chemistry %</th>
                 <th>Biology %</th>
                 <th>Total %</th>
-                <th>All India Rank</th>
               </tr>
             </thead>
             <tbody>
@@ -577,7 +575,6 @@ const downloadIITAnalysisPDF = () => {
                     <td>{exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-'}</td>
                     <td>{exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-'}</td>
                     <td>{exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-'}</td>
-                    <td>{exam.all_india_rank !== undefined && exam.all_india_rank !== null ? exam.all_india_rank : '-'}</td>
                   </tr>
                 );
               })}
@@ -767,16 +764,21 @@ const downloadIITAnalysisPDF = () => {
   y = 35; // Start content after banner
 
   // ===== PERFORMANCE ANALYSIS TITLE =====
-doc.setFontSize(14);
-doc.setFont('helvetica', 'bold');
-doc.setTextColor(30, 41, 59);
+doc.setFontSize(16);
+doc.setFont('helvetica','bold');
+doc.setTextColor(0, 0, 0);
 const pageWidth = doc.internal.pageSize.width;
-doc.text('Performance Analysis', pageWidth / 2, y, { align: 'center' });
+doc.text('IIT Foundation Batch-Wise Performace Report ', pageWidth / 2, y, { align: 'center' });
+doc.setFont('bold');
+doc.setTextColor(0, 0, 0);
+doc.text(`${cls}-${sec}`, 14, 40, { align: 'left' });
+doc.setFontSize(8);
+doc.text(`Generated: ${new Date().toLocaleString()}`,doc.internal.pageSize.width-60,30);
 y += 10;
 
 // ===== BEST SUBJECT =====
 doc.setFontSize(12);
-doc.setFont('helvetica', 'bold');
+doc.setFont('bold');
 doc.text('Best Subject: ' + (analysis.bestSubject || '—'), pageWidth / 2, y, { align: 'center' });
 y += 12;
 
@@ -820,10 +822,11 @@ y += 12;
     doc.text('Avg %', x + colWidth / 2 - 2, y + 20, { align: 'center' });
   });
 
-  y += 30;
+  y += 40;
 
   // ===== SUBJECT-WISE TOP EXAM =====
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
   doc.text('Subject-wise Top Exam:', 14, y);
   y += 8;
@@ -911,15 +914,15 @@ y += 12;
     head: [tableColumn],
     body: tableRows,
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 4 },
+    styles: { fontSize: 9, cellPadding: 4 ,halign: 'center'},
     headStyles: { fillColor: [37, 79, 162], textColor: [255, 255, 255], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 25 },
       1: { cellWidth: 25 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 23 },
-      4: { cellWidth: 23 },
+      2: { cellWidth: 35 },
+      3: { cellWidth: 35 },
+      4: { cellWidth: 35 },
       5: { cellWidth: 23 },
       6: { cellWidth: 23 },
       7: { cellWidth: 23 },
@@ -1385,23 +1388,31 @@ const renderExamWiseResultsView = () => {
     // Powered BY SPECTROPY (Right)
     doc.setFontSize(10);
     doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
-    yPos += 8;
+    yPos += 6;
 
     // === Title ===
-    doc.setFontSize(14);
+    doc.setFontSize(18);
     doc.setTextColor(0, 0, 0); // Black text
-    doc.text(`Exam Analysis Report`, margin + 60, yPos );
+    doc.setFont('bold');
+    doc.text(`IIT Foundation Exam Analysis Report`, margin + 40, yPos );
+    yPos += 9;
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0); 
+    doc.text(`${currentOMRExam.class}-${currentOMRExam.section} `, margin, yPos);
     yPos += 6;
-    doc.setFontSize(10);
-    doc.text(`${currentOMRExam.class}-${currentOMRExam.section} | ${currentOMRExam.exam_pattern}`, margin + 60, yPos);
+    doc.text(`${currentOMRExam.exam_pattern}`, margin + 145, yPos - 6);
     yPos += 6;
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 60, yPos);
-    yPos += 8;
+    doc.text(`DATE:${currentOMRExam.exam_date}`, margin + 145, yPos - 6 );
+    yPos += 6;
+    doc.setFontSize(6);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 160, yPos - 30);
+    doc.text('--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------',margin,yPos - 10);
+    yPos += 2;
 
     // === 1. Subject Averages (as Percentages) + Overall Toppers (Top 5) — SIDE BY SIDE ===
     doc.setFontSize(14);
-    doc.text('Subject Averages (%)', margin, yPos);
-    yPos += 6;
+    doc.text('Subject Averages (%)', margin, yPos - 6);
+    yPos += 1;
 
     // Subject Averages Table
     const avgTableData = Object.entries(subjectAverages).map(([subject, avg]) => [
@@ -1453,8 +1464,31 @@ const renderExamWiseResultsView = () => {
     // Get height of both tables for correct positioning
     const topperTableEndY = doc.lastAutoTable.finalY;
     yPos = Math.max(avgTableEndY, topperTableEndY) + 12;
+    
+    // === 2. Grade-wise Distribution ===
+    doc.setFontSize(14);
+    doc.text('Performace Distribution', margin, yPos);
+    yPos += 6;
 
-    // === 2. Subject-wise Toppers (Top 5) — MERGED TABLE ===
+    const gradeTableData = gradeRanges.map(range => [
+      range.label,
+      gradeCounts[range.label].physics,
+      gradeCounts[range.label].chemistry,
+      gradeCounts[range.label].maths,
+      gradeCounts[range.label].biology
+    ]);
+
+    doc.autoTable({
+      startY: yPos,
+      head: [['Range(%)', 'Physics', 'Chemistry', 'Maths', 'Biology']],
+      body: gradeTableData,
+      theme: 'grid',
+      styles: { fontSize: 12 ,halign: 'center'},
+      headStyles: { fillColor: [65, 105, 225] },
+      columnStyles: { 0: { cellWidth: 25 } }
+    });
+    yPos = doc.lastAutoTable.finalY + 12;
+    // === 3. Subject-wise Toppers (Top 5) — MERGED TABLE ===
     doc.setFontSize(14);
     doc.text('Subject-wise Toppers (Top 5)', margin, yPos);
     yPos += 6;
@@ -1485,30 +1519,6 @@ const renderExamWiseResultsView = () => {
         7: { cellWidth: 25 }, 8: { cellWidth: 15 }
       }
     });
-    yPos = doc.lastAutoTable.finalY + 12;
-
-    // === 3. Grade-wise Distribution ===
-    doc.setFontSize(14);
-    doc.text('Performace Distribution', margin, yPos);
-    yPos += 6;
-
-    const gradeTableData = gradeRanges.map(range => [
-      range.label,
-      gradeCounts[range.label].physics,
-      gradeCounts[range.label].chemistry,
-      gradeCounts[range.label].maths,
-      gradeCounts[range.label].biology
-    ]);
-
-    doc.autoTable({
-      startY: yPos,
-      head: [['Range(%)', 'Physics', 'Chemistry', 'Maths', 'Biology']],
-      body: gradeTableData,
-      theme: 'grid',
-      styles: { fontSize: 12 ,halign: 'center'},
-      headStyles: { fillColor: [65, 105, 225] },
-      columnStyles: { 0: { cellWidth: 25 } }
-    });
 
     // === Save ===
     doc.save(`Exam_Analysis_${currentOMRExam.id}.pdf`);
@@ -1537,16 +1547,50 @@ const renderExamWiseResultsView = () => {
             <button
               onClick={() => {
                 const doc = new jsPDF('landscape');
-                doc.setFontSize(18);
-                doc.text(`Exam Results - ${currentOMRExam.exam_pattern}`, 14, 22);
-                doc.setFontSize(12);
-                doc.text(`Class: ${currentOMRExam.class} - ${currentOMRExam.section}`, 14, 30);
+                const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    let yPos = 20;
+    
+    // === BLUE HEADER BANNER (as per Fig 2) ===
+    doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
+    doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
+
+    // School Name (Left)
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255); // White text
+    doc.text(school.school_name || 'Unknown School', 14, 12);
+
+    // Area (Below school name)
+    doc.setFontSize(10);
+    doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
+
+    // Powered BY SPECTROPY (Right)
+    doc.setFontSize(10);
+    doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+    yPos += 6;
+
+    // === Title ===
+    doc.setFontSize(18);
+    doc.setTextColor(0, 0, 0); // Black text
+    doc.setFont('bold');
+    doc.text(`IIT Foundation Exam Result`, margin + 100, yPos );
+    yPos += 9;
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0); 
+    doc.text(`${currentOMRExam.class}-${currentOMRExam.section} `, margin, yPos);
+    yPos += 6;
+    doc.text(`${currentOMRExam.exam_pattern} | DATE:${currentOMRExam.exam_date}`, margin + 200, yPos - 6);
+    yPos += 6;
+    doc.setFontSize(6);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 230, yPos - 24);
+
                 const headers = [
                   'Student ID', 'Name', 'Total Q', 'Correct', 'Wrong', 'Unattempted',
                   'Physics', 'Chemistry', 'Maths', 'Biology', 'Total Marks', '%',
                   'Class Rank', 'School Rank', 'All Schools Rank'
                 ];
-                const body = results.map(r => [
+                const sortedResults = [...results].sort((a, b) => b.percentage - a.percentage);
+                const body = sortedResults.map(r => [
                   r.student_id || '-',
                   `${r.first_name || ''} ${r.last_name || ''}`.trim() || '-',
                   r.total_questions || 0,
@@ -1568,8 +1612,10 @@ const renderExamWiseResultsView = () => {
                   head: [headers],
                   body,
                   theme: 'grid',
-                  styles: { fontSize: 8 },
-                  headStyles: { fillColor: [30, 144, 255] }
+                  styles: { fontSize: 8 ,halign: 'center',textColor:[0,0,0] },
+                  headStyles: { fillColor: [65, 105, 255],textColor:(255,255,255) },
+                  columnStyles: {11: { fontStyle: 'bold' }  // ✅ makes only the Percentage column bold
+                  }
                 });
                 doc.save(`Exam_Results_${currentOMRExam.id}.pdf`);
               }}
@@ -1678,7 +1724,7 @@ const renderStudentWiseView = () => {
             setStudentIdInput(e.target.value);
             if (studentIdInputError) setStudentIdInputError('');
           }}
-          placeholder="Enter Student ID (e.g., S12345)"
+          placeholder="Enter Student ID (e.g., 12345)"
           style={{
             width: '100%',
             padding: '12px',
@@ -1723,8 +1769,13 @@ const renderTeacherWiseView = () => {
     }
     setTeacherIdInputError('');
     setSelectedTeacherId(id);
-    setView('teacher-dashboard'); // 👈 new view
+    setView('teacher-dashboard');
   };
+
+  // ✅ ADD THIS: Render TeacherDashboard inline when view is 'teacher-dashboard'
+  if (view === 'teacher-dashboard' && selectedTeacherId && selectedTeacherId.trim() !== '') {
+    return <TeacherDashboard teacherId={selectedTeacherId.trim()} onBack={() => setView('overview')} />;
+  }
 
   return (
     <div style={card}>
@@ -1747,7 +1798,7 @@ const renderTeacherWiseView = () => {
             setTeacherIdInput(e.target.value);
             if (teacherIdInputError) setTeacherIdInputError('');
           }}
-          placeholder="Enter Teacher ID (e.g., T12345)"
+          placeholder="Enter Teacher ID (e.g., TS251101)"
           style={{
             width: '100%',
             padding: '12px',
@@ -1787,7 +1838,7 @@ const renderTeacherWiseView = () => {
   const renderContent = () => {
     switch (view) {
       case 'teacher':
-        return renderTeacherWiseView();
+      return renderTeacherWiseView();
       case 'exam':
         return renderExamWiseView();
       case 'examwise-results':
