@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import StudentDashboard from './StudentDashboard'; // adjust path as needed
 import TeacherDashboard from './TeacherDashboard';
 
@@ -169,6 +171,379 @@ const computeOverallAnalysis = () => {
   if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
   if (!school) return <p>No school data available.</p>;
 
+// ✅ Reusable student report PDF generator (returns Blob)
+const generateStudentReportPDF = (studentData, schoolData, examResults) => {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!studentData || !schoolData || !Array.isArray(examResults) || examResults.length === 0) {
+        throw new Error('Missing required data');
+      }
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 14;
+      let y = 20;
+
+      // 🔹 Helper: Get subject percentage
+      const getSubjectPct = (marks, max) => {
+        if (!max || max <= 0) return 0;
+        return ((marks || 0) / max) * 100;
+      };
+
+      // ======================
+      // 🎨 THEME COLORS
+      // ======================
+      const BLUE = [30, 80, 150];
+      const LIGHT_BLUE = [230, 240, 255];
+      const WHITE = [255, 255, 255];
+
+      // ======================
+      // 🏫 HEADER (Blue Theme)
+      // ======================
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFillColor(...BLUE);
+      doc.setTextColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, 25, 'F');
+      doc.text(schoolData.school_name || "School Name", 15, 15);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Area: ${schoolData.area || 'N/A'}`, 15, 22);
+      doc.text(`Powered BY SPECTROPY`, 240, 15);
+      y = 30;
+
+      // ======================
+      // 🧑‍🎓 STUDENT INFO BOXES
+      // ======================
+      const boxX = 12;
+      const boxY = y;
+      const boxW = 50;
+      const boxH = 22;
+      const gap = 1;
+
+      const subjKeys = [
+        { key: 'physics', label: 'Physics' },
+        { key: 'chemistry', label: 'Chemistry' },
+        { key: 'maths', label: 'Mathematics' },
+        { key: 'biology', label: 'Biology' }
+      ];
+
+      const avgMap = {};
+      for (const subj of subjKeys) {
+        const marksKey = `${subj.key}_marks`;
+        const maxKey = `max_marks_${subj.key}`;
+        const totalPct = examResults.reduce((sum, r) => {
+          return sum + getSubjectPct(r[marksKey], r[maxKey]);
+        }, 0);
+        avgMap[subj.key] = examResults.length ? totalPct / examResults.length : 0;
+      }
+
+      const sortedSubj = Object.entries(avgMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([key, pct]) => ({ key, pct }));
+
+      const strength = sortedSubj[0]?.key || '—';
+      const weak = sortedSubj[sortedSubj.length - 1]?.key || '—';
+
+      // Box 1: Name
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(boxX, boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Student Name", boxX + 3, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(studentData.name || "—", boxX + 3, boxY + 14);
+
+      // Box 2: Roll No
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(boxX + boxW + gap, boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Roll No", boxX + boxW + gap + 1, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 1, boxY + 14);
+
+      // Box 3: Class
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(boxX + 2 * (boxW + gap), boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Class Section", boxX + 2 * (boxW + gap) + 1, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 1, boxY + 14);
+
+      // Box 4: Best Performance
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      const bestExam = examResults.reduce((best, curr) =>
+        (curr.percentage || 0) > (best.percentage || 0) ? curr : best, {});
+      doc.rect(boxX + 3 * (boxW + gap), boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 1, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 1, boxY + 14);
+
+      // Box 5: Strength Subject
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(boxX + 4 * (boxW + gap), boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 1, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 1, boxY + 14);
+
+      // Box 6: Weak Subject
+      doc.setFillColor(...WHITE);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(boxX + 5 * (boxW + gap), boxY, boxW, boxH, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 1, boxY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 1, boxY + 14);
+
+      y = boxY + boxH + 10;
+
+      // ======================
+      // 📊 CUMULATIVE SUBJECT AVERAGES
+      // ======================
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text("Cumulative Performance", 15, y);
+      y += 8;
+
+      const graphX = 15;
+      const graphY = y;
+      const graphW = 35;
+      const graphH = 25;
+      const graphGap = 8;
+
+      subjKeys.forEach((subj, i) => {
+        const x = graphX + i * (graphW + graphGap);
+        doc.setFillColor(...LIGHT_BLUE);
+        doc.rect(x, graphY, graphW, graphH, 'F');
+        doc.setFillColor(...WHITE);
+        doc.rect(x + 1, graphY + 1, graphW - 2, graphH - 2, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(subj.label, x + 5, graphY + 8);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
+      });
+
+      y = graphY + graphH + 15;
+
+      // ======================
+      // 📋 EXAM RESULTS TABLE
+      // ======================
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text("Exam Results", 15, y);
+      y += 10;
+
+      const tableData = examResults.map(r => {
+        const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
+        const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
+        const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
+        const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
+
+        return [
+          r.date || "—",
+          r.exam.replace(/_/g, ' ') || "—",
+          `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
+          `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
+          `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
+          `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
+          (r.total || 0).toFixed(0),
+          `${(r.percentage || 0).toFixed(1)}%`,
+          r.class_rank ?? "—",
+          r.school_rank ?? "—",
+          r.all_schools_rank ?? "—"
+        ];
+      });
+
+      doc.autoTable({
+        head: [
+          [
+            "Date",
+            "Exam",
+            "Physics",
+            "Chemistry",
+            "Maths",
+            "Biology",
+            "Total",
+            "%",
+            "Class\nRank",
+            "School\nRank",
+            "All India\nRank"
+          ]
+        ],
+        body: tableData,
+        startY: y,
+        theme: 'grid',
+        styles: {
+          fontSize: 10,
+          cellPadding: 2,
+          fontStyle: 'bold',
+          fillColor: WHITE,
+          textColor: 0,
+        },
+        headStyles: {
+          fillColor: BLUE,
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 11,
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 32 },
+          2: { cellWidth: 26 },
+          3: { cellWidth: 26 },
+          4: { cellWidth: 26 },
+          5: { cellWidth: 26 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 18 },
+          9: { cellWidth: 18 },
+          10: { cellWidth: 20 }
+        },
+        margin: { left: 15, right: 15 },
+        tableWidth: 'wrap'
+      });
+
+      y = doc.lastAutoTable.finalY + 10;
+
+      // ======================
+      // ✍️ SIGNATURES
+      // ======================
+      const sigY = pageHeight - 30;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'italic');
+
+      doc.setTextColor(0, 0, 0);
+      doc.text("Parent/Guardian", 20, sigY);
+      doc.text("School Principal", 130, sigY);
+      doc.text("Organization Head", 240, sigY);
+
+      doc.text("Date: ___________", 20, sigY + 8);
+      doc.text("Date: ___________", 130, sigY + 8);
+      doc.text("Date: ___________", 240, sigY + 8);
+
+      // ✅ Return blob directly
+      resolve(doc.output('blob'));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}; 
+
+const handleDownloadAllGradesReport = async () => {
+  if (!school) {
+    alert('School data not loaded.');
+    return;
+  }
+
+  setExamLoading(true);
+  const zip = new JSZip();
+
+  try {
+    // ✅ Fetch ALL exam records for the school (contains student info)
+    const params = new URLSearchParams({ school_id: schoolId });
+    const res = await fetch(`${API_BASE}/api/exams?${params}`);
+    const allExamRecords = await res.json();
+
+    if (!Array.isArray(allExamRecords) || allExamRecords.length === 0) {
+      alert('No exam records found for the school.');
+      return;
+    }
+
+    // ✅ Deduplicate students by student_id
+    const studentMap = {};
+    for (const record of allExamRecords) {
+      if (record.student_id && !studentMap[record.student_id]) {
+        studentMap[record.student_id] = {
+          student_id: record.student_id,
+          first_name: record.first_name || '',
+          last_name: record.last_name || '',
+          class: record.class || '',
+          section: record.section || ''
+        };
+      }
+    }
+
+    const uniqueStudents = Object.values(studentMap);
+    console.log('✅ Found', uniqueStudents.length, 'unique students');
+
+    let generatedCount = 0;
+
+    // ✅ Generate report for each student
+    for (const student of uniqueStudents) {
+      try {
+        // Fetch this student's full exam history
+        const studentRes = await fetch(`${API_BASE}/api/exams/results?student_id=${student.student_id}`);
+        const examResults = await studentRes.json();
+
+        if (!Array.isArray(examResults) || examResults.length === 0) {
+          console.warn(`⚠️ No exam results for student ${student.student_id}`);
+          continue;
+        }
+
+        const studentData = {
+          name: `${student.first_name} ${student.last_name}`.trim() || 'Unknown',
+          roll_no: student.student_id,
+          class: student.class,
+          section: student.section
+        };
+
+        const pdfBlob = await generateStudentReportPDF(studentData, school, examResults);
+
+        const safeName = studentData.name.replace(/[^a-z0-9]/gi, '_');
+        const folder = `${student.class}_${student.section}`;
+        const filename = `${folder}/${safeName}_Report.pdf`;
+
+        zip.file(filename, pdfBlob);
+        generatedCount++;
+      } catch (err) {
+        console.error(`Failed to generate report for ${student.student_id}:`, err);
+      }
+    }
+
+    if (generatedCount === 0) {
+      alert('No reports could be generated.');
+      return;
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    saveAs(zipBlob, `All_Student_Reports_${school.school_id}.zip`);
+
+  } catch (err) {
+    console.error('💥 ZIP generation failed:', err);
+    alert('Failed to generate ZIP. Check console for details.');
+  } finally {
+    setExamLoading(false);
+  }
+};
+
   // 🖼️ Render School Header
   const renderSchoolHeader = () => (
     <div style={{
@@ -230,11 +605,18 @@ const renderMetricButtons = () => (
       {[
         { label: 'Batch(Exam Wise)', key: 'exam' },
         { label: 'Teacher Wise', key: 'teacher' },
-        { label: 'Student Wise', key: 'student' }
+        { label: 'Student Wise', key: 'student' },
+        { label: 'Download All Grades Report', key: 'download-all-grades' }
       ].map(btn => (
         <button
           key={btn.key}
-          onClick={() => setView(btn.key)}
+          onClick={() => {
+         if (btn.key === 'download-all-grades') {
+           handleDownloadAllGradesReport(); // direct call
+          } else {
+           setView(btn.key);
+          }
+          }}
           style={{
             padding: '12px 24px',
             background: '#3b82f6',
@@ -265,6 +647,65 @@ const renderMetricButtons = () => (
     </div>
   </div>
 );
+
+const renderTeachersTable = () => {
+  if (!school || !Array.isArray(school.teachers) || school.teachers.length === 0) {
+    return (
+      <div style={card}>
+        <h2>👨‍🏫 Teachers ({0})</h2>
+        <p>No teachers assigned yet.</p>
+      </div>
+    );
+  }
+
+  // Group assignments by (teacher, subject)
+  const teacherSubjectMap = {};
+
+  school.teachers.forEach(teacher => {
+    if (Array.isArray(teacher.teacher_assignments)) {
+      teacher.teacher_assignments.forEach(assignment => {
+        const key = `${teacher.name}|${assignment.subject}`;
+        if (!teacherSubjectMap[key]) {
+          teacherSubjectMap[key] = {
+            name: teacher.name,
+            subject: assignment.subject,
+            classSections: []
+          };
+        }
+        teacherSubjectMap[key].classSections.push(`${assignment.class}-${assignment.section}`);
+      });
+    }
+  });
+
+  // Convert to array for rendering
+  const groupedRows = Object.values(teacherSubjectMap);
+
+  return (
+    <div style={card}>
+      <h2>👨‍🏫 Teachers ({school.teachers.length})</h2>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={dataTable}>
+          <thead>
+            <tr>
+              <th>Teacher Name</th>
+              <th>Subject</th>
+              <th>Allotment (Class-Section)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groupedRows.map((row, i) => (
+              <tr key={i}>
+                <td>{row.name}</td>
+                <td>{row.subject}</td>
+                <td>{row.classSections.join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
  const renderIITBatches = () => {
   const analysis = computeOverallAnalysis();
@@ -1701,15 +2142,33 @@ const renderStudentWiseView = () => {
   };
   console.log("📌 Rendering student view? view =", view, "selectedStudentId =", selectedStudentId);
   if (view === 'student' && selectedStudentId && selectedStudentId.trim() !== '') {
-  return <StudentDashboard studentId={selectedStudentId.trim()} onBack={() => setView('overview')} />;
+  return (
+  <StudentDashboard
+    studentId={selectedStudentId.trim()}
+    onBack={() => {
+      setView('overview');
+      setStudentIdInput('');
+      setStudentIdInputError('');
+      setSelectedStudentId('');
+    }}
+  />
+);
 } 
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2>🎓 Student Wise Performance</h2>
-        <button onClick={() => setView('overview')} style={backButton}>
-          ← Back to Overview
-        </button>
+        <button
+        onClick={() => {
+        setView('overview');
+        setStudentIdInput('');
+        setStudentIdInputError('');
+        setSelectedStudentId('');
+        }}
+        style={backButton}
+        >
+        ← Back to Overview
+       </button>
       </div>
 
       <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
@@ -1769,21 +2228,39 @@ const renderTeacherWiseView = () => {
     }
     setTeacherIdInputError('');
     setSelectedTeacherId(id);
-    setView('teacher-dashboard');
+    setView('teacher');
   };
 
   // ✅ ADD THIS: Render TeacherDashboard inline when view is 'teacher-dashboard'
-  if (view === 'teacher-dashboard' && selectedTeacherId && selectedTeacherId.trim() !== '') {
-    return <TeacherDashboard teacherId={selectedTeacherId.trim()} onBack={() => setView('overview')} />;
+  if (view === 'teacher' && selectedTeacherId && selectedTeacherId.trim() !== '') {
+    return (
+  <TeacherDashboard
+    teacherId={selectedTeacherId.trim()}
+    onBack={() => {
+      setView('overview');
+      setTeacherIdInput('');
+      setTeacherIdInputError('');
+      setSelectedTeacherId('');
+    }}
+  />
+);
   }
 
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2>👨‍🏫 Teacher Wise Performance</h2>
-        <button onClick={() => setView('overview')} style={backButton}>
-          ← Back to Overview
-        </button>
+        <button
+        onClick={() => {
+        setView('overview');
+        setTeacherIdInput('');
+        setTeacherIdInputError('');
+        setSelectedTeacherId('');
+        }}
+        style={backButton}
+        >
+        ← Back to Overview
+      </button>
       </div>
 
       <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
@@ -1844,7 +2321,7 @@ const renderTeacherWiseView = () => {
       case 'examwise-results':
         return renderExamWiseResultsView();
       case 'student':
-        return renderStudentWiseView();
+        return renderStudentWiseView(); 
       default:
         return (
           <>
@@ -1853,6 +2330,8 @@ const renderTeacherWiseView = () => {
             {renderMetricButtons()}
 
             {renderIITBatches()}
+
+            {renderTeachersTable()}
           </>
         );
     }

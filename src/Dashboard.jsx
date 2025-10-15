@@ -67,7 +67,7 @@ export default function Dashboard() {
     { id: 'school-registration', label: '🏫 School Registration' },
     { id: 'class-teacher-registration', label: '👩‍🏫 Class/Teacher Registration' },
     { id: 'student-registration', label: '🎓 Student Registration' },
-    { id: 'exams-registration', label: '📝 Exams ' },
+    { id: 'exams-registration', label: '📝 OMR Exams ' },
   ];
 
   return (

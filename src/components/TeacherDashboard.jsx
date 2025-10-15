@@ -126,7 +126,8 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
 
-  const isViewingAsSchoolOwner = !!externalTeacherId;
+  const isViewingAsSchoolOwner = !!externalTeacherId && externalTeacherId.trim() !== '';
+  console.log("✅ isViewingAsSchoolOwner =", isViewingAsSchoolOwner);
 
   useEffect(() => {
   const loadTeacherAndExams = async () => {
@@ -135,22 +136,45 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
       let schoolName = "Unknown School";
       let schoolId = null;
 
+      // 🔹 Get schoolId from session (works for both teacher and school owner)
+      const userSession = sessionStorage.getItem("sp_user");
+      if (!userSession) {
+        throw new Error("User session not found.");
+      }
+      const user = JSON.parse(userSession);
+      schoolId = user.school_id;
+
       if (isViewingAsSchoolOwner) {
-        // 🔹 SCHOOL OWNER MODE: fetch by teacherId
+        // 🔹 SCHOOL OWNER MODE
         if (!externalTeacherId) {
           throw new Error("Teacher ID is required.");
         }
 
-        // Fetch teacher profile (you'll need this endpoint — see below)
-        const teacherRes = await fetch(`${API_BASE}/api/teachers/${encodeURIComponent(externalTeacherId)}`);
-        if (!teacherRes.ok) {
-          if (teacherRes.status === 404) throw new Error("Teacher not found.");
-          throw new Error("Failed to load teacher profile.");
+        // Fetch school (which includes list of teachers)
+        const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+        if (!schoolRes.ok) throw new Error("Failed to load school data.");
+        const schoolData = await schoolRes.json();
+        schoolName = schoolData.school?.school_name || "Unknown School";
+        
+        console.log("Searching for:", externalTeacherId.trim());
+        console.log("Available IDs:", schoolData.teachers?.map(t => t.teacher_id));
+        // Find teacher in school.teachers by teacher_id
+        const targetId = externalTeacherId.trim().toUpperCase();
+        const teacher = schoolData.teachers?.find(
+        t => t.teacher_id?.trim().toUpperCase() === targetId
+        );
+
+        if (!teacher) {
+          throw new Error("Teacher not found in your school.");
         }
-        const teacherProfile = await teacherRes.json();
-        teacherData = teacherProfile.teacher;
-        schoolName = teacherProfile.school_name || "Unknown School";
-        schoolId = teacherData.school_id;
+
+        // Ensure teacher_assignments exists
+        teacherData = {
+          ...teacher,
+          teacher_assignments: Array.isArray(teacher.teacher_assignments)
+            ? teacher.teacher_assignments
+            : [],
+        };
       } else {
         // 🔹 TEACHER SELF-VIEW MODE (existing logic)
         const user = sessionStorage.getItem("sp_user");

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears } from '../api';
+import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears, updateClassById, deleteClassById, updateAssignmentById,deleteAssignmentById  } from '../api';
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
@@ -129,6 +129,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     setError('');
     try {
       const data = await getSchoolById(selectedSchool);
+      console.log('School data:', data); 
       setSchoolData(data);
     } catch (err) {
       setError(err.message || 'Failed to load school data');
@@ -298,6 +299,91 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     }
   };
 
+  const handleUpdateClass = async (classId, updatedData) => {
+  setLoading(true);
+  setError('');
+  setSuccess('');
+
+  try {
+    await updateClassById(classId, {
+      class: updatedData.class,
+      section: updatedData.section,
+      foundation: updatedData.foundation,
+      program: updatedData.program,
+      group: updatedData.group,
+      num_students: parseInt(updatedData.numStudents) || 0
+    });
+
+    setSuccess('Class updated successfully!');
+    await fetchSchoolData(); // Refresh data
+  } catch (err) {
+    setError(err.message || 'Failed to update class');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleDeleteClass = async (classId, className, section) => {
+  if (!confirm(`Are you sure you want to delete class ${className}-${section}? All subject assignments will be removed.`)) {
+    return;
+  }
+
+  setLoading(true);
+  setError('');
+  setSuccess('');
+
+  try {
+    await deleteClassById(classId);
+    setSuccess('Class deleted successfully!');
+    await fetchSchoolData();
+  } catch (err) {
+    setError(err.message || 'Failed to delete class');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleUpdateAssignment = async (assignmentId, updatedData) => {
+  setLoading(true);
+  setError('');
+  setSuccess('');
+
+  try {
+    await updateAssignmentById(assignmentId, {
+      class: updatedData.class,
+      section: updatedData.section,
+      subject: updatedData.subject
+    });
+
+    setSuccess('Assignment updated successfully!');
+    await fetchSchoolData();
+  } catch (err) {
+    setError(err.message || 'Failed to update assignment');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleDeleteAssignment = async (assignmentId, subject, className, section) => {
+  if (!confirm(`Remove assignment: ${subject} for ${className}-${section}?`)) {
+    return;
+  }
+
+  setLoading(true);
+  setError('');
+  setSuccess('');
+
+  try {
+    await deleteAssignmentById(assignmentId);
+    setSuccess('Assignment removed successfully!');
+    await fetchSchoolData();
+  } catch (err) {
+    setError(err.message || 'Failed to delete assignment');
+  } finally {
+    setLoading(false);
+  }
+};
+
   return (
     <div style={{ marginTop: '20px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px' }}>
       <h3 style={{ margin: '0 0 20px 0', color: '#1e90ff' }}>👩‍🏫 Class/Teacher Registration</h3>
@@ -411,7 +497,14 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.num_students || 0}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
                           <button
-                            onClick={() => alert(`Edit class: ${cls.class}-${cls.section}`)}
+                            onClick={() => handleUpdateClass(cls.id, {
+                             class: cls.class,
+                             section: cls.section,
+                             foundation: cls.foundation,
+                             program: cls.program,
+                             group: cls.group,
+                             numStudents: cls.num_students
+                             })}
                             style={{
                               background: '#0e87eaff',
                               color: 'white',
@@ -426,7 +519,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                             Edit
                           </button>
                           <button
-                            onClick={() => alert(`Delete class: ${cls.class}-${cls.section}`)}
+                            onClick={() => handleDeleteClass(cls.id, cls.class, cls.section)}
                             style={{
                               background: '#ef7a3cff',
                               color: 'white',
@@ -502,7 +595,11 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                         </td>
                         <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
                           <button
-                            onClick={() => alert(`Edit teacher: ${teacher.name}`)}
+                            onClick={() => handleUpdateAssignment(assignment.id, {
+                              class: assignment.class,
+                              section: assignment.section,
+                              subject: assignment.subject
+                            })}
                             style={{
                               background: '#089ff1ff',
                               color: 'white',
@@ -517,7 +614,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                             Edit
                           </button>
                           <button
-                            onClick={() => alert(`Delete teacher: ${teacher.name}`)}
+                            onClick={() => handleDeleteAssignment(assignment.id,assignment.subject,assignment.class,assignment.section)}
                             style={{
                               background: '#f88155ff',
                               color: 'white',
