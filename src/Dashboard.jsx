@@ -7,6 +7,7 @@ import ReportButtons from "./components/ReportButtons.jsx"
 import ClassTeacherRegistration from "./components/ClassTeacherRegistration.jsx"
 import StudentRegistration from "./components/StudentRegistration.jsx"
 import ExamsRegistration from "./components/ExamsRegistration.jsx"
+import LMSExamRegistration from "./components/LMSExamRegistration.jsx"
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -68,6 +69,7 @@ export default function Dashboard() {
     { id: 'class-teacher-registration', label: '👩‍🏫 Class/Teacher Registration' },
     { id: 'student-registration', label: '🎓 Student Registration' },
     { id: 'exams-registration', label: '📝 OMR Exams ' },
+    { id: 'lms-exam-registration', label: '📚 LMS Exam Converter' },
   ];
 
   return (
@@ -169,6 +171,12 @@ export default function Dashboard() {
       {activeTab === 'exams-registration' && (
         <div style={card}>
           <ExamsRegistration schools={schools} />
+        </div>
+      )}
+
+      {activeTab === 'lms-exam-registration' && (
+        <div style={card}>
+          <LMSExamRegistration />
         </div>
       )}
     </div>

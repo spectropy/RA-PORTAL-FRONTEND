@@ -51,6 +51,45 @@ const getExamPatternsByProgram = (program) => {
         { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
         { id: 'GRAND_TEST_2', name: 'Grand Test 2', type: 'GRAND_TEST' }
       ];
+    case 'NGHS_MAESTRO':
+        return [
+        { id: 'CDF_1', name: 'CDF 1', type: 'CDF' },
+        { id: 'CDF_2', name: 'CDF 2', type: 'CDF' },
+        { id: 'CDF_3', name: 'CDF 3', type: 'CDF' },
+        { id: 'CDF_4', name: 'CDF 4', type: 'CDF' },
+        { id: 'CDF_5', name: 'CDF 5', type: 'CDF' },
+        { id: 'CDF_6', name: 'CDF 6', type: 'CDF' },
+        { id: 'CDF_7', name: 'CDF 7', type: 'CDF' },
+        { id: 'CDF_8', name: 'CDF 8', type: 'CDF' },
+        { id: 'CDF_9', name: 'CDF 9', type: 'CDF' },
+        { id: 'CDF_10', name: 'CDF 10', type: 'CDF' },
+        { id: 'CDF_11', name: 'CDF 11', type: 'CDF' },
+        { id: 'CDF_12', name: 'CDF 12', type: 'CDF' },
+        { id: 'CDF_13', name: 'CDF 13', type: 'CDF' },
+        { id: 'CDF_14', name: 'CDF 14', type: 'CDF' },
+        { id: 'CDF_15', name: 'CDF 15', type: 'CDF' },
+        { id: 'CDF_16', name: 'CDF 16', type: 'CDF' },
+        { id: 'CDF_17', name: 'CDF 17', type: 'CDF' },
+        { id: 'CDF_18', name: 'CDF 18', type: 'CDF' },
+        { id: 'JEE_1', name: 'JEE 1', type: 'JEE' },
+        { id: 'JEE_2', name: 'JEE 2', type: 'JEE' },
+        { id: 'JEE_3', name: 'JEE 3', type: 'JEE' },
+        { id: 'JEE_4', name: 'JEE 4', type: 'JEE' },
+        { id: 'JEE_5', name: 'JEE 5', type: 'JEE' },
+        { id: 'JEE_6', name: 'JEE 6', type: 'JEE' },
+        { id: 'JEE_7', name: 'JEE 7', type: 'JEE' },
+        { id: 'JEE_8', name: 'JEE 8', type: 'JEE' },
+        { id: 'JEE_9', name: 'JEE 9', type: 'JEE' },
+        { id: 'JEE_10', name: 'JEE 10', type: 'JEE' },
+        { id: 'JEE_11', name: 'JEE 11', type: 'JEE' },
+        { id: 'JEE_12', name: 'JEE 12', type: 'JEE' },
+        { id: 'JEE_13', name: 'JEE 13', type: 'JEE' },
+        { id: 'JEE_14', name: 'JEE 14', type: 'JEE' },
+        { id: 'JEE_15', name: 'JEE 15', type: 'JEE' },
+        { id: 'JEE_16', name: 'JEE 16', type: 'JEE' },
+        { id: 'JEE_17', name: 'JEE 17', type: 'JEE' },
+        { id: 'JEE_18', name: 'JEE 18', type: 'JEE' }
+      ];
     default:
       return [];
   }

@@ -212,18 +212,6 @@ export async function getExams() {
   return j;
 }
 
-// Update class by ID
-export const updateClassById = async (id, payload) => {
-  const res = await fetch(`/api/classes/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to update class');
-  return data;
-};
-
 // Delete class by ID
 export const deleteClassById = async (id) => {
   const res = await fetch(`/api/classes/${id}`, {
@@ -231,23 +219,6 @@ export const deleteClassById = async (id) => {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to delete class');
-  return data;
-};
-
-// Update teacher assignment by ID
-export const updateAssignmentById = async (id, payload) => {
-  const res = await fetch(`/api/teacher-assignments/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to update teacher assignment');
-  }
   return data;
 };
 

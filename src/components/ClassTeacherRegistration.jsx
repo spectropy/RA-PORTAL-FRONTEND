@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears, updateClassById, deleteClassById, updateAssignmentById,deleteAssignmentById  } from '../api';
+import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears,  deleteClassById, deleteAssignmentById  } from '../api';
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
 const SECTION_OPTIONS = "ABCDEF".split("");
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED", "FF"];
-const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO"];
+const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO", "NGHS_MAESTRO"];
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
 
 const forcedGroupForFoundation = (foundation) => {
@@ -299,29 +299,6 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     }
   };
 
-  const handleUpdateClass = async (classId, updatedData) => {
-  setLoading(true);
-  setError('');
-  setSuccess('');
-
-  try {
-    await updateClassById(classId, {
-      class: updatedData.class,
-      section: updatedData.section,
-      foundation: updatedData.foundation,
-      program: updatedData.program,
-      group: updatedData.group,
-      num_students: parseInt(updatedData.numStudents) || 0
-    });
-
-    setSuccess('Class updated successfully!');
-    await fetchSchoolData(); // Refresh data
-  } catch (err) {
-    setError(err.message || 'Failed to update class');
-  } finally {
-    setLoading(false);
-  }
-};
 
 const handleDeleteClass = async (classId, className, section) => {
   if (!confirm(`Are you sure you want to delete class ${className}-${section}? All subject assignments will be removed.`)) {
@@ -338,27 +315,6 @@ const handleDeleteClass = async (classId, className, section) => {
     await fetchSchoolData();
   } catch (err) {
     setError(err.message || 'Failed to delete class');
-  } finally {
-    setLoading(false);
-  }
-};
-
-const handleUpdateAssignment = async (assignmentId, updatedData) => {
-  setLoading(true);
-  setError('');
-  setSuccess('');
-
-  try {
-    await updateAssignmentById(assignmentId, {
-      class: updatedData.class,
-      section: updatedData.section,
-      subject: updatedData.subject
-    });
-
-    setSuccess('Assignment updated successfully!');
-    await fetchSchoolData();
-  } catch (err) {
-    setError(err.message || 'Failed to update assignment');
   } finally {
     setLoading(false);
   }
@@ -497,28 +453,6 @@ const handleDeleteAssignment = async (assignmentId, subject, className, section)
                         <td style={{ padding: '8px', border: '1px solid #eee' }}>{cls.num_students || 0}</td>
                         <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
                           <button
-                            onClick={() => handleUpdateClass(cls.id, {
-                             class: cls.class,
-                             section: cls.section,
-                             foundation: cls.foundation,
-                             program: cls.program,
-                             group: cls.group,
-                             numStudents: cls.num_students
-                             })}
-                            style={{
-                              background: '#0e87eaff',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              marginRight: '5px'
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
                             onClick={() => handleDeleteClass(cls.id, cls.class, cls.section)}
                             style={{
                               background: '#ef7a3cff',
@@ -593,41 +527,31 @@ const handleDeleteAssignment = async (assignmentId, subject, className, section)
                        <span>-</span>
                        )}
                         </td>
-                        <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center' }}>
-                          <button
-                            onClick={() => handleUpdateAssignment(assignment.id, {
-                              class: assignment.class,
-                              section: assignment.section,
-                              subject: assignment.subject
-                            })}
-                            style={{
-                              background: '#089ff1ff',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              marginRight: '5px'
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAssignment(assignment.id,assignment.subject,assignment.class,assignment.section)}
-                            style={{
-                              background: '#f88155ff',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
+              <td style={{ padding: '8px', border: '1px solid #eee', textAlign: 'center', verticalAlign: 'top' }}>
+                {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {teacher.teacher_assignments.map((assignment, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleDeleteAssignment(assignment.id, assignment.subject, assignment.class, assignment.section)}
+                        style={{
+                          background: '#f88155ff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Delete Allotment
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <span>-</span>
+                )}
+              </td>
                       </tr>
                     ))}
                   </tbody>

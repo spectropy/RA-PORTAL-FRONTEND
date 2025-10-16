@@ -1538,63 +1538,76 @@ y += 12;
           )}
 
           {/* ===== EXAM TABLE ===== */}
-          <div style={{ overflowX: 'auto' }}>
-            {examWiseLoading ? (
-              <p>Loading exams...</p>
-            ) : examWiseExams.length > 0 ? (
-              <table style={dataTable}>
-                <thead>
-                  <tr>
-                    <th>Program</th>
-                    <th>Exam Date</th>
-                    <th>Exam Pattern</th>
-                    <th>Physics Exam %</th>
-                    <th>Chemistry Exam %</th>
-                    <th>Maths Exam %</th>
-                    <th>Biology Exam %</th>
-                    <th>total Exam %</th>
-                    <th>School Rank</th>
-                    <th>All India Rank</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {examWiseExams.map((exam, i) => (
-                    <tr key={i}>
-                      <td>{exam.program || '-'}</td>
-                      <td>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : '-'}</td>
-                      <td>{exam.exam_pattern || '-'}</td>
-                      <td>{exam.phy_exam_per_average ? parseFloat(exam.phy_exam_per_average).toFixed(2) : '-'}</td>
-                      <td>{exam.chem_exam_per_average ? parseFloat(exam.chem_exam_per_average).toFixed(2) : '-'}</td>
-                      <td>{exam.math_exam_per_average ? parseFloat(exam.math_exam_per_average).toFixed(2) : '-'}</td>
-                      <td>{exam.bioexam_per_average ? parseFloat(exam.bioexam_per_average).toFixed(2) : '-'}</td>
-                      <td>{exam.total_exam_per_avg ? parseFloat(exam.total_exam_per_avg).toFixed(2) : '-'}</td>
-                      <td>{exam.school_grade_rank !== undefined && exam.school_grade_rank !== null ? exam.school_grade_rank : '-'}</td>
-                      <td>{exam.all_schools_grade_rank !== undefined && exam.all_schools_grade_rank !== null ? exam.all_schools_grade_rank : '-'}</td>
-                      <td>
-                        <button
-                          onClick={() => handleViewExamResult(exam)}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px'
-                          }}
-                        >
-                          View Exam Result
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p>No exams found for this class-section.</p>
-            )}
-          </div>
+<div style={{ overflowX: 'auto' }}>
+  {examWiseLoading ? (
+    <p>Loading exams...</p>
+  ) : examWiseExams.length > 0 ? (
+    <table style={dataTable}>
+      <thead>
+        <tr>
+          <th>Program</th>
+          <th>Exam Date</th>
+          <th>Exam Pattern</th>
+          <th>Physics Exam %</th>
+          <th>Chemistry Exam %</th>
+          <th>Maths Exam %</th>
+          <th>Biology Exam %</th>
+          <th>Total Exam %</th>
+          <th>School Rank</th>
+          <th>All India Rank</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {examWiseExams
+          .slice() // ⚠️ Important: create a shallow copy to avoid mutating original array
+          .sort((a, b) => {
+            const dateA = a.exam_date ? new Date(a.exam_date) : null;
+            const dateB = b.exam_date ? new Date(b.exam_date) : null;
+
+            // Handle missing dates: push null/invalid dates to the end
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+
+            return dateA - dateB; // ascending order (oldest first)
+          })
+          .map((exam, i) => (
+            <tr key={i}>
+              <td>{exam.program || '-'}</td>
+              <td>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : '-'}</td>
+              <td>{exam.exam_pattern || '-'}</td>
+              <td>{exam.phy_exam_per_average ? parseFloat(exam.phy_exam_per_average).toFixed(2) : '-'}</td>
+              <td>{exam.chem_exam_per_average ? parseFloat(exam.chem_exam_per_average).toFixed(2) : '-'}</td>
+              <td>{exam.math_exam_per_average ? parseFloat(exam.math_exam_per_average).toFixed(2) : '-'}</td>
+              <td>{exam.bioexam_per_average ? parseFloat(exam.bioexam_per_average).toFixed(2) : '-'}</td>
+              <td>{exam.total_exam_per_avg ? parseFloat(exam.total_exam_per_avg).toFixed(2) : '-'}</td>
+              <td>{exam.school_grade_rank !== undefined && exam.school_grade_rank !== null ? exam.school_grade_rank : '-'}</td>
+              <td>{exam.all_schools_grade_rank !== undefined && exam.all_schools_grade_rank !== null ? exam.all_schools_grade_rank : '-'}</td>
+              <td>
+                <button
+                  onClick={() => handleViewExamResult(exam)}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  View Exam Result
+                </button>
+              </td>
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  ) : (
+    <p>No exams found for this class-section.</p>
+  )}
+</div>
         </>
       )}
     </div>
