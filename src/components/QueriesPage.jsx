@@ -1,6 +1,7 @@
 // src/components/QueriesPage.jsx
 import React, { useState, useEffect } from "react";
 import { getPrograms } from "../api.js"; // Keep this if you still need initial program list
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 async function fetchJson(url) {
   const res = await fetch(url);
@@ -30,40 +31,43 @@ export default function QueriesPage() {
 
   // 🔁 Unified data fetch: exam patterns, schools, and stats in one call
   useEffect(() => {
-    console.log("API CALL:", { selectedProgram, selectedExamPattern, selectedSchool });
-    if (!selectedProgram) {
+  if (!selectedProgram) {
+    setExamPatterns([]);
+    setSchools([]);
+    setStats(null);
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+
+  const params = new URLSearchParams({ program: selectedProgram });
+  if (selectedExamPattern) params.append("exam_pattern", selectedExamPattern);
+  if (selectedSchool) params.append("school", selectedSchool);
+
+  // ✅ Use async IIFE inside useEffect
+  (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/queries/dashboard?${params}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json(); // This will fail if response is HTML
+      console.log("📥 API Response received:", data);
+      setExamPatterns(data.examPatterns || []);
+      setSchools(data.schools || []);
+      setStats(data.stats);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setError(err.message || "Failed to load dashboard data");
       setExamPatterns([]);
       setSchools([]);
       setStats(null);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(true);
-    setError("");
-
-    const params = new URLSearchParams({ program: selectedProgram });
-    if (selectedExamPattern) {
-      params.append("exam_pattern", selectedExamPattern);
-    }
-    if (selectedSchool) {
-      params.append("school", selectedSchool);
-    }
-
-    fetchJson(`/api/queries/dashboard?${params}`)
-      .then(({ examPatterns, schools, stats }) => {
-        console.log("📥 API Response received:", { examPatterns, schools, stats });
-        setExamPatterns(examPatterns || []);
-        setSchools(schools || []);
-        setStats(stats);
-      })
-      .catch(err => {
-        setError(err.message || "Failed to load dashboard data");
-        setExamPatterns([]);
-        setSchools([]);
-        setStats(null);
-      })
-      .finally(() => setLoading(false));
-  }, [selectedProgram, selectedExamPattern, selectedSchool]);
+  })();
+}, [selectedProgram, selectedExamPattern, selectedSchool]);
 
   // ✅ Reset school when exam pattern changes
   useEffect(() => {
