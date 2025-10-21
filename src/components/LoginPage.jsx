@@ -583,39 +583,39 @@ const styles = {
     display: "grid",
     placeItems: "center",
     background: "#f0f8ff",
-    padding: 24,
+    padding: "clamp(16px, 4vw, 32px)", // adjusts automatically
   },
   card: {
-    width: "min(1100px, 100%)",
+    width: "min(100%, 1100px)",
     background: "white",
     border: "2px solid #add8e6",
     borderRadius: 20,
-    padding: "28px 28px 18px",
+    padding: "clamp(20px, 3vw, 36px)",
     boxShadow: "0 6px 20px rgba(173,216,230,0.5)",
   },
-  header: { textAlign: "center", marginBottom: 12 },
+  header: { textAlign: "center", marginBottom: 16 },
   h1: {
     margin: 0,
     color: "#1e90ff",
-    fontSize: 28,
+    fontSize: "clamp(20px, 3vw, 32px)",
     fontWeight: 700,
   },
   sub: {
     marginTop: 6,
     color: "#4682b4",
-    fontSize: 14,
+    fontSize: "clamp(13px, 1.4vw, 16px)",
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 14,
-    marginTop: 18,
+    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    gap: 16,
+    marginTop: 20,
   },
   tile: {
     display: "grid",
     gridTemplateRows: "auto auto 1fr",
     gap: 6,
-    padding: "16px 14px",
+    padding: "clamp(12px, 2vw, 18px)",
     textAlign: "center",
     background: "#f0f8ff",
     border: "1px solid #87ceeb",
@@ -623,19 +623,27 @@ const styles = {
     color: "#1e3d59",
     cursor: "pointer",
     transition: "transform 140ms ease, box-shadow 140ms ease, background 140ms ease",
-    outline: "none",
   },
-  emoji: { fontSize: 26, lineHeight: 1 },
-  title: { fontSize: 16, fontWeight: 700, marginTop: 2, color: "#1e90ff" },
-  blurb: { fontSize: 13, color: "#4682b4" },
-  footer: { marginTop: 14, textAlign: "center", color: "#4682b4" },
+  emoji: { fontSize: "clamp(22px, 2.5vw, 28px)", lineHeight: 1 },
+  title: {
+    fontSize: "clamp(15px, 2vw, 18px)",
+    fontWeight: 700,
+    marginTop: 2,
+    color: "#1e90ff",
+  },
+  blurb: {
+    fontSize: "clamp(12px, 1.5vw, 14px)",
+    color: "#4682b4",
+  },
+  footer: { marginTop: 18, textAlign: "center", color: "#4682b4" },
   link: { color: "#1e90ff", textDecoration: "underline" },
 
   // Form Styles
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: 16,
+    gap: 18,
+    marginTop: 12,
   },
   inputGroup: {
     display: "flex",
@@ -643,13 +651,13 @@ const styles = {
     gap: 6,
   },
   label: {
-    fontSize: 14,
+    fontSize: "clamp(13px, 1.3vw, 15px)",
     fontWeight: 600,
     color: "#1e3d59",
   },
   input: {
-    padding: "10px 12px",
-    fontSize: 14,
+    padding: "clamp(10px, 2vw, 14px) 12px",
+    fontSize: "clamp(13px, 1.5vw, 15px)",
     border: "1px solid #87ceeb",
     borderRadius: 8,
     outline: "none",
@@ -657,7 +665,7 @@ const styles = {
   },
   error: {
     color: "#e3342f",
-    fontSize: 13,
+    fontSize: "clamp(12px, 1.3vw, 14px)",
     textAlign: "center",
     padding: "8px",
     background: "#fff5f5",
@@ -666,13 +674,16 @@ const styles = {
   },
   formActions: {
     display: "flex",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 12,
     marginTop: 10,
   },
   cancelBtn: {
-    padding: "8px 16px",
-    fontSize: 14,
+    flex: 1,
+    minWidth: 100,
+    padding: "clamp(8px, 2vw, 10px) 16px",
+    fontSize: "clamp(13px, 1.5vw, 15px)",
     border: "1px solid #4682b4",
     background: "white",
     color: "#4682b4",
@@ -680,33 +691,40 @@ const styles = {
     cursor: "pointer",
   },
   submitBtn: {
-    padding: "8px 20px",
-    fontSize: 14,
+    flex: 1,
+    minWidth: 100,
+    padding: "clamp(8px, 2vw, 10px) 20px",
+    fontSize: "clamp(13px, 1.5vw, 15px)",
     border: "none",
     background: "#1e90ff",
     color: "white",
     borderRadius: 8,
     cursor: "pointer",
   },
-
-  // Password Input with Eye
   passwordContainer: {
-    position: 'relative',
+    position: "relative",
   },
   eyeButton: {
-    position: 'absolute',
-    right: '10px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: 'none',
-    border: 'none',
-    fontSize: '16px',
-    cursor: 'pointer',
-    color: '#555',
-    padding: '4px',
+    position: "absolute",
+    right: "10px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "none",
+    border: "none",
+    fontSize: "18px",
+    cursor: "pointer",
+    color: "#555",
+    padding: "4px",
   },
 };
 
-// Responsive
-styles.grid["@media (max-width: 900px)"] = { gridTemplateColumns: "repeat(2, minmax(0,1fr))" };
-styles.grid["@media (max-width: 600px)"] = { gridTemplateColumns: "repeat(1, minmax(0,1fr))" };
+// Extra media queries for fine-tuning (optional)
+styles.card["@media (max-width: 480px)"] = {
+  borderRadius: 12,
+  padding: "18px 16px",
+};
+styles.formActions["@media (max-width: 480px)"] = {
+  flexDirection: "column",
+  alignItems: "stretch",
+};
+styles.h1["@media (max-width: 360px)"] = { fontSize: "20px" };

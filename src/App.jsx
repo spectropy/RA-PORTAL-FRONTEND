@@ -70,14 +70,19 @@ function AppRoutes() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header (shown on all pages) */}
       <header style={{
-        padding: '12px 20px',
-        backgroundColor: '#1a56db',
-        color: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '18px',
-        fontWeight: 'bold',
+        padding: "clamp(10px, 2vw, 18px) clamp(16px, 4vw, 28px)",
+        backgroundColor: "#1a56db",
+        color: "white",
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "10px",
+        fontSize: "clamp(16px, 2vw, 20px)",
+        fontWeight: "bold",
+        lineHeight: 1.3,
+        textAlign: "center",
+        boxShadow: "0 3px 12px rgba(26,86,219,0.3)",
       }}>
         <span>SPECTROPY School Portal</span>
         {sessionStorage.getItem('sp_user') && (

@@ -261,7 +261,7 @@ const handleUpload = async (exam) => {
                     <th style={tableHeaderStyle}>%</th>
                     <th style={tableHeaderStyle}>Class Rank</th>
                     <th style={tableHeaderStyle}>School Rank</th>
-                    <th style={tableHeaderStyle}>Global Rank</th>
+                    <th style={tableHeaderStyle}>All India Rank</th>
                   </tr>
                 </thead>
                 <tbody>
