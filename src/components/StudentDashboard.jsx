@@ -424,6 +424,9 @@ const tableData = examResults.map(r => {
   return [
     r.date || "—",
     r.exam.replace(/_/g, ' ') || "—",
+    String(Math.round(r.correct_answers || 0)),
+    String(Math.round(r.wrong_answers || 0)),
+    String(Math.round(r.unattempted || 0)),
     `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
     `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
     `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
@@ -441,6 +444,9 @@ doc.autoTable({
     [
       "Date",
       "Exam",
+      "correct",
+      "wrong",
+      "unattempted",
       "Physics",
       "Chemistry",
       "Maths",
@@ -472,15 +478,18 @@ doc.autoTable({
   columnStyles: {
     0: { cellWidth: 22 }, // Date
     1: { cellWidth: 32 }, // Exam
-    2: { cellWidth: 26 }, // Physics
-    3: { cellWidth: 26 }, // Chemistry
-    4: { cellWidth: 26 }, // Maths
-    5: { cellWidth: 26 }, // Biology
-    6: { cellWidth: 20 }, // Total
-    7: { cellWidth: 18 }, // %
-    8: { cellWidth: 18 }, // Class Rank
-    9: { cellWidth: 18 }, // School Rank
-    10: { cellWidth: 20 } // All Schools Rank
+    2: { cellWidth: 18}, //correct
+    3: { cellWidth: 18},//wrong
+    4: { cellWidth: 18},//unattempted 
+    5: { cellWidth: 26 }, // Physics
+    6: { cellWidth: 26 }, // Chemistry
+    7: { cellWidth: 26 }, // Maths
+    8: { cellWidth: 26 }, // Biology
+    9: { cellWidth: 18 }, // Total
+    10: { cellWidth: 18 }, // %
+    11: { cellWidth: 18 }, // Class Rank
+    12: { cellWidth: 18 }, // School Rank
+    13: { cellWidth: 18 } // All Schools Rank
   },
   margin: { left: 15, right: 15 },
   tableWidth: 'wrap'
@@ -573,16 +582,29 @@ doc.autoTable({
             )}
           </div>
 
-          {/* Cumulative Averages Bar Chart */}
+         {/* Cumulative Averages Bar Chart */}
 <div style={{ width: '100%', height: 260 }}>
   <ResponsiveContainer>
-    <BarChart data={averagesData} barSize={200} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="subject" tick={false} />
-      <YAxis />
+    <BarChart
+      data={averagesData}
+      barSize={60}
+      margin={{ top: 10, right: 10, left: -20, bottom: 50 }}
+    >
+      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+      <XAxis
+        dataKey="subject"
+        tick={{ fontSize: 12, fontWeight: 'bold' }}
+        interval={0}
+        angle={0}
+        dy={10}
+      />
+      <YAxis
+        domain={[0, 100]}
+        tickFormatter={(value) => `${value}%`}
+      />
       <Tooltip formatter={(v) => [`${v}%`, 'Average']} />
       <Legend />
-      <Bar dataKey="average" name="Average %" fill="#1f77b4" /> {/* Single bar per subject */}
+      <Bar dataKey="average" name="Average %" fill="#1f77b4" radius={[4, 4, 0, 0]} />
     </BarChart>
   </ResponsiveContainer>
 </div>
@@ -647,6 +669,9 @@ doc.autoTable({
           <th>Date</th>
           <th>Exam</th>
           <th>Program</th>
+          <th>correct</th>
+          <th>wrong</th>
+          <th>unattempted</th>
           <th>Physics</th>
           <th>Chemistry</th>
           <th>Maths</th>
@@ -672,6 +697,9 @@ doc.autoTable({
               <td>{r.date}</td>
               <td>{r.exam}</td>
               <td>{r.program}</td>
+              <td>{r.correct_answers != null ? Math.round(r.correct_answers) : '—'}</td>
+              <td>{r.wrong_answers != null ? Math.round(r.wrong_answers) : '—'}</td>
+              <td>{r.unattempted != null ? Math.round(r.unattempted) : '—'}</td>
               <td>{formatSubject(r.physics_marks, r.max_marks_physics)}</td>
               <td>{formatSubject(r.chemistry_marks, r.max_marks_chemistry)}</td>
               <td>{formatSubject(r.maths_marks, r.max_marks_maths)}</td>

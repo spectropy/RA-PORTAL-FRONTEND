@@ -57,9 +57,9 @@ export default function LMSExamRegistration() {
       return {
         student_id: studentId,
         student_name: ((obj["First Name"] || "") + " " + (obj["Last Name"] || "")).trim() || obj["Name"] || "Unknown",
-        physics: parseFloat(obj["PHYSICS Score"]) || 0,
-        chemistry: parseFloat(obj["CHEMISTRY Score"]) || 0,
-        maths: parseFloat(obj["MATHS Score"]) || 0,
+        physics: parseFloat(obj["PHYSICS Score"]) || (obj["Physics Score"]) || 0,
+        chemistry: parseFloat(obj["CHEMISTRY Score"]) || (obj["Chemistry Score"]) || 0,
+        maths: parseFloat(obj["MATHS Score"]) || (obj["Mathematics Score"]) || 0,
         biology: parseFloat(obj["BIOLOGY Score"]) || 0, // Not in LMS? Set to 0
         correct: parseFloat(obj["No. Of Correct Answers"]) || 0, // LMS doesn't provide this → infer or leave 0
         wrong: parseFloat(obj["No. Of incorrect Answers"]) || 0,

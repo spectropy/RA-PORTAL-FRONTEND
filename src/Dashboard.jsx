@@ -8,6 +8,7 @@ import ClassTeacherRegistration from "./components/ClassTeacherRegistration.jsx"
 import StudentRegistration from "./components/StudentRegistration.jsx"
 import ExamsRegistration from "./components/ExamsRegistration.jsx"
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx"
+import QueriesPage from "./components/QueriesPage.jsx";
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -70,6 +71,7 @@ export default function Dashboard() {
     { id: 'student-registration', label: '🎓 Student Registration' },
     { id: 'exams-registration', label: '📝 OMR Exams ' },
     { id: 'lms-exam-registration', label: '📚 LMS Exam Converter' },
+    { id: 'queries', label: '🔍 Queries' },
   ];
 
   return (
@@ -177,6 +179,12 @@ export default function Dashboard() {
       {activeTab === 'lms-exam-registration' && (
         <div style={card}>
           <LMSExamRegistration />
+        </div>
+      )}
+
+      {activeTab === 'queries' && (
+        <div style={card}>
+          <QueriesPage />
         </div>
       )}
     </div>

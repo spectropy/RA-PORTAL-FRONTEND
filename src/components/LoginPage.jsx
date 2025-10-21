@@ -577,7 +577,6 @@ function PasswordInput({ value, onChange, placeholder }) {
   );
 }
 
-// === Styles ===
 const styles = {
   wrap: {
     minHeight: "100vh",
