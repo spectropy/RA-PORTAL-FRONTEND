@@ -53,7 +53,7 @@ function computeExamAnalytics(exams, teacherAssignments) {
         Biology: subjects.biology.length > 0
           ? (subjects.biology.reduce((a, b) => a + b, 0) / subjects.biology.length).toFixed(1)
           : null,
-        Mathematics: subjects.maths.length > 0
+        Maths: subjects.maths.length > 0
           ? (subjects.maths.reduce((a, b) => a + b, 0) / subjects.maths.length).toFixed(1)
           : null,
       };
@@ -88,7 +88,7 @@ function computeExamAnalytics(exams, teacherAssignments) {
       if (!/^\d+$/.test(grade)) return; // Skip invalid grades
 
       // Check each subject the teacher might teach in this class-section
-      ['Physics', 'Chemistry', 'Biology', 'Mathematics'].forEach(subject => {
+      ['Physics', 'Chemistry', 'Biology', 'Maths'].forEach(subject => {
         const teachKey = `${classSection}|${subject}`;
         if (!teacherTeaches.has(teachKey)) return; // Skip if not taught
 
@@ -311,7 +311,7 @@ const downloadPDF = () => {
     const teacherClassSections = [...new Set(
       teacher.teacher_assignments.map(a => `${a.class}-${a.section}`)
     )];
-    const subjects = ["Physics", "Chemistry", "Biology", "Mathematics"];
+    const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
     const dynamicCols = [];
     const tableColumns = ["Exam Pattern"];
 
@@ -367,7 +367,7 @@ const downloadPDF = () => {
 
   // Build column headers: one per (subject, class-section) combo the teacher teaches
   const columns = [];
-  const subjects = ["Physics", "Chemistry", "Biology", "Mathematics"];
+  const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
   for (const subject of subjects) {
     for (const cs of teacherClassSections) {
       if (teacher.teacher_assignments.some(a => a.subject === subject && `${a.class}-${a.section}` === cs)) {
