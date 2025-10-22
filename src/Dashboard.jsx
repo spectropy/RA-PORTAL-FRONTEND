@@ -172,31 +172,32 @@ export default function Dashboard() {
 
       {/* Content */}
       {activeTab === "school-registration" && (
-        <>
-          <div style={styles.card}>
-            <SchoolForm onSubmit={onAddSchool} />
-          </div>
-          <div style={styles.card}>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-                gap: 8,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: "clamp(16px, 2vw, 20px)" }}>
-                School List
-              </h2>
-              <ReportButtons rows={schools} />
-            </div>
-            {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
-            {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-          </div>
-        </>
-      )}
+  <>
+    <div style={styles.card}>
+      {/* ✅ Pass existing schools to enable duplicate check */}
+      <SchoolForm onSubmit={onAddSchool} existingSchools={schools} />
+    </div>
+    <div style={styles.card}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+          gap: 8,
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: "clamp(16px, 2vw, 20px)" }}>
+          School List
+        </h2>
+        <ReportButtons rows={schools} />
+      </div>
+      {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
+      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+    </div>
+  </>
+)}
 
       {activeTab === "class-teacher-registration" && (
         <div style={styles.card}>

@@ -249,6 +249,7 @@ const downloadPDF = () => {
   doc.text("IIT Foundation Teacher Report", pageWidth / 2, y, { align: 'center' });
   y += 10;
   doc.setFontSize(12);
+  doc.setFont(undefined,'bold');
   doc.text(`Teacher: ${teacher.name}`, margin, y); y += 6;
   doc.text(`ID: ${teacher.teacher_id}`, margin, y); y += 6;
   doc.line(margin, y, pageWidth - margin, y); 

@@ -19,7 +19,7 @@ function yy(ay) {
   return start.slice(-2)
 }
 
-export default function SchoolForm({ onSubmit }) {
+export default function SchoolForm({ onSubmit, existingSchools = [] }) {
   // ===== School fields =====
   const [name, setName] = useState('')
   const [state, setState] = useState('')
@@ -41,9 +41,21 @@ export default function SchoolForm({ onSubmit }) {
   // ===== Submit =====
   function handleSubmit(e) {
     e.preventDefault()
+
+    // Validation
     if (!name || !state || !ay || !num2 || !schoolId) {
       return alert('Please fill School Name, State, Academic Year, and a valid 2-digit School Number (01–99).')
     }
+
+    // Check for duplicate school_id
+    const isDuplicate = existingSchools.some(school => 
+      school.school_id === schoolId
+    )
+
+    if (isDuplicate) {
+      return alert(`A school with SCHOOL_ID "${schoolId}" already exists.`)
+    }
+
     onSubmit?.({
       school_name: name,
       state,
@@ -55,8 +67,12 @@ export default function SchoolForm({ onSubmit }) {
       classes: [], // always empty
       teachers: [] // always empty
     })
+
     // Clear for next entry
-    setName(''); setArea(''); setDistrict(''); setSchoolNum('')
+    setName('')
+    setArea('')
+    setDistrict('')
+    setSchoolNum('')
   }
 
   return (
