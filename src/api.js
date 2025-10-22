@@ -214,7 +214,7 @@ export async function getExams() {
 
 // Delete class by ID
 export const deleteClassById = async (id) => {
-  const res = await fetch(`/api/classes/${id}`, {
+  const res = await fetch(`${API_BASE}/api/classes/${id}`, {
     method: 'DELETE'
   });
   const data = await res.json();
@@ -224,7 +224,7 @@ export const deleteClassById = async (id) => {
 
 // Delete teacher assignment by ID
 export const deleteAssignmentById = async (id) => {
-  const res = await fetch(`/api/teacher-assignments/${id}`, {
+  const res = await fetch(`${API_BASE}/api/teacher-assignments/${id}`, {
     method: 'DELETE'
   });
   const data = await res.json();
