@@ -85,6 +85,7 @@ function AppRoutes() {
         boxShadow: "0 3px 12px rgba(26,86,219,0.3)",
       }}>
         <span>SPECTROPY School Portal</span>
+      
         {sessionStorage.getItem('sp_user') && (
           <button
             onClick={handleLogout}
@@ -101,6 +102,18 @@ function AppRoutes() {
             🔐 Logout
           </button>
         )}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <img
+           src="https://spectropy.com/wp-content/uploads/2023/02/final-blue-white-bg.png" // 👈 replace this path with your actual logo file (e.g., './assets/logo.png')
+           alt="SPECTROPY Logo"
+           style={{
+           height: "40px",
+           width: "auto",
+           borderRadius: "6px",
+           objectFit: "contain",
+        }}
+       />
+       </div>
       </header>
 
       {/* Page Content */}

@@ -2058,8 +2058,9 @@ const renderExamWiseResultsView = () => {
     doc.setFont('bold');
     doc.text(`IIT Foundation Exam Result`, margin + 100, yPos );
     yPos += 9;
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0); 
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('bold'); 
     doc.text(`${currentOMRExam.class}-${currentOMRExam.section} `, margin, yPos);
     yPos += 6;
     doc.text(`${currentOMRExam.exam_pattern} | DATE:${currentOMRExam.exam_date}`, margin + 200, yPos - 6);
@@ -2070,7 +2071,7 @@ const renderExamWiseResultsView = () => {
                 const headers = [
                   'Student ID', 'Name', 'Total Q', 'Correct', 'Wrong', 'Unattempted',
                   'Physics', 'Chemistry', 'Maths', 'Biology', 'Total Marks', '%',
-                  'Class Rank', 'School Rank', 'All Schools Rank'
+                  'Class Rank', 'School Rank', 'All India Rank'
                 ];
                 const sortedResults = [...results].sort((a, b) => b.percentage - a.percentage);
                 const body = sortedResults.map(r => [

@@ -294,7 +294,7 @@ const handleSubmit = (e) => {
           'Percentage',
           'Class Rank',
           'School Rank',
-          'All Schools Rank'
+          'All India Rank'
         ];
 
         // Table rows
