@@ -541,8 +541,8 @@ if (loginStep === "owner-login") {
         <footer style={styles.footer}>
           <small>
             Need help? Contact{" "}
-            <a href="mailto:support@spectropy.com" style={styles.link}>
-              support@spectropy.com
+            <a href="https://spectropy.com" style={styles.link}>
+              spectropy.com
             </a>
           </small>
         </footer>

@@ -264,30 +264,33 @@ const handleUpload = async (exam) => {
                     <th style={tableHeaderStyle}>All India Rank</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {examResults[currentOMRExam.id].map((r, index) => (
-                    <tr key={index} style={{ 
-                      borderBottom: '1px solid #eee',
-                      backgroundColor: index % 2 === 0 ? '#fafafa' : 'white'
-                    }}>
-                      <td style={tableCellStyle}>{r.student_id || '-'}</td>
-                      <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
-                      <td style={tableCellStyle}>{r.total_questions || 0}</td>
-                      <td style={tableCellStyle}>{r.correct_answers || 0}</td>
-                      <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
-                      <td style={tableCellStyle}>{r.unattempted || 0}</td>
-                      <td style={tableCellStyle}>{r.physics_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.maths_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.biology_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.total_marks || 0}</td>
-                      <td style={tableCellStyle}>{r.percentage || 0}%</td>
-                      <td style={tableCellStyle}>{r.class_rank || '-'}</td>
-                      <td style={tableCellStyle}>{r.school_rank || '-'}</td>
-                      <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                 <tbody>
+  {[...examResults[currentOMRExam.id] || []]
+    .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+    .map((r, index) => (
+      <tr key={index} style={{ 
+        borderBottom: '1px solid #eee',
+        backgroundColor: index % 2 === 0 ? '#fafafa' : 'white'
+      }}>
+        <td style={tableCellStyle}>{r.student_id || '-'}</td>
+        <td style={tableCellStyle}>{`${r.first_name || ''} ${r.last_name || ''}`.trim() || '-'}</td>
+        <td style={tableCellStyle}>{r.total_questions || 0}</td>
+        <td style={tableCellStyle}>{r.correct_answers || 0}</td>
+        <td style={tableCellStyle}>{r.wrong_answers || 0}</td>
+        <td style={tableCellStyle}>{r.unattempted || 0}</td>
+        <td style={tableCellStyle}>{r.physics_marks || 0}</td>
+        <td style={tableCellStyle}>{r.chemistry_marks || 0}</td>
+        <td style={tableCellStyle}>{r.maths_marks || 0}</td>
+        <td style={tableCellStyle}>{r.biology_marks || 0}</td>
+        <td style={tableCellStyle}>{r.total_marks || 0}</td>
+        <td style={tableCellStyle}>{r.percentage != null ? `${r.percentage}%` : '0%'}</td>
+        <td style={tableCellStyle}>{r.class_rank || '-'}</td>
+        <td style={tableCellStyle}>{r.school_rank || '-'}</td>
+        <td style={tableCellStyle}>{r.all_schools_rank || '-'}</td>
+      </tr>
+    ))
+  }
+</tbody>
               </table>
             </div>
           </>

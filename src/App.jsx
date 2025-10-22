@@ -104,7 +104,7 @@ function AppRoutes() {
       </header>
 
       {/* Page Content */}
-      <main style={{ flex: 1, padding: '20px', backgroundColor: '#f7fafc' }}>
+      <main style={{ flex: 1, padding: '0px', backgroundColor: '#f7fafc' }}>
         <Routes>
           {/* Redirect root to login */}
           <Route path="/" element={<Navigate to="/login" replace />} />

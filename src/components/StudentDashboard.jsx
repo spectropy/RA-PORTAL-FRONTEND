@@ -728,6 +728,7 @@ doc.autoTable({
 
       <h3>👨‍🏫 Teachers</h3>
       {teachers.length > 0 ? (
+        <div style={{ overflowX: 'auto' }}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -748,6 +749,7 @@ doc.autoTable({
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <p style={{ color: '#718096', fontStyle: 'italic' }}>
           No teachers assigned to your class yet.
@@ -770,7 +772,7 @@ const styles = {
     cursor: 'pointer',
     fontWeight: 'bold'
   },
-  profile: { background: '#f0f8ff', padding: 16, borderRadius: 8, border: '1px solid #add8e6', marginBottom: 20 },
+  profile: { background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 20 , boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
   divider: { margin: '20px 0', borderColor: '#ddd' },
   table: {
     width: '100%',

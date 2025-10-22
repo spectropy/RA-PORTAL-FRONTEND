@@ -365,15 +365,39 @@ const downloadPDF = async (studentData, schoolData, examResults) => {
     doc.setFontSize(24);
     doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
   });
+  
+  y = doc.lastAutoTable.finalY + 10;
 
+  // ======================
+  // ✍️ SIGNATURES (at bottom)
+  // ======================
+  const sigY = pageHeight - 30;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'italic');
+
+  // Signature lines with light blue background
+  doc.setFillColor(...LIGHT_BLUE);
+
+  doc.text("Remarks: ___________", 20, sigY - 48);
+
+  doc.setTextColor(0, 0, 0);
+  doc.text("Parent/Guardian", 20, sigY);
+  doc.text("School Principal", 130, sigY);
+  doc.text("Organization Head", 240, sigY);
+
+  doc.text("Date: ___________", 20, sigY + 8);
+  doc.text("Date: ___________", 130, sigY + 8);
+  doc.text("Date: ___________", 240, sigY + 8);
+  
+  
   y = graphY + graphH + 15;
-
+  doc.addPage();
   // ======================
 // 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
 // ======================
 doc.setFont('helvetica', 'bold');
 doc.setFontSize(18);
-doc.text("Exam Results", 15, y);
+doc.text("Exam Results", 15, y - 85);
 y += 10;
 
 const tableData = examResults.map(r => {
@@ -420,7 +444,7 @@ doc.autoTable({
     ]
   ],
   body: tableData,
-  startY: y,
+  startY: y - 85,
   theme: 'grid',
   styles: {
     fontSize: 10,
@@ -433,49 +457,28 @@ doc.autoTable({
     fillColor: BLUE,
     textColor: 255,
     fontStyle: 'bold',
-    fontSize: 11,
+    fontSize: 9,
     halign: 'center'
   },
   columnStyles: {
     0: { cellWidth: 22 }, // Date
     1: { cellWidth: 32 }, // Exam
-    2: { cellWidth: 18}, //correct
-    3: { cellWidth: 18},//wrong
-    4: { cellWidth: 18},//unattempted 
+    2: { cellWidth: 15}, //correct
+    3: { cellWidth: 15},//wrong
+    4: { cellWidth: 15},//unattempted 
     5: { cellWidth: 26 }, // Physics
     6: { cellWidth: 26 }, // Chemistry
     7: { cellWidth: 26 }, // Maths
     8: { cellWidth: 26 }, // Biology
-    9: { cellWidth: 18 }, // Total
-    10: { cellWidth: 18 }, // %
-    11: { cellWidth: 18 }, // Class Rank
-    12: { cellWidth: 18 }, // School Rank
-    13: { cellWidth: 18 } // All Schools Rank
+    9: { cellWidth: 15 }, // Total
+    10: { cellWidth: 15 }, // %
+    11: { cellWidth: 15 }, // Class Rank
+    12: { cellWidth: 15 }, // School Rank
+    13: { cellWidth: 15 } // All Schools Rank
   },
-  margin: { left: 15, right: 15 },
+  margin: { left: 9, right: 9 },
   tableWidth: 'wrap'
 });
-
-  y = doc.lastAutoTable.finalY + 10;
-
-  // ======================
-  // ✍️ SIGNATURES (at bottom)
-  // ======================
-  const sigY = pageHeight - 30;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'italic');
-
-  // Signature lines with light blue background
-  doc.setFillColor(...LIGHT_BLUE);
-
-  doc.setTextColor(0, 0, 0);
-  doc.text("Parent/Guardian", 20, sigY);
-  doc.text("School Principal", 130, sigY);
-  doc.text("Organization Head", 240, sigY);
-
-  doc.text("Date: ___________", 20, sigY + 8);
-  doc.text("Date: ___________", 130, sigY + 8);
-  doc.text("Date: ___________", 240, sigY + 8);
 
   // ======================
   // 💾 SAVE
@@ -483,6 +486,7 @@ doc.autoTable({
   const fileName = `ReportCard_${studentData.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 };
+
 
   if (loading) {
     return (
@@ -686,6 +690,7 @@ doc.autoTable({
 
       <h3>👨‍🏫 Teachers</h3>
       {teachers.length > 0 ? (
+        <div style={{ overflowX: 'auto' }}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -706,6 +711,7 @@ doc.autoTable({
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <p style={{ color: '#718096', fontStyle: 'italic' }}>
           No teachers assigned to your class yet.
@@ -728,7 +734,7 @@ const styles = {
     cursor: 'pointer',
     fontWeight: 'bold'
   },
-  profile: { background: '#f0f8ff', padding: 16, borderRadius: 8, border: '1px solid #add8e6', marginBottom: 20 },
+  profile: { background: '#f8fafc', padding: 16, borderRadius: 8,  border: '1px solid #e2e8f0', marginBottom: 20 ,  boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
   divider: { margin: '20px 0', borderColor: '#ddd' },
   table: {
     width: '100%',

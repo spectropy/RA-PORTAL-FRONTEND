@@ -350,104 +350,119 @@ const generateStudentReportPDF = (studentData, schoolData, examResults) => {
         doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
       });
 
+      y = doc.lastAutoTable.finalY + 10;
+
+      // ======================
+      // ✍️ SIGNATURES
+      // ======================
+     const sigY = pageHeight - 30;
+     doc.setFontSize(11);
+     doc.setFont('helvetica', 'italic');
+
+     // Signature lines with light blue background
+     doc.setFillColor(...LIGHT_BLUE);
+
+     doc.text("Remarks: ___________", 20, sigY - 48);
+
+     doc.setTextColor(0, 0, 0);
+     doc.text("Parent/Guardian", 20, sigY);
+     doc.text("School Principal", 130, sigY);
+     doc.text("Organization Head", 240, sigY);
+
+     doc.text("Date: ___________", 20, sigY + 8);
+     doc.text("Date: ___________", 130, sigY + 8);
+     doc.text("Date: ___________", 240, sigY + 8);
+
       y = graphY + graphH + 15;
+      doc.addPage();
 
       // ======================
       // 📋 EXAM RESULTS TABLE
       // ======================
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text("Exam Results", 15, y);
+      doc.text("Exam Results", 15, y - 85);
       y += 10;
 
       const tableData = examResults.map(r => {
-        const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
-        const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
-        const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
-        const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
+      const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
+      const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
+      const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
+      const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
 
-        return [
-          r.date || "—",
-          r.exam.replace(/_/g, ' ') || "—",
-          `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
-          `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
-          `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
-          `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
-          (r.total || 0).toFixed(0),
-          `${(r.percentage || 0).toFixed(1)}%`,
-          r.class_rank ?? "—",
-          r.school_rank ?? "—",
-          r.all_schools_rank ?? "—"
-        ];
-      });
+      return [
+        r.date || "—",
+        r.exam.replace(/_/g, ' ') || "—",
+        String(Math.round(r.correct_answers || 0)),
+        String(Math.round(r.wrong_answers || 0)),
+        String(Math.round(r.unattempted || 0)),
+       `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
+       `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
+       `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
+       `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
+        (r.total || 0).toFixed(0),
+       `${(r.percentage || 0).toFixed(1)}%`,
+        r.class_rank ?? "—",          // Class Rank
+        r.school_rank ?? "—",         // School Rank
+        r.all_schools_rank ?? "—"     // All Schools Rank
+      ];
+    });
 
-      doc.autoTable({
-        head: [
-          [
-            "Date",
-            "Exam",
-            "Physics",
-            "Chemistry",
-            "Maths",
-            "Biology",
-            "Total",
-            "%",
-            "Class\nRank",
-            "School\nRank",
-            "All India\nRank"
-          ]
-        ],
-        body: tableData,
-        startY: y,
-        theme: 'grid',
-        styles: {
-          fontSize: 10,
-          cellPadding: 2,
-          fontStyle: 'bold',
-          fillColor: WHITE,
-          textColor: 0,
-        },
-        headStyles: {
-          fillColor: BLUE,
-          textColor: 255,
-          fontStyle: 'bold',
-          fontSize: 11,
-          halign: 'center'
-        },
-        columnStyles: {
-          0: { cellWidth: 22 },
-          1: { cellWidth: 32 },
-          2: { cellWidth: 26 },
-          3: { cellWidth: 26 },
-          4: { cellWidth: 26 },
-          5: { cellWidth: 26 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 18 },
-          8: { cellWidth: 18 },
-          9: { cellWidth: 18 },
-          10: { cellWidth: 20 }
-        },
-        margin: { left: 15, right: 15 },
-        tableWidth: 'wrap'
-      });
-
-      y = doc.lastAutoTable.finalY + 10;
-
-      // ======================
-      // ✍️ SIGNATURES
-      // ======================
-      const sigY = pageHeight - 30;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'italic');
-
-      doc.setTextColor(0, 0, 0);
-      doc.text("Parent/Guardian", 20, sigY);
-      doc.text("School Principal", 130, sigY);
-      doc.text("Organization Head", 240, sigY);
-
-      doc.text("Date: ___________", 20, sigY + 8);
-      doc.text("Date: ___________", 130, sigY + 8);
-      doc.text("Date: ___________", 240, sigY + 8);
+doc.autoTable({
+  head: [
+    [
+      "Date",
+      "Exam",
+      "correct",
+      "wrong",
+      "unattempted",
+      "Physics",
+      "Chemistry",
+      "Maths",
+      "Biology",
+      "Total",
+      "%",
+      "Class\nRank",
+      "School\nRank",
+      "All India\nRank"
+    ]
+  ],
+  body: tableData,
+  startY: y - 85,
+  theme: 'grid',
+  styles: {
+    fontSize: 10,
+    cellPadding: 2,
+    fontStyle: 'bold',
+    fillColor: WHITE,
+    textColor: 0,
+  },
+  headStyles: {
+    fillColor: BLUE,
+    textColor: 255,
+    fontStyle: 'bold',
+    fontSize: 9,
+    halign: 'center'
+  },
+  columnStyles: {
+    0: { cellWidth: 22 }, // Date
+    1: { cellWidth: 32 }, // Exam
+    2: { cellWidth: 15}, //correct
+    3: { cellWidth: 15},//wrong
+    4: { cellWidth: 15},//unattempted 
+    5: { cellWidth: 26 }, // Physics
+    6: { cellWidth: 26 }, // Chemistry
+    7: { cellWidth: 26 }, // Maths
+    8: { cellWidth: 26 }, // Biology
+    9: { cellWidth: 15 }, // Total
+    10: { cellWidth: 15 }, // %
+    11: { cellWidth: 15 }, // Class Rank
+    12: { cellWidth: 15 }, // School Rank
+    13: { cellWidth: 15 } // All Schools Rank
+  },
+  margin: { left: 9, right: 9 },
+  tableWidth: 'wrap'
+});
 
       // ✅ Return blob directly
       resolve(doc.output('blob'));
@@ -548,11 +563,12 @@ const handleDownloadAllGradesReport = async () => {
   const renderSchoolHeader = () => (
     <div style={{
       textAlign: 'center',
-      padding: '30px 20px',
-      background: '#f0f9ff',
+      padding: '32px 20px',
+      background: '#f8fafc',
       borderRadius: '12px',
+      border: '1px solid #e2e8f0',
       marginBottom: '30px',
-      border: '1px solid #bae6fd'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
     }}>
       <img
         src={school.logo_url || '/default-school-logo.png'}
@@ -560,7 +576,7 @@ const handleDownloadAllGradesReport = async () => {
         style={{ height: '80px', marginBottom: '16px', borderRadius: '8px' }}
         onError={(e) => { e.target.src = '/placeholder-logo.png'; }}
       />
-      <h1 style={{ color: '#0891b2', margin: '0 0 8px 0' }}>
+      <h1 style={{ color: '#080808ff', margin: '0 0 8px 0' }}>
         {school.school_name || 'Unknown School'} {school.school_id || 'id is not set'}
       </h1>
       <p style={{ margin: '4px 0', color: '#374151' }}>
@@ -977,59 +993,72 @@ const downloadIITAnalysisPDF = () => {
         </div>
       )}
       {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
-      <h2>📚 IIT Foundation Batches ({Array.isArray(school.classes) ? school.classes.length : 0})</h2>
-      {examLoading ? (
-        <p>Loading performance data...</p>
-      ) : Array.isArray(school.classes) && school.classes.length > 0 ? (
-        <>
-          <table style={dataTable}>
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>Section</th>
-                <th>Foundation</th>
-                <th>Program</th>
-                <th>Group</th>
-                <th>Students</th>
-                <th>Physics %</th>
-                <th>Maths %</th>
-                <th>Chemistry %</th>
-                <th>Biology %</th>
-                <th>Total %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {school.classes.map((c, i) => {
-                const key = `${c.class}|${c.section}`;
-                const exam = classExamData[key] || {};
+      {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
+<h2>📚 IIT Foundation Batches ({Array.isArray(school.classes) ? school.classes.length : 0})</h2>
+{examLoading ? (
+  <p>Loading performance data...</p>
+) : Array.isArray(school.classes) && school.classes.length > 0 ? (
+  <div style={{
+    overflowX: 'auto',       // Enables horizontal scroll if needed
+    overflowY: 'hidden',     // Optional: prevents vertical scroll in container
+    width: '100%',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    WebkitOverflowScrolling: 'touch' // Smoother scrolling on iOS
+  }}>
+    <table style={{
+      ...dataTable,
+      minWidth: '800px',     // Ensures table doesn't shrink too much
+      width: '100%',
+      borderCollapse: 'collapse'
+    }}>
+      <thead>
+        <tr>
+          <th>Class</th>
+          <th>Section</th>
+          <th>Foundation</th>
+          <th>Program</th>
+          <th>Group</th>
+          <th>Students</th>
+          <th>Physics %</th>
+          <th>Maths %</th>
+          <th>Chemistry %</th>
+          <th>Biology %</th>
+          <th>Total %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {school.classes.map((c, i) => {
+          const key = `${c.class}|${c.section}`;
+          const exam = classExamData[key] || {};
 
-                return (
-                  <tr key={i}>
-                    <td>{c.class || '-'}</td>
-                    <td>{c.section || '-'}</td>
-                    <td>{c.foundation || '-'}</td>
-                    <td>{c.program || '-'}</td>
-                    <td>{c.group || '-'}</td>
-                    <td>{c.num_students || 0}</td>
-                    <td>{exam.phygrade_per_avg ? parseFloat(exam.phygrade_per_avg).toFixed(2) : '-'}</td>
-                    <td>{exam.mathgrade_per_avg ? parseFloat(exam.mathgrade_per_avg).toFixed(2) : '-'}</td>
-                    <td>{exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-'}</td>
-                    <td>{exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-'}</td>
-                    <td>{exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-'}</td>
-                  </tr>
-                );
-              })}
-              <tr style={{ background: '#f1f5f9', fontWeight: 'bold' }}>
-                <td colSpan="5" style={{ textAlign: 'right' }}>Total Strength:</td>
-                <td>{totalStrength}</td>
-                <td colSpan="6"></td>
-              </tr>
-            </tbody>
-          </table>
-        </>
-      ) : (
-        <p>No batches added yet.</p>
-      )}
+          return (
+            <tr key={i}>
+              <td>{c.class || '-'}</td>
+              <td>{c.section || '-'}</td>
+              <td>{c.foundation || '-'}</td>
+              <td>{c.program || '-'}</td>
+              <td>{c.group || '-'}</td>
+              <td>{c.num_students || 0}</td>
+              <td>{exam.phygrade_per_avg ? parseFloat(exam.phygrade_per_avg).toFixed(2) : '-'}</td>
+              <td>{exam.mathgrade_per_avg ? parseFloat(exam.mathgrade_per_avg).toFixed(2) : '-'}</td>
+              <td>{exam.chemgrade_per_avg ? parseFloat(exam.chemgrade_per_avg).toFixed(2) : '-'}</td>
+              <td>{exam.biograde_per_avg ? parseFloat(exam.biograde_per_avg).toFixed(2) : '-'}</td>
+              <td>{exam.totalgrade_per_avg ? parseFloat(exam.totalgrade_per_avg).toFixed(2) : '-'}</td>
+            </tr>
+          );
+        })}
+        <tr style={{ background: '#f1f5f9', fontWeight: 'bold' }}>
+          <td colSpan="5" style={{ textAlign: 'right' }}>Total Strength:</td>
+          <td>{totalStrength}</td>
+          <td colSpan="6"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+) : (
+  <p>No batches added yet.</p>
+)}
     </div>
   );
 };
@@ -1382,13 +1411,13 @@ y += 12;
         <h2>📝 Exam Wise Results</h2>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button onClick={handleDownloadAnalysisPDF} style={{
-            padding: '8px 16px',
+            padding: '8px',
             background: '#3b82f6',
             color: 'white',
             border: 'none',
-            borderRadius: '6px',
+            borderRadius: '4px',
             cursor: 'pointer',
-            fontSize: '14px',
+            fontSize: '12px',
             fontWeight: '500'
           }}>
             📊 Download Analysis PDF
@@ -1481,7 +1510,7 @@ y += 12;
               </div>
 
               {/* Subject-wise Top Exam */}
-              <div>
+              <div style={{ overflowX: 'auto' }}>
                 <strong>🎯 Subject-wise Top Exam:</strong>
                 <table style={{
                   width: '100%',
@@ -1750,11 +1779,11 @@ const renderExamWiseResultsView = () => {
         </div>
 
         {/* 2. Subject-wise Toppers — SINGLE TABLE */}
-        <div style={{ marginBottom: '30px', padding: '20px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+        <div style={{ marginBottom: '30px', padding: '20px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' ,overflow: 'auto'}}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: '0', color: '#065f46', textAlign: 'center' }}>🏆 Subject-wise Toppers (Top 5)</h3>
           </div>
-
+          
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', border: '1px solid #d1fae5' }}>
             <thead>
               <tr>
@@ -2441,13 +2470,13 @@ Object.assign(dataTable, {
 });
 
 const backButton = {
-  padding: '6px 12px',
+  padding: '8px',
   background: '#6b7280',
   color: 'white',
   border: 'none',
   borderRadius: 6,
   cursor: 'pointer',
-  fontSize: '14px'
+  fontSize: '12px'
 };
 
 // For Results Table
