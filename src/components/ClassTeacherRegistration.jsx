@@ -3,7 +3,12 @@ import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAca
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
-const SECTION_OPTIONS = "ABCDEF".split("");
+const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS"
+  .split(" ")               // → ['ABCDEF', 'TULIPS', 'IRIS', 'DAFFODILS']
+  .flatMap(part => 
+    part === "ABCDEF" ? part.split("") : [part]
+  );
+//const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS".split("");
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED", "FF"];
 const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO", "NGHS_MAESTRO"];
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
