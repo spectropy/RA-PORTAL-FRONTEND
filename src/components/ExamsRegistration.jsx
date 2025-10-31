@@ -8,7 +8,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 const getExamPatternsByProgram = (program) => {
   switch (program) {
     case 'CAT':
-    case 'FUTURE FOUNDATION':
+    case 'FF':
       return [
         { id: 'PART_TEST_1', name: 'Part Test 1', type: 'PART_TEST' },
         { id: 'PART_TEST_2', name: 'Part Test 2', type: 'PART_TEST' },
@@ -189,7 +189,8 @@ const getExamOptions = () => {
       const programDisplayName = {
         'MAE': 'MAESTRO',
         'PIO': 'PIONEER',
-        'CAT': 'CATALYST'
+        'CAT': 'CATALYST',
+        'FF' : 'FUTUER FOUNDATION'
       }[programCode] || programCode;
 
       allExams.push({
