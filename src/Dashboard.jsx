@@ -9,6 +9,7 @@ import StudentRegistration from "./components/StudentRegistration.jsx";
 import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
+import TopStudentsSchool from './components/TopStudentsSchool.jsx';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -73,17 +74,17 @@ export default function Dashboard() {
       scrollbarWidth: "none",
     },
     tabButton: (active) => ({
-      flex: "0 0 auto",
-      padding: "10px 16px",
-      background: active ? "#1e90ff" : "#f8f9fa",
-      color: active ? "white" : "#475569",
-      border: "1px solid #cbd5e1",
-      borderRadius: "8px 8px 0 0",
-      cursor: "pointer",
-      fontWeight: active ? 600 : 400,
-      whiteSpace: "nowrap",
-      fontSize: "clamp(13px, 1.5vw, 15px)",
-      transition: "all 0.2s ease",
+       flex: "0 0 auto",
+  padding: "8px 12px", // Reduced from 10px 16px
+  background: active ? "#1e90ff" : "#f8f9fa",
+  color: active ? "white" : "#475569",
+  border: "1px solid #cbd5e1",
+  borderRadius: "8px 8px 0 0",
+  cursor: "pointer",
+  fontWeight: active ? 600 : 400,
+  whiteSpace: "nowrap",
+  fontSize: "clamp(12px, 1.3vw, 14px)", // Smaller font
+  transition: "all 0.2s ease",
     }),
     card: {
       border: "1px solid #d3d8e6",
@@ -136,6 +137,7 @@ export default function Dashboard() {
     { id: "exams-registration", label: "📝 OMR Exams" },
     { id: "lms-exam-registration", label: "📚 LMS Exam Converter" },
     { id: "queries", label: "🔍 Queries" },
+    { id: "top-students", label: "🏆Top Students" },
   ];
 
   // -------------------- Render --------------------
@@ -228,6 +230,14 @@ export default function Dashboard() {
           <QueriesPage />
         </div>
       )}
+
+      {activeTab === "top-students" && (
+  <div style={styles.card}>
+    <TopStudentsSchool />
+  </div>
+)}
+
     </div>
+
   );
 }

@@ -32,12 +32,14 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [examWiseClassSection, setExamWiseClassSection] = useState(null);
   const [examWiseExams, setExamWiseExams] = useState([]);
   const [examWiseLoading, setExamWiseLoading] = useState(false);
+  const [allClassExams, setAllClassExams] = useState([]);
   const [studentIdInput, setStudentIdInput] = useState('');
   const [studentIdInputError, setStudentIdInputError] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [teacherIdInput, setTeacherIdInput] = useState('');
   const [teacherIdInputError, setTeacherIdInputError] = useState('');
+
 
   const schoolId = sessionStorage.getItem("sp_school_id");
 
@@ -993,7 +995,6 @@ const downloadIITAnalysisPDF = () => {
         </div>
       )}
       {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
-      {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
 <h2>📚 IIT Foundation Batches ({Array.isArray(school.classes) ? school.classes.length : 0})</h2>
 {examLoading ? (
   <p>Loading performance data...</p>
@@ -1069,49 +1070,45 @@ const downloadIITAnalysisPDF = () => {
     ? school.classes.map(c => ({ class: c.class, section: c.section }))
     : [];
 
-  // Handle class-section selection
   const handleSelectClassSection = async (cls, sec) => {
-    setExamWiseClassSection({ class: cls, section: sec });
-    setExamWiseLoading(true);
-    try {
-      const params = new URLSearchParams({
-        school_id: schoolId,
-        class: cls,
-        section: sec
-      });
-      const res = await fetch(`${API_BASE}/api/exams?${params}`);
-      let exams = await res.json();
+  setExamWiseClassSection({ class: cls, section: sec });
+  setExamWiseLoading(true);
+  try {
+    const params = new URLSearchParams({
+      school_id: schoolId,
+      class: cls,
+      section: sec
+    });
+    const res = await fetch(`${API_BASE}/api/exams?${params}`);
+    const allExams = await res.json(); // ✅ All rows
 
-      // Deduplicate by exam_pattern + exam_date
-      const seen = new Set();
-      exams = exams.filter(exam => {
-        const key = `${exam.exam_pattern}|${exam.exam_date || ''}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+    // 👇 Deduplicate ONLY for exam table display
+    const seen = new Set();
+    const deduplicatedExams = allExams.filter(exam => {
+      const key = `${exam.exam_pattern}|${exam.exam_date || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
-      // ✅ SORT EXAMS BY exam_pattern: week_test_1, week_test_2, ...
-      exams.sort((a, b) => {
-        const patternA = a.exam_pattern?.toLowerCase() || '';
-        const patternB = b.exam_pattern?.toLowerCase() || '';
+    deduplicatedExams.sort((a, b) => {
+      const numA = parseInt(a.exam_pattern?.replace(/[^0-9]/g, ''), 10) || 0;
+      const numB = parseInt(b.exam_pattern?.replace(/[^0-9]/g, ''), 10) || 0;
+      return numA - numB;
+    });
 
-        // Extract numeric part after "week_test_"
-        const numA = parseInt(patternA.replace(/[^0-9]/g, ''), 10) || 0;
-        const numB = parseInt(patternB.replace(/[^0-9]/g, ''), 10) || 0;
-
-        return numA - numB;
-      });
-
-      setExamWiseExams(exams);
-    } catch (err) {
-      setError("Failed to load exams: " + err.message);
-      setExamWiseExams([]);
-    } finally {
-      setExamWiseLoading(false);
-    }
-  };
-
+    setExamWiseExams(deduplicatedExams);
+    setAllClassExams(allExams); // ✅ NEW state: all rows for analysis
+  } catch (err) {
+    setError("Failed to load exams: " + err.message);
+    setExamWiseExams([]);
+    setAllClassExams([]);
+  } finally {
+    setExamWiseLoading(false);
+  }
+};
+  
+  
   // Handle "View Exam Result"
   const handleViewExamResult = async (exam) => {
     setResultsLoading(true);
@@ -1204,6 +1201,45 @@ const downloadIITAnalysisPDF = () => {
 
   const analysis = examWiseExams.length > 0 ? computeAnalysis(examWiseExams) : null;
 
+ // ✅ Compute Top 5 Students by cumulative_percentage (plain function, no Hook!)
+ // ✅ Helper function (pure, no hooks)
+const computeTopStudents = (exams) => {
+  if (!Array.isArray(exams) || exams.length === 0) {
+    return [];
+  }
+
+  const studentMap = new Map();
+  exams.forEach(exam => {
+    if (!exam.student_id || exam.cumulative_percentage == null) return;
+    // Only keep the first occurrence per student (to avoid duplicates)
+    if (studentMap.has(exam.student_id)) return;
+
+    const nameParts = [
+      (exam.first_name || '').toString().trim(),
+      (exam.last_name || '').toString().trim()
+    ].filter(part => part !== '');
+
+    const name = nameParts.length > 0 ? nameParts.join(' ') : 'Anonymous';
+    const cumPct = parseFloat(exam.cumulative_percentage);
+
+    if (!isNaN(cumPct)) {
+      studentMap.set(exam.student_id, {
+        id: exam.student_id,
+        name,
+        cumulative_percentage: cumPct
+      });
+    }
+  });
+
+  return Array.from(studentMap.values())
+    .sort((a, b) => b.cumulative_percentage - a.cumulative_percentage)
+    .slice(0, 5)
+    .map((s, i) => ({ ...s, rank: i + 1 }));
+};
+
+// ✅ Compute using ALL raw exam records (not deduplicated)
+const topStudents = allClassExams.length > 0 ? computeTopStudents(allClassExams) : [];
+  
   const handleDownloadAnalysisPDF = () => {
   if (!examWiseClassSection || !analysis) return;
 
@@ -1563,6 +1599,47 @@ y += 12;
                   </tbody>
                 </table>
               </div>
+                        {/* ===== TOP 5 STUDENTS BY CUMULATIVE PERCENTAGE ===== */}
+{topStudents.length > 0 && (
+  <div style={{ marginTop: '24px', overflowX: 'auto' }}>
+    <h4 style={{ marginBottom: '12px', color: '#1e293b' }}>
+      🏆 Top 5 Students (Cumulative Performance)
+    </h4>
+    <table style={{
+      width: '100%',
+      borderCollapse: 'collapse',
+      border: '1px solid #cbd5e1',
+      textAlign: 'center'
+    }}>
+      <thead>
+        <tr style={{ background: '#e2e8f0' }}>
+          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Rank</th>
+          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Student ID</th>
+          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Name</th>
+          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Cumulative %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {topStudents.map((student) => (
+          <tr key={student.id} style={{ background: '#f8fafc' }}>
+            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}>
+              {student.rank}
+            </td>
+            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>
+              {student.id}
+            </td>
+            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>
+              {student.name}
+            </td>
+            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>
+              {student.cumulative_percentage.toFixed(2)}%
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
             </div>
           )}
 
