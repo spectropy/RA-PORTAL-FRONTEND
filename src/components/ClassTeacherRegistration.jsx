@@ -10,7 +10,7 @@ const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS"
   );
 //const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS".split("");
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED"];
-const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO", "NGHS_MAESTRO", "FF"];
+const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO", "NGHS_MAE", "FF"];
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
 
 const forcedGroupForFoundation = (foundation) => {

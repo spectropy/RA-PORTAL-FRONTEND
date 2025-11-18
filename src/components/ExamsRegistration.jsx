@@ -52,7 +52,7 @@ const getExamPatternsByProgram = (program) => {
         { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
         { id: 'GRAND_TEST_2', name: 'Grand Test 2', type: 'GRAND_TEST' }
       ];
-    case 'NGHS_MAESTRO':
+    case 'NGHS_MAE':
         return [
         { id: 'CDF_1', name: 'CDF 1', type: 'CDF' },
         { id: 'CDF_2', name: 'CDF 2', type: 'CDF' },
@@ -89,7 +89,26 @@ const getExamPatternsByProgram = (program) => {
         { id: 'JEE_15', name: 'JEE 15', type: 'JEE' },
         { id: 'JEE_16', name: 'JEE 16', type: 'JEE' },
         { id: 'JEE_17', name: 'JEE 17', type: 'JEE' },
-        { id: 'JEE_18', name: 'JEE 18', type: 'JEE' }
+        { id: 'JEE_18', name: 'JEE 18', type: 'JEE' },
+        { id: 'CDF_Level_1', name: 'CDF Level_1', type: 'CDF Level_1' },
+        { id: 'CDF_Level_2', name: 'CDF Level_2', type: 'CDF Level_2' },
+        { id: 'CDF_Level_3', name: 'CDF Level_3', type: 'CDF Level_3' },
+        { id: 'CDF_Level_4', name: 'CDF Level_4', type: 'CDF Level_4' },
+        { id: 'CDF_Level_5', name: 'CDF Level_5', type: 'CDF Level_5' },
+        { id: 'CDF_Level_6', name: 'CDF Level_6', type: 'CDF Level_6' },
+        { id: 'CDF_Level_7', name: 'CDF Level_7', type: 'CDF Level_7' },
+        { id: 'CDF_Level_8', name: 'CDF Level_8', type: 'CDF Level_8' },
+        { id: 'CDF_Level_9', name: 'CDF Level_9', type: 'CDF Level_9' },
+        { id: 'CDF_Level_10', name: 'CDF Level_10', type: 'CDF Level_10' },
+        { id: 'CDF_Level_11', name: 'CDF Level_11', type: 'CDF Level_11' },
+        { id: 'CDF_Level_12', name: 'CDF Level_12', type: 'CDF Level_12' },
+        { id: 'CDF_Level_13', name: 'CDF Level_13', type: 'CDF Level_13' },
+        { id: 'CDF_Level_14', name: 'CDF Level_14', type: 'CDF Level_14' },
+        { id: 'CDF_Level_15', name: 'CDF Level_15', type: 'CDF Level_15' },
+        { id: 'CDF_Level_16', name: 'CDF Level_16', type: 'CDF Level_16' },
+        { id: 'CDF_Level_17', name: 'CDF Level_17', type: 'CDF Level_17' },
+        { id: 'CDF_Level_18', name: 'CDF Level_18', type: 'CDF Level_18' },
+
       ];
     default:
       return [];
@@ -190,7 +209,8 @@ const getExamOptions = () => {
         'MAE': 'MAESTRO',
         'PIO': 'PIONEER',
         'CAT': 'CATALYST',
-        'FF' : 'FUTUER FOUNDATION'
+        'FF' : 'FUTUER FOUNDATION',
+        'NGHS_MAE' : 'NGHS_MAESTRO'
       }[programCode] || programCode;
 
       allExams.push({
