@@ -304,7 +304,7 @@ const handleSubmit = (e) => {
         const headers = [
           'Student ID',
           'Student Name',
-          'Total Q',
+          'Total Max Marks',
           'Correct',
           'Wrong',
           'Unattempted',
