@@ -2146,7 +2146,7 @@ const renderExamWiseResultsView = () => {
     doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 230, yPos - 24);
 
                 const headers = [
-                  'Student ID', 'Name', 'Total Q', 'Correct', 'Wrong', 'Unattempted',
+                  'Student ID', 'Name', 'Total Max Marks', 'Correct', 'Wrong', 'Unattempted',
                   'Physics', 'Chemistry', 'Maths', 'Biology', 'Total Marks', '%',
                   'Class Rank', 'School Rank', 'All India Rank'
                 ];
@@ -2198,7 +2198,7 @@ const renderExamWiseResultsView = () => {
       <tr>
         <th style={tableHeaderStyle}>Student ID</th>
         <th style={tableHeaderStyle}>Name</th>
-        <th style={tableHeaderStyle}>Total Q</th>
+        <th style={tableHeaderStyle}>Total Max Marks</th>
         <th style={tableHeaderStyle}>Correct</th>
         <th style={tableHeaderStyle}>Wrong</th>
         <th style={tableHeaderStyle}>Unattempted</th>

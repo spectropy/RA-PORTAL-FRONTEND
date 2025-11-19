@@ -249,7 +249,7 @@ const handleUpload = async (exam) => {
                   <tr>
                     <th style={tableHeaderStyle}>Student ID</th>
                     <th style={tableHeaderStyle}>Student Name</th>
-                    <th style={tableHeaderStyle}>Total Q</th>
+                    <th style={tableHeaderStyle}>Total Max Marks </th>
                     <th style={tableHeaderStyle}>Correct</th>
                     <th style={tableHeaderStyle}>Wrong </th>
                     <th style={tableHeaderStyle}>Unattempted</th>
