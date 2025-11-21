@@ -3,7 +3,7 @@ import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAca
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
-const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS MPC_A MPC_B MPC_C MPC_D BIPC"
+const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS MPC_A MPC_B MPC_C MPC BIPC"
   .split(" ")               // → ['ABCDEF', 'TULIPS', 'IRIS', 'DAFFODILS']
   .flatMap(part => 
     part === "ABCDEF" ? part.split("") : [part]
