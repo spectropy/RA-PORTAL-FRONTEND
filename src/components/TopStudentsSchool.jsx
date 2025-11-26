@@ -42,8 +42,10 @@ const TopStudentsSchool = () => {
         const url = `${API_BASE}/api/exams?school_id=${selectedSchoolId}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+       
         const exams = await res.json();
-
+        console.log('✅ Raw exams from API:', exams);
+        console.log('📊 Classes present:', [...new Set(exams.map(e => e.class))]);
         if (!Array.isArray(exams)) throw new Error('Invalid exam data');
 
         // Group by class|section
