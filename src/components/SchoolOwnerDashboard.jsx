@@ -1987,14 +1987,16 @@ activeSubs.forEach(sub => {
               // Title
               doc.setFontSize(18);
               doc.setFont('bold');
+              doc.setTextColor(0, 0, 0);
               doc.text(`IIT Foundation Exam Result`, margin + 100, yPos);
               yPos += 9;
               doc.setFontSize(14);
               doc.setFont('bold');
+              doc.setTextColor(0, 0, 0);
               doc.text(`${currentOMRExam.class}-${currentOMRExam.section} `, margin, yPos);
               doc.text(`${currentOMRExam.exam_pattern} | DATE:${currentOMRExam.exam_date}`, margin + 200, yPos - 6);
               doc.setFontSize(6);
-              doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 230, yPos - 24);
+              doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 230, yPos - 12);
 
               // Headers — DYNAMIC
               const headers = [
