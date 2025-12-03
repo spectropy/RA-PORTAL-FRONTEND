@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { supabase } from '../supabaseClient';
 
 const STATES = {
   "Andhra Pradesh": "AP", "Arunachal Pradesh": "AR", "Assam": "AS", "Bihar": "BR",
@@ -27,6 +28,7 @@ export default function SchoolForm({ onSubmit, existingSchools = [] }) {
   const [area, setArea] = useState('')
   const [district, setDistrict] = useState('')
   const [schoolNum, setSchoolNum] = useState('') // NN (01–99)
+  const [logoFile, setLogoFile] = useState(null);
 
   const abbr = STATES[state] || ''
   const num2 = (() => {
@@ -39,41 +41,72 @@ export default function SchoolForm({ onSubmit, existingSchools = [] }) {
   const schoolId = (abbr && yy(ay) && num2) ? `${abbr}${yy(ay)}${num2}` : ''
 
   // ===== Submit =====
-  function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit(e) {
+  e.preventDefault();
 
-    // Validation
-    if (!name || !state || !ay || !num2 || !schoolId) {
-      return alert('Please fill School Name, State, Academic Year, and a valid 2-digit School Number (01–99).')
-    }
-
-    // Check for duplicate school_id
-    const isDuplicate = existingSchools.some(school => 
-      school.school_id === schoolId
-    )
-
-    if (isDuplicate) {
-      return alert(`A school with SCHOOL_ID "${schoolId}" already exists.`)
-    }
-
-    onSubmit?.({
-      school_name: name,
-      state,
-      academic_year: ay,
-      area,
-      district,
-      school_number_2d: num2,
-      school_id: schoolId,
-      classes: [], // always empty
-      teachers: [] // always empty
-    })
-
-    // Clear for next entry
-    setName('')
-    setArea('')
-    setDistrict('')
-    setSchoolNum('')
+  if (!name || !state || !ay || !num2 || !schoolId) {
+    return alert('Please fill School Name, State, Academic Year, and a valid 2-digit School Number (01–99).');
   }
+
+  if (existingSchools.some(school => school.school_id === schoolId)) {
+    return alert(`A school with SCHOOL_ID "${schoolId}" already exists.`);
+  }
+
+  let logoUrl = null;
+
+  // ✅ If logo file is selected, upload it
+  if (logoFile) {
+    try {
+      // Generate safe file extension
+      const fileExt = logoFile.name.split('.').pop()?.toLowerCase();
+      if (!['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+        return alert('Please upload a valid image (jpg, png, gif, webp).');
+      }
+
+      // Construct path: school_logos/TS2501_logo.jpg
+      const fileName = `${schoolId}_logo.${fileExt}`;
+      const filePath = `school_logos/${fileName}`; // matches your existing pattern
+
+      // Upload to 'logos' bucket
+      const { error: uploadError } = await supabase.storage
+        .from('logos') // ← your bucket name
+        .upload(filePath, logoFile, { upsert: true }); // overwrite if exists
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError);
+        return alert('Failed to upload logo. Please try again.');
+      }
+
+      // Get public URL (matches your sample URL format)
+      const { data } = supabase.storage.from('logos').getPublicUrl(filePath);
+      logoUrl = data.publicUrl;
+    } catch (err) {
+      console.error('Unexpected upload error:', err);
+      return alert('An unexpected error occurred during upload.');
+    }
+  }
+
+  // ✅ Call onSubmit with logo_url included
+  onSubmit?.({
+    school_name: name,
+    state,
+    academic_year: ay,
+    area,
+    district,
+    school_number_2d: num2,
+    school_id: schoolId,
+    logo_url: logoUrl, // ← this will be null or a full public URL
+    classes: [],
+    teachers: []
+  });
+
+  // Reset form
+  setName('');
+  setArea('');
+  setDistrict('');
+  setSchoolNum('');
+  setLogoFile(null);
+}
 
   return (
     <form onSubmit={handleSubmit}>
@@ -129,6 +162,16 @@ export default function SchoolForm({ onSubmit, existingSchools = [] }) {
         </div>
       </div>
       
+      <div style={{ marginTop: 8 }}>
+  <label>School Logo (optional)</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+  />
+  {logoFile && <p className="help">Selected: {logoFile.name}</p>}
+</div>
+
       {/* submit */}
       <div className="row" style={{ marginTop: 24 }}>
         <button className="btn btn-primary" type='submit'>Add to List</button>

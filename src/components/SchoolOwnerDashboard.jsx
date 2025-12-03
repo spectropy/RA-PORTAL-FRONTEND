@@ -6,6 +6,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import StudentDashboard from './StudentDashboard'; // adjust path as needed
 import TeacherDashboard from './TeacherDashboard';
+import certificateTemplate from '../assets/certificate.png';
+import spectropyLogoUrl from '../assets/logo.png';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -43,6 +45,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
 
   const schoolId = sessionStorage.getItem("sp_school_id");
+  
 
   // 📥 Fetch School + Analytics
   useEffect(() => {
@@ -629,7 +632,7 @@ const handleDownloadAllGradesReport = async () => {
       <img
         src={school.logo_url || '/default-school-logo.png'}
         alt="School Logo"
-        style={{ height: '80px', marginBottom: '16px', borderRadius: '8px' }}
+        style={{ height: '120px', marginBottom: '20px', borderRadius: '10px' }}
         onError={(e) => { e.target.src = '/placeholder-logo.png'; }}
       />
       <h1 style={{ color: '#080808ff', margin: '0 0 8px 0' }}>
@@ -811,22 +814,37 @@ const globalActive = Array.from(globalActiveSubjects);
     // ===== HEADER BANNER =====
     doc.setFillColor(37, 79, 162);
     doc.rect(0, 0, pageWidth, 25, 'F');
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    if (school?.logo_url) {
+  try {
+    // Adjust size and position: 20x20, centered vertically in 25pt height
+    doc.addImage(school.logo_url, 'PNG', 8, 2.5, 20, 20);
+  } catch (e) {
+    console.warn('Failed to load school logo:', e);
+  }
+}
+    doc.setFontSize(14);
+    doc.setFont('bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(school.school_name || 'Unknown School', 14, 10);
+    doc.text(school.school_name || 'Unknown School', 30, 10);
+    doc.setFontSize(12);
+    doc.setFont('bold');
+    doc.text(`Area: ${school.area || 'Not Set'}`, 30, 18);
+
+    // --- Spectropy Logo (right) ---
+try {     
+  doc.addImage(spectropyLogoUrl, doc.internal.pageSize.width - 30, 2, 15, 15);
+} catch (e) {
+  console.warn('Failed to load Spectropy logo, falling back to text:', e);
+}
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Powered BY SPECTROPY', pageWidth - 60, 13);
+    doc.setFont('italic');
+    doc.text('Powered BY SPECTROPY', pageWidth - 50, 22);
 
     y = 35;
 
     // ===== TITLE =====
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setTextColor(30, 41, 59);
     doc.text('IIT Foundation School Performance Report', pageWidth / 2, y, { align: 'center' });
     doc.setFontSize(8);
@@ -885,7 +903,7 @@ const globalActive = Array.from(globalActiveSubjects);
     y += 12;
 
     // ===== SUBJECT AVERAGES CARDS =====
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setFontSize(14);
     doc.text('Subject Averages (%):', 14, y);
     y += 8;
@@ -915,7 +933,7 @@ const globalActive = Array.from(globalActiveSubjects);
 
     // ===== IIT BATCHES TABLE — Dynamic Columns =====
     doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setTextColor(0, 0, 0);
     doc.text('IIT Foundation Batches', 14, y);
     y += 8;
@@ -1268,32 +1286,64 @@ const renderExamWiseView = () => {
   };
 
   const topStudents = allClassExams.length > 0 ? computeTopStudents(allClassExams) : [];
+  
+  const handleGenerateCertificates = async () => {
+  if (!topStudents.length || !examWiseClassSection) return;
+
+  const examType = activeSubs.includes('Biology')
+    ? "NEET FOUNDATION EXAMS"
+    : "IIT FOUNDATION EXAMS";
+
+  const grade = examWiseClassSection.class;
+
+  for (const [index, student] of topStudents.entries()) {
+    await generateCertificateFromImage(student, index + 1, examType, grade);
+  }
+};
 
   const handleDownloadAnalysisPDF = () => {
     if (!examWiseClassSection || !analysis) return;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const { class: cls, section: sec } = examWiseClassSection;
     let y = 10;
-
+    
     // ===== HEADER BANNER =====
     doc.setFillColor(37, 79, 162);
     doc.rect(0, 0, doc.internal.pageSize.width, 25, 'F');
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    // --- School Logo (left) ---
+if (school?.logo_url) {
+  try {
+    // Adjust size and position: 20x20, centered vertically in 25pt height
+    doc.addImage(school.logo_url, 'PNG', 8, 2.5, 20, 20);
+  } catch (e) {
+    console.warn('Failed to load school logo:', e);
+  }
+}
+    doc.setFontSize(14);
+    doc.setFont('bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(school.school_name || 'Unknown School', 14, 10);
+    doc.text(school.school_name || 'Unknown School', 30, 10);
+    doc.setFontSize(12);
+    doc.setFont('bold');
+    doc.text(`Area: ${school.area || 'Not Set'}`, 30, 18);
+    
+    // --- Spectropy Logo (right) ---
+try {     
+  doc.addImage(spectropyLogoUrl, doc.internal.pageSize.width - 30, 2, 15, 15);
+} catch (e) {
+  console.warn('Failed to load Spectropy logo, falling back to text:', e);
+}
+
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Powered BY SPECTROPY', doc.internal.pageSize.width - 60, 13);
+    doc.setFont('italic');
+    doc.text('Powered BY SPECTROPY', doc.internal.pageSize.width - 50, 22);
+
     y = 35;
 
     // ===== PERFORMANCE ANALYSIS TITLE =====
     const pageWidth = doc.internal.pageSize.width;
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setTextColor(0, 0, 0);
     doc.text('IIT Foundation Batch-Wise Performace Report', pageWidth / 2, y, { align: 'center' });
     doc.setFont('bold');
@@ -1310,7 +1360,7 @@ const renderExamWiseView = () => {
     y += 12;
 
     // ===== SUBJECT AVERAGES (%) — DYNAMIC =====
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.text('Subject Averages (%):', 14, y);
     y += 8;
 
@@ -1338,7 +1388,7 @@ const renderExamWiseView = () => {
     y += 40;
 
     // ===== SUBJECT-WISE TOP EXAM =====
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.text('Subject-wise Top Exam:', 14, y);
@@ -1362,7 +1412,7 @@ const renderExamWiseView = () => {
     // ===== EXAM TABLE — DYNAMIC COLUMNS =====
     doc.addPage();
     y = 35;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('bold');
     doc.setFontSize(12);
     doc.text('Exam Results Table', 14, y);
     y += 8;
@@ -1417,6 +1467,76 @@ const renderExamWiseView = () => {
     doc.save(`Performance_Analysis_${cls}-${sec}.pdf`);
   };
 
+  const generateCertificateFromImage = async (student, rank, examType, grade) => {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const w = doc.internal.pageSize.width; // 297mm
+  const h = doc.internal.pageSize.height; // 210mm
+
+  // ===== LOAD BASE IMAGE =====
+  try {
+    // ✅ Use the imported asset directly
+    doc.addImage(certificateTemplate, 'SVG', 0, 0, w, h);
+  } catch (err) {
+    console.error('Failed to add certificate template:', err);
+    alert('Failed to load certificate template. Check file format and path.',certificateTemplate);
+
+    return;
+  }
+
+  // ===== ADD SCHOOL LOGOS (TOP LEFT & RIGHT) =====
+  if (school?.logo_url) {
+    try {
+      doc.addImage(school.logo_url, 'PNG', 17, 19, 26, 26); // top left
+      doc.addImage(school.logo_url, 'PNG', 255, 19, 26, 26); // top right
+    } catch (e) {
+      console.warn('Failed to add school logo:', e);
+    }
+  }
+ 
+  // ===== ADD STUDENT NAME =====
+  doc.setFontSize(35);
+  doc.setFont('Times New Roman','bold');
+  doc.setTextColor(255, 180, 0); // gold
+  doc.text(student.name.toUpperCase(), w / 2, 95, { align: 'center' }); // Adjust Y based on template
+
+  // ===== ADD GRADE =====
+  doc.setFontSize(20);
+  doc.setFont('Times New Roman', 'bold');
+  doc.text(`${grade}`, w / 2 - 2 , 110, { align: 'center' });
+
+  
+  doc.setFontSize(20);
+  doc.setFont('Times New Roman', 'bold');
+   doc.setTextColor(255, 255, 255); // gold
+  doc.text(examType, w / 2, 145, { align: 'center' });
+
+
+  // ===== ADD RANK INSIDE MEDAL =====
+  doc.setFontSize(50);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text(rank.toString(), w / 2, 170, { align: 'center' }); // Adjust Y for medal center
+
+  // ===== ADD DATE =====
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text(new Date().toLocaleDateString(), 50, 178);
+  //doc.setLineWidth(0.2);
+  //doc.line(30, 182, 70, 182);
+  //doc.setFontSize(6);
+  //doc.text('DATE', 45, 185);
+
+  // ===== SAVE =====
+  const safeName = student.name.replace(/[^a-z0-9\s]/gi, '_').replace(/\s+/g, '_');
+  doc.save(`Certificate_${safeName}_Rank${rank}.pdf`);
+};
+
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -1434,6 +1554,22 @@ const renderExamWiseView = () => {
           }}>
             📊 Download Analysis PDF
           </button>
+          <button 
+  onClick={handleGenerateCertificates} 
+  style={{
+    padding: '8px',
+    background: '#10b981',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '500'
+  }}
+  disabled={!topStudents.length || !examWiseClassSection}
+>
+  🏆 Generate Certificates
+</button>
           <button onClick={() => setView('overview')} style={backButton}>← Back to Overview</button>
         </div>
       </div>
@@ -1804,12 +1940,31 @@ activeSubs.forEach(sub => {
     // ===== HEADER =====
     doc.setFillColor(30, 85, 160);
     doc.rect(0, 0, pageWidth, 20, 'F');
+     // --- School Logo (left) ---
+if (school?.logo_url) {
+  try {
+    // Adjust size and position: 20x20, centered vertically in 25pt height
+    doc.addImage(school.logo_url, 'PNG', 8, 2.5, 15, 15);
+  } catch (e) {
+    console.warn('Failed to load school logo:', e);
+  }
+}
     doc.setFontSize(14);
+    doc.setFont('bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(school.school_name || 'Unknown School', 14, 12);
+    doc.text(school.school_name || 'Unknown School', 30, 10);
     doc.setFontSize(10);
-    doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
-    doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+    doc.setFont('bold');
+    doc.text(`Area: ${school.area || 'Not Set'}`, 30, 16);
+
+     // --- Spectropy Logo (right) ---
+try {     
+  doc.addImage(spectropyLogoUrl, doc.internal.pageSize.width - 30, 2, 10, 10);
+} catch (e) {
+  console.warn('Failed to load Spectropy logo, falling back to text:', e);
+}
+    doc.setFont('bold');
+    doc.text('Powered BY SPECTROPY', pageWidth - 15, 16, { align: 'right' });
     yPos += 6;
 
     // ===== TITLE =====
@@ -1976,12 +2131,31 @@ activeSubs.forEach(sub => {
               // Header
               doc.setFillColor(30, 85, 160);
               doc.rect(0, 0, pageWidth, 20, 'F');
+              // --- School Logo (left) ---
+if (school?.logo_url) {
+  try {
+    // Adjust size and position: 20x20, centered vertically in 25pt height
+    doc.addImage(school.logo_url, 'PNG', 8, 2.5, 15, 15);
+  } catch (e) {
+    console.warn('Failed to load school logo:', e);
+  }
+}
+             
               doc.setFontSize(14);
+              doc.setFont('bold');
               doc.setTextColor(255, 255, 255);
-              doc.text(school.school_name || 'Unknown School', 14, 12);
+              doc.text(school.school_name || 'Unknown School', 30, 10);
               doc.setFontSize(10);
-              doc.text(`Area: ${school.area || 'Not Set'}`, 14, 18);
-              doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+              doc.setFont('bold');
+              doc.text(`Area: ${school.area || 'Not Set'}`, 30, 16);             
+    // --- Spectropy Logo (right) ---
+try {     
+  doc.addImage(spectropyLogoUrl, doc.internal.pageSize.width - 30, 2, 10, 10);
+} catch (e) {
+  console.warn('Failed to load Spectropy logo, falling back to text:', e);
+}
+              doc.setFont('italic');
+              doc.text('Powered BY SPECTROPY', pageWidth - 15, 16, { align: 'right' });
               yPos += 6;
 
               // Title
