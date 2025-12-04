@@ -1286,13 +1286,27 @@ const renderExamWiseView = () => {
   };
 
   const topStudents = allClassExams.length > 0 ? computeTopStudents(allClassExams) : [];
-  
-  const handleGenerateCertificates = async () => {
+
+ const handleGenerateCertificates = async () => {
   if (!topStudents.length || !examWiseClassSection) return;
 
-  const examType = activeSubs.includes('Biology')
-    ? "NEET FOUNDATION EXAMS"
-    : "IIT FOUNDATION EXAMS";
+  const hasPhysics = activeSubs.includes('Physics');
+  const hasChemistry = activeSubs.includes('Chemistry');
+  const hasMaths = activeSubs.includes('Maths');
+  const hasBiology = activeSubs.includes('Biology');
+
+  let examType = "FOUNDATION EXAMS"; // fallback
+
+  if (hasPhysics && hasChemistry) {
+    if (hasMaths && !hasBiology) {
+      examType = "IIT FOUNDATION EXAMS";
+    } else if (hasBiology && !hasMaths) {
+      examType = "NEET FOUNDATION EXAMS";
+    } else if (hasMaths && hasBiology) {
+      examType = "IIT-NEET FOUNDATION EXAMS";
+    }
+    // If only Physics and Chemistry (no Maths/Biology), keep fallback or handle as needed
+  }
 
   const grade = examWiseClassSection.class;
 
