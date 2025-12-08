@@ -8,6 +8,10 @@ import StudentDashboard from './StudentDashboard'; // adjust path as needed
 import TeacherDashboard from './TeacherDashboard';
 import certificateTemplate from '../assets/certificate.png';
 import spectropyLogoUrl from '../assets/logo.png';
+import physicsicon from '../assets/icons/physics.png';
+import chemistryicon from '../assets/icons/chemistry.png';
+import mathsicon from '../assets/icons/Maths.png';
+import biologyicon from '../assets/icons/biology.png';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -263,37 +267,105 @@ const generateStudentReportPDF = (studentData, schoolData, examResults) => {
       const WHITE = [255, 255, 255];
 
       // ======================
-      // 🏫 HEADER (Blue Theme)
+        // 🏫 HEADER (Blue Theme)
+        // ======================
+        
+        doc.setFontSize(16);
+        doc.setFont('Times New Roman', 'bold');
+        doc.setFillColor(...BLUE);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(0, 0, pageWidth, 25, 'F'); // Full header bar
+        //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
+        // ✅ Safely add school logo only if valid
+      if (schoolData.logo_url && typeof schoolData.logo_url === 'string') {
+        try {
+          doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
+        } catch (e) {
+          console.warn('Failed to load school logo:', e);
+          // Optionally draw a placeholder or skip
+        }
+      }
+        doc.text(schoolData.school_name || "School Name", 30, 12);
+        
+        doc.setFontSize(12);
+        doc.setFont('Times New Roman', 'normal');
+        doc.setTextColor(255, 255, 255);
+        doc.text(`Area: ${schoolData.area || 'N/A'} | AY: ${schoolData.academic_year}`, 30, 20);
+        
+        doc.setFontSize(26);
+        doc.setFont('Times New Roman', 'bold');
+        doc.text("IIT Foundation Report Card",108,15);
+        try {     
+        doc.addImage(spectropyLogoUrl, doc.internal.pageSize.width - 30, 2, 15, 15);
+      } catch (e) {
+        console.warn('Failed to load Spectropy logo, falling back to text:', e);
+      }
+        doc.setFontSize(12);
+        doc.setFont('Times New Roman', 'normal');
+        doc.text(`Powered BY SPECTROPY`, 250, 21);
+        y = 30;
+      
+        // ======================
+      // 🧑‍🎓 STUDENT INFO BOXES — SIX INDIVIDUAL ROUNDED BOXES
       // ======================
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setFillColor(...BLUE);
-      doc.setTextColor(255, 255, 255);
-      doc.rect(0, 0, pageWidth, 25, 'F');
-      doc.text(schoolData.school_name || "School Name", 15, 15);
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Area: ${schoolData.area || 'N/A'}`, 15, 22);
-      doc.text(`Powered BY SPECTROPY`, 240, 15);
-      y = 30;
-
-      // ======================
-      // 🧑‍🎓 STUDENT INFO BOXES
-      // ======================
+      
       const boxX = 12;
       const boxY = y;
-      const boxW = 50;
-      const boxH = 22;
-      const gap = 1;
-
+      const boxW = 44;
+      const boxH = 18;
+      const gap = 8;
+      
+      // --- Map program code to name ---
+      const programCode = examResults[0]?.program || "—";
+      let programName = "—";
+      switch (programCode) {
+        case "MAE": programName = "Maestro"; break;
+        case "CAT": programName = "Catalyst"; break;
+        case "PIO": programName = "Pioneer"; break;
+        case "FF": programName = "Future Foundation"; break;
+        default: programName = programCode;
+      }
+      
+      // --- Determine stream (IIT, MED, IIT-MED) based on subjects ---
+      let hasPhysics = false, hasChemistry = false, hasMaths = false, hasBiology = false;
+      
+      // Check subjects from first exam (assume consistent across exams)
+      const firstExam = examResults[0] || {};
+      if (firstExam.physics_marks !== undefined) hasPhysics = true;
+      if (firstExam.chemistry_marks !== undefined) hasChemistry = true;
+      if (firstExam.maths_marks !== undefined) hasMaths = true;
+      if (firstExam.biology_marks !== undefined) hasBiology = true;
+      
+      let stream = "";
+      if (hasPhysics && hasChemistry && hasMaths && hasBiology) {
+        stream = "IIT-MED";
+      } else if (hasPhysics && hasChemistry && hasMaths) {
+        stream = "IIT";
+      } else if (hasPhysics && hasChemistry && hasBiology) {
+        stream = "MED";
+      } else {
+        // Optional: derive from subject keys if marks not reliable
+        const keys = Object.keys(firstExam);
+        hasPhysics = keys.some(k => k.includes('physics'));
+        hasChemistry = keys.some(k => k.includes('chemistry'));
+        hasMaths = keys.some(k => k.includes('maths'));
+        hasBiology = keys.some(k => k.includes('biology'));
+        if (hasPhysics && hasChemistry && hasMaths && hasBiology) stream = "IIT-MED";
+        else if (hasPhysics && hasChemistry && hasMaths) stream = "IIT";
+        else if (hasPhysics && hasChemistry && hasBiology) stream = "MED";
+        else stream = "—";
+      }
+      
+      const fullProgram = stream === "—" ? programName : `${programName}-${stream}`;
+      
+      // --- Calculate strength & weak subjects ---
       const subjKeys = [
         { key: 'physics', label: 'Physics' },
         { key: 'chemistry', label: 'Chemistry' },
         { key: 'maths', label: 'Mathematics' },
         { key: 'biology', label: 'Biology' }
       ];
-
+      
       const avgMap = {};
       for (const subj of subjKeys) {
         const marksKey = `${subj.key}_marks`;
@@ -303,225 +375,402 @@ const generateStudentReportPDF = (studentData, schoolData, examResults) => {
         }, 0);
         avgMap[subj.key] = examResults.length ? totalPct / examResults.length : 0;
       }
-
+      
       const sortedSubj = Object.entries(avgMap)
         .sort(([, a], [, b]) => b - a)
         .map(([key, pct]) => ({ key, pct }));
-
+      
       const strength = sortedSubj[0]?.key || '—';
       const weak = sortedSubj[sortedSubj.length - 1]?.key || '—';
-
-      // Box 1: Name
-      doc.setFillColor(...WHITE);
-      doc.setTextColor(0, 0, 0);
-      doc.rect(boxX, boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Student Name", boxX + 3, boxY + 6);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text(studentData.name || "—", boxX + 3, boxY + 14);
-
-      // Box 2: Roll No
-      doc.setFillColor(...WHITE);
-      doc.setTextColor(0, 0, 0);
-      doc.rect(boxX + boxW + gap, boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Roll No", boxX + boxW + gap + 1, boxY + 6);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 1, boxY + 14);
-
-      // Box 3: Class
-      doc.setFillColor(...WHITE);
-      doc.setTextColor(0, 0, 0);
-      doc.rect(boxX + 2 * (boxW + gap), boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Class Section", boxX + 2 * (boxW + gap) + 1, boxY + 6);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 1, boxY + 14);
-
-      // Box 4: Best Performance
-      doc.setFillColor(...WHITE);
-      doc.setTextColor(0, 0, 0);
+      
+      // --- Best Exam ---
       const bestExam = examResults.reduce((best, curr) =>
         (curr.percentage || 0) > (best.percentage || 0) ? curr : best, {});
-      doc.rect(boxX + 3 * (boxW + gap), boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 1, boxY + 6);
-      doc.setFont('helvetica', 'bold');
+      
+      // --- Helper: Draw one labeled rounded box with auto-fit/wrap ---
+      function drawRoundedBox(offsetIndex, label, value, maxFontSize = 14) {
+        const x = boxX + offsetIndex * (boxW + gap);
+        const y = boxY;
+        const width = boxW;
+        const height = boxH;
+      
+        // Draw box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(30, 30, 30);
+        doc.setLineWidth(0.1);
+        //doc.roundedRect(x, y, width, height, 3, 3, 'FD');
+      
+        // --- Draw LABEL (small, top) ---
+        doc.setFont('Times New Roman', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        const labelLines = doc.splitTextToSize(label, width - 6); // 3px padding each side
+        const labelY = y + 4;
+        doc.text(labelLines, x + width / 2, labelY, { align: 'center' });
+      
+        // --- Prepare VALUE text ---
+        let valueStr = String(value);
+        if (valueStr === '—') {
+          valueStr = '—';
+        }
+      
+        // Try to fit value by reducing font size until it fits in 1–2 lines
+        let fontSize = maxFontSize;
+        let lines = [];
+        let finalFontSize = 8; // min size
+        let finalLines = [valueStr];
+      
+        // Try from maxFontSize down to 8
+        for (let size = maxFontSize; size >= 8; size--) {
+          doc.setFont('Times New Roman', 'bold');
+          doc.setFontSize(size);
+          const attemptLines = doc.splitTextToSize(valueStr, width - 6);
+          
+          // Allow up to 2 lines of text
+          if (attemptLines.length <= 2) {
+            // Check vertical fit: 2 lines need ~10px, 1 line ~7px
+            const lineHeight = size * 0.6;
+            const totalHeight = attemptLines.length * lineHeight;
+            if (totalHeight <= height - 8) { // leave 4px top/bottom margin
+              finalFontSize = size;
+              finalLines = attemptLines;
+              break;
+            }
+          }
+        }
+      
+        // Draw value
+        doc.setFont('Times New Roman', 'bold');
+        doc.setFontSize(finalFontSize);
+        const textHeight = finalLines.length * (finalFontSize * 0.6);
+        const valueY = y + (height - textHeight) / 2 + (finalFontSize * 0.8); // adjust for baseline
+      
+        doc.text(finalLines, x + width / 2 , valueY - 3, { align: 'center' });
+      }
+      
+      // --- Draw all 6 rounded boxes ---
+      //drawRoundedBox(0, "STUDENT NAME", studentData.name || "—", 14);
+      // Box position & size
+      const boxWidth = 180;
+      const boxHeight = 20; // slightly taller so text fits nicely
+      
+      // Draw box
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.1);
+      doc.roundedRect(10, 28, boxWidth, boxHeight, 4, 4, 'S');
+      
+      // Text style
+      doc.setFont('Times New Roman', 'bold');
       doc.setFontSize(16);
-      doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 1, boxY + 14);
-
-      // Box 5: Strength Subject
-      doc.setFillColor(...WHITE);
       doc.setTextColor(0, 0, 0);
-      doc.rect(boxX + 4 * (boxW + gap), boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 1, boxY + 6);
-      doc.setFont('helvetica', 'bold');
+      // First line — NAME
+      doc.text(`${studentData.name || "—"}`, boxX + 6, boxY + 7);
+      
+      // Second line — ROLL NO
+      doc.text(`${studentData.class}-${studentData.section}`, boxX + 6, boxY + 14);
+      
+      /*doc.setFont('Times New Roman', 'bold');
+      doc.setTextColor( 0, 0, 0);
       doc.setFontSize(16);
-      doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 1, boxY + 14);
-
-      // Box 6: Weak Subject
-      doc.setFillColor(...WHITE);
-      doc.setTextColor(0, 0, 0);
-      doc.rect(boxX + 5 * (boxW + gap), boxY, boxW, boxH, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 1, boxY + 6);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 1, boxY + 14);
-
-      y = boxY + boxH + 10;
-
+      doc.text(`NAME :    ${studentData.name || "—"}`, 15,35);
+      //drawRoundedBox(1, "CLASS SECTION", `${studentData.class}-${studentData.section}`, 14);
+      doc.setFont('Times New Roman', 'bold');
+      doc.setTextColor( 0, 0, 0);
+      doc.setFontSize(14);
+      doc.text(`CLASS SECTION : ${studentData.class}-${studentData.section}`, 15,45);*/
+      
+      //drawRoundedBox(2, "ROLL NO", studentData.roll_no || "—", 18);
+      doc.setFont('Times New Roman', 'normal');
+      doc.setTextColor( 0, 0, 0);
+      doc.setFontSize(10);
+      doc.text("ROLL NO", 143,33);
+      doc.setFont('Times New Roman', 'bold');
+      doc.setTextColor( 0, 0, 0);
+      doc.setFontSize(30);
+      doc.text(`${studentData.roll_no || "—"}`, 135,43);
+      
+      
+      doc.setFillColor(255, 236, 158);
+      doc.roundedRect(195, 35, 80, 10, 3, 3, 'FD');
+      
+      // White text on badge
+      doc.setTextColor( 0, 0, 0);
+      doc.setFontSize(14);
+      doc.text(`PROGRAM : ${fullProgram}`, 200,41);
+      //drawRoundedBox(4, "STRENGTH SUBJECT", strength.charAt(0).toUpperCase() + strength.slice(1), 14);
+      //drawRoundedBox(5, "WEAK SUBJECT", weak.charAt(0).toUpperCase() + weak.slice(1), 14);
+      
+        y = boxY + boxH + 10;
+      
+        // ======================
+      // 📊 SUBJECT WISE PERFORMANCE SUMMARY — GRAPHICAL PROGRESS BARS
       // ======================
-      // 📊 CUMULATIVE SUBJECT AVERAGES
-      // ======================
-      doc.setFont('helvetica', 'bold');
+      
+      doc.setFont('Times New Roman', 'bold');
       doc.setFontSize(18);
-      doc.text("Cumulative Performance", 15, y);
-      y += 8;
-
-      const graphX = 15;
-      const graphY = y;
-      const graphW = 35;
-      const graphH = 25;
-      const graphGap = 8;
-
+      doc.text("Subject Wise Performance Summary", 15, y + 3);
+      // Optional underline
+      //doc.setLineWidth(0.5);
+      //doc.line(15, y + 2, 15 + doc.getTextDimensions("Subject Wise Performance Summary").w, y + 2);
+      y += 12; // move y down after title
+      
+      
+      // Subject colors
+      const subjectColors = {
+        physics: [180, 255, 210],
+        chemistry: [200, 230, 255],
+        maths: [230, 200, 255],
+        biology: [200, 255, 255]
+      };
+      
+      // Layout constants (relative to current y)
+      const labelX = 25;
+      const barX = 55;
+      const barWidth = 105;
+      const barHeight = 12;
+      const barGap = 16;
+      const pctX = barX + barWidth + 5;
+      
+      doc.addImage(physicsicon, 'PNG', 15, 70, 10, 10);
+      doc.addImage(chemistryicon, 'PNG', 15, 87, 10, 10);
+      doc.addImage(mathsicon, 'PNG', 15, 103, 10, 10);
+      doc.addImage(biologyicon, 'PNG', 15, 119, 10,10);
+      
+      // Draw each subject row
       subjKeys.forEach((subj, i) => {
-        const x = graphX + i * (graphW + graphGap);
-        doc.setFillColor(...LIGHT_BLUE);
-        doc.rect(x, graphY, graphW, graphH, 'F');
-        doc.setFillColor(...WHITE);
-        doc.rect(x + 1, graphY + 1, graphW - 2, graphH - 2, 'F');
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.text(subj.label, x + 5, graphY + 8);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(24);
-        doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
+        const avgPct = avgMap[subj.key] || 0;
+        const barFillWidth = (avgPct / 100) * barWidth;
+        const barY = y + i * barGap;
+      
+        // Subject label + icon
+        //const icon = subjectIcons[subj.key] || '';
+        doc.setFont('Times New Roman', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${subj.label}`, labelX , barY + 8); // ✅ Icon + Subject Name
+      
+        // Background bar
+        doc.setFillColor(240, 240, 240);
+        doc.roundedRect(barX, barY, barWidth, barHeight, 6, 6, 'FD');
+      
+        // Filled portion
+        const [r, g, b] = subjectColors[subj.key] || [230, 230, 230];
+        doc.setFillColor(r, g, b);
+        doc.roundedRect(barX, barY, barFillWidth, barHeight, 6, 6, 'FD');
+      
+        // Dark cap (optional visual polish)
+        if (barFillWidth > 0) {
+          doc.setFillColor(r * 0.7, g * 0.7, b * 0.7);
+          doc.rect(barX + barFillWidth - 4, barY, 4, barHeight, 'FD');
+        }
+      
+        // Percentage
+        doc.setFont('Times New Roman', 'bold');
+        doc.setFontSize(16);
+        doc.text(`${avgPct.toFixed(1)}%`, pctX, barY + 8);
       });
-
-      y = doc.lastAutoTable.finalY + 10;
-
+      
+      // ✅ Update y to below the last bar
+      y += subjKeys.length * barGap + 10;
       // ======================
-      // ✍️ SIGNATURES
+      // 🎯 BEST EXAM DONUT — jsPDF COMPATIBLE (no arc())
       // ======================
-     const sigY = pageHeight - 30;
-     doc.setFontSize(11);
-     doc.setFont('helvetica', 'italic');
-
-     // Signature lines with light blue background
-     doc.setFillColor(...LIGHT_BLUE);
-
-     doc.text("Remarks: ___________", 20, sigY - 48);
-
-     doc.setTextColor(0, 0, 0);
-     doc.text("Parent/Guardian", 20, sigY);
-     doc.text("School Principal", 130, sigY);
-     doc.text("Organization Head", 240, sigY);
-
-     doc.text("Date: ___________", 20, sigY + 8);
-     doc.text("Date: ___________", 130, sigY + 8);
-     doc.text("Date: ___________", 240, sigY + 8);
-
-      y = graphY + graphH + 15;
-      doc.addPage();
-
-      // ======================
-      // 📋 EXAM RESULTS TABLE
-      // ======================
-      doc.setFont('helvetica', 'bold');
+      // Position: to the right of bars
+      const donutCenterX = 230;
+      const barChartTop = y - subjKeys.length * barGap - 10;
+      const barChartHeight = subjKeys.length * barGap;
+      const donutCenterY = barChartTop + barChartHeight / 2;
+      
+      // Outer ring (light gray background)
+      doc.setFillColor(30, 80, 150);
+      doc.circle(donutCenterX, donutCenterY - 5, 35, 'FD');
+      
+      // Inner white circle (creates "donut hole")
+      doc.setFillColor(255, 255, 255);
+      doc.circle(donutCenterX, donutCenterY - 5, 22, 'FD');
+      
+      // Main color fill: simulate progress with a solid color circle scaled visually
+      // Since we can't draw arcs, we’ll just use a solid colored ring for full effect
+      // and rely on the percentage text for accuracy (common in reports)
+      doc.setFillColor(30, 80, 150);
+      // Trick: draw full circle if >=95%, otherwise use a workaround (not perfect)
+      // But for clarity in PDF, just use full ring + accurate text
+      
+      doc.circle(donutCenterX, donutCenterY - 5, 35, 'FD');
+      // Re-draw inner hole to restore donut shape
+      doc.setFillColor(255, 255, 255);
+      doc.circle(donutCenterX, donutCenterY - 5, 22, 'FD');
+      
+      // Add percentage in center
+      doc.setFont('Times New Roman', 'bold');
+      doc.setFontSize(40);
+      const pctText = `${(bestExam.percentage || 0).toFixed(1)}%`;
+      const textWidth = doc.getTextDimensions(pctText).w;
+      doc.text(pctText, donutCenterX - textWidth / 2, donutCenterY );
+      
+      // Label
       doc.setFontSize(18);
-      doc.text("Exam Results", 15, y - 85);
+      doc.setFont('Times New Roman', 'bold');
+      const label = "Overall Score";
+      const labelWidth = doc.getTextDimensions(label).w;
+      doc.text(label, donutCenterX - labelWidth / 2, donutCenterY - 45);
+      doc.setFillColor(102, 204, 102);  // same as text color
+      doc.circle(205, 140 - 2, 3, 'FD');
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${strength.charAt(0).toUpperCase() + strength.slice(1)}`, 210, 140);
+      doc.setFillColor(255, 99, 132);  // same as weak text color
+      doc.circle(238, 140 - 2, 3, 'FD');
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${ weak.charAt(0).toUpperCase() + weak.slice(1)}`, 243, 140);
+        
+        //y = doc.lastAutoTable.finalY + 10;
+        // ======================
+        // ✍️ SIGNATURES (at bottom)
+        // ======================
+        const sigY = pageHeight - 30;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'italic');
+      
+        // Signature lines with light blue background
+        doc.setFillColor(...LIGHT_BLUE);
+      
+       // --- Auto-generated Remarks based on best exam percentage ---
+      const overallPct = bestExam.percentage || 0;
+      
+      let remark = "";
+      if (overallPct >= 91) {
+        remark = "Outstanding performance! Keep excelling.";
+      } else if (overallPct >= 81) {
+        remark = "Excellent work. Aim for the top!";
+      } else if (overallPct >= 71) {
+        remark = "Good performance. Maintain consistency.";
+      } else if (overallPct >= 61) {
+        remark = "Satisfactory. Focus on weak areas.";
+      } else if (overallPct >= 51) {
+        remark = "Needs improvement. Regular practice advised.";
+      } else if (overallPct >= 41) {
+        remark = "Below average. Extra effort required.";
+      } else {
+        remark = "Significant improvement needed. Seek help.";
+      }
+      
+      // Optional: Keep underline for empty space after remark
+      const remarkPrefix = "Remarks: ";
+      const fullRemarkLine = remark;
+      doc.setFont('Times New Roman', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(0, 0, 0);
+      doc.text(remarkPrefix, 20, sigY - 28);
+      doc.setFont('Times New Roman', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(255, 140, 0);
+      doc.text(fullRemarkLine , 50, sigY - 28);
+      
+        doc.setTextColor(0, 0, 0);
+        doc.text("Spectropy CEO", 20, sigY);
+        doc.text("Parent/Guardian", 90, sigY);
+        doc.text("IIT Coordinator", 160, sigY);
+        doc.text("School Principal", 240, sigY);
+        
+        doc.setFont("courier","italic");
+        doc.text("Krishna", 20, sigY + 8);
+        doc.setFont('Times New Roman', 'bold');
+        doc.text("Date: ___________", 90, sigY + 8);
+        doc.text("Date: ___________", 160, sigY + 8);
+        doc.text("Date: ___________", 240, sigY + 8);
+        
+        //y = graphY + graphH + 15;
+        doc.addPage();
+        // ======================
+      // 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
+      // ======================
+      doc.setFont('Times New Roman', 'bold');
+      doc.setFontSize(18);
+      doc.text("Exam Results", 10, y - 125);
       y += 10;
-
+      
       const tableData = examResults.map(r => {
-      const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
-      const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
-      const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
-      const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
-
-      return [
-        r.date || "—",
-        r.exam.replace(/_/g, ' ') || "—",
-        String(Math.round(r.correct_answers || 0)),
-        String(Math.round(r.wrong_answers || 0)),
-        String(Math.round(r.unattempted || 0)),
-       `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
-       `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
-       `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
-       `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
-        (r.total || 0).toFixed(0),
-       `${(r.percentage || 0).toFixed(1)}%`,
-        r.class_rank ?? "—",          // Class Rank
-        r.school_rank ?? "—",         // School Rank
-        r.all_schools_rank ?? "—"     // All Schools Rank
-      ];
-    });
-
-doc.autoTable({
-  head: [
-    [
-      "Date",
-      "Exam",
-      "correct",
-      "wrong",
-      "unattempted",
-      "Physics",
-      "Chemistry",
-      "Maths",
-      "Biology",
-      "Total",
-      "%",
-      "Class\nRank",
-      "School\nRank",
-      "All India\nRank"
-    ]
-  ],
-  body: tableData,
-  startY: y - 85,
-  theme: 'grid',
-  styles: {
-    fontSize: 10,
-    cellPadding: 2,
-    fontStyle: 'bold',
-    fillColor: WHITE,
-    textColor: 0,
-  },
-  headStyles: {
-    fillColor: BLUE,
-    textColor: 255,
-    fontStyle: 'bold',
-    fontSize: 9,
-    halign: 'center'
-  },
-  columnStyles: {
-    0: { cellWidth: 22 }, // Date
-    1: { cellWidth: 32 }, // Exam
-    2: { cellWidth: 15}, //correct
-    3: { cellWidth: 15},//wrong
-    4: { cellWidth: 15},//unattempted 
-    5: { cellWidth: 26 }, // Physics
-    6: { cellWidth: 26 }, // Chemistry
-    7: { cellWidth: 26 }, // Maths
-    8: { cellWidth: 26 }, // Biology
-    9: { cellWidth: 15 }, // Total
-    10: { cellWidth: 15 }, // %
-    11: { cellWidth: 15 }, // Class Rank
-    12: { cellWidth: 15 }, // School Rank
-    13: { cellWidth: 15 } // All Schools Rank
-  },
-  margin: { left: 9, right: 9 },
-  tableWidth: 'wrap'
-});
+        const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
+        const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
+        const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
+        const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
+      
+        return [
+          r.date || "—",
+          r.exam.replace(/_/g, ' ') || "—",
+          String(Math.round(r.correct_answers || 0)),
+          String(Math.round(r.wrong_answers || 0)),
+          String(Math.round(r.unattempted || 0)),
+          `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
+          `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
+          `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
+          `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
+          (r.total || 0).toFixed(0),
+          `${(r.percentage || 0).toFixed(1)}%`,
+          r.class_rank ?? "—",          // Class Rank
+          r.school_rank ?? "—",         // School Rank
+          r.all_schools_rank ?? "—"     // All Schools Rank
+        ];
+      });
+      
+      doc.autoTable({
+        head: [
+          [
+            "Date",
+            "Exam",
+            "correct",
+            "wrong",
+            "unattempted",
+            "Physics",
+            "Chemistry",
+            "Maths",
+            "Biology",
+            "Total",
+            "%",
+            "Class\nRank",
+            "School\nRank",
+            "All India\nRank"
+          ]
+        ],
+        body: tableData,
+        startY: y - 125,
+        theme: 'grid',
+        styles: {
+          fontSize: 10,
+          cellPadding: 2,
+          fontStyle: 'normal',
+          fillColor: WHITE,
+          textColor: 0,
+          halign: 'center'
+        },
+        headStyles: {
+          fillColor: [30, 80, 150],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 9,
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { cellWidth: 22 }, // Date
+          1: { cellWidth: 32 ,fontStyle: 'bold'}, // Exam
+          2: { cellWidth: 15}, //correct
+          3: { cellWidth: 15},//wrong
+          4: { cellWidth: 15},//unattempted 
+          5: { cellWidth: 26 }, // Physics
+          6: { cellWidth: 26 }, // Chemistry
+          7: { cellWidth: 26 }, // Maths
+          8: { cellWidth: 26 }, // Biology
+          9: { cellWidth: 15 }, // Total
+          10: { cellWidth: 15 ,fontStyle: 'bold' }, // %
+          11: { cellWidth: 15 ,fontStyle: 'bold' }, // Class Rank
+          12: { cellWidth: 15 }, // School Rank
+          13: { cellWidth: 15 ,fontStyle: 'bold' } // All Schools Rank
+        },
+        margin: { left: 9, right: 9 },
+        tableWidth: 'wrap'
+      });
 
       // ✅ Return blob directly
       resolve(doc.output('blob'));

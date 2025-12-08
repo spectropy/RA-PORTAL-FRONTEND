@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // 👈 Import autotable
+import spectropyLogoUrl from '../assets/logo.png';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -231,15 +232,23 @@ const downloadPDF = () => {
   // === BLUE HEADER BANNER (as per Fig 2) ===
     doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
     doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
-
+    
     // School Name (Left)
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255); // White text
+    //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
+    //doc.text(schoolData.school_name || "School Name", 30, 12);
+    //doc.text(`Area: ${schoolData.area || 'N/A'}`, 30, 20);
     doc.text(`${schoolName}` || 'Unknown School', 14, 12);
-
+  
     // Powered BY SPECTROPY (Right)
-    doc.setFontSize(10);
-    doc.text('Powered BY SPECTROPY', pageWidth - 20, 15, { align: 'right' });
+    try {     
+      doc.addImage(spectropyLogoUrl, pageWidth - 25, 2,12,12);
+    } catch (e) {
+      console.warn('Failed to load Spectropy logo, falling back to text:', e);
+    }
+    doc.setFontSize(8);
+    doc.text('Powered BY SPECTROPY', pageWidth - 10, 18, { align: 'right' });
   y += 10;
 
   // Header
