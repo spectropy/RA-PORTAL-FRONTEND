@@ -234,6 +234,7 @@ const downloadPDF = () => {
     doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
     
     // School Name (Left)
+    doc.setFont('times', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255); // White text
     //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);

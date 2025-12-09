@@ -685,7 +685,12 @@ doc.setFontSize(18);
 doc.text("Exam Results", 10, y - 125);
 y += 10;
 
-const tableData = examResults.map(r => {
+// Sort examResults by date in ascending order (oldest → newest)
+const sortedExamResults = examResults
+  .slice() // Avoid mutating the original array
+  .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+const tableData = sortedExamResults.map(r => {
   const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
   const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
   const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
@@ -934,34 +939,36 @@ doc.autoTable({
         </tr>
       </thead>
       <tbody>
-        {examResults.map((r, i) => {
-          // Helper to format "marks (percentage%)"
-          const formatSubject = (marks, max) => {
-            if (max == null || max === 0) return `${marks || 0}`;
-            const pct = ((marks || 0) / max) * 100;
-            return `${marks || 0} (${pct.toFixed(0)}%)`;
-          };
+        {examResults
+          .slice() // Create a shallow copy to avoid mutating original data
+          .sort((a, b) => new Date(a.date) - new Date(b.date)) // ✅ Ascending: Oldest first
+          .map((r, i) => {
+            const formatSubject = (marks, max) => {
+              if (max == null || max === 0) return `${marks || 0}`;
+              const pct = ((marks || 0) / max) * 100;
+              return `${marks || 0} (${pct.toFixed(0)}%)`;
+            };
 
-          return (
-            <tr key={i}>
-              <td>{r.date}</td>
-              <td>{r.exam}</td>
-              <td>{r.program}</td>
-              <td>{r.correct_answers != null ? Math.round(r.correct_answers) : '—'}</td>
-              <td>{r.wrong_answers != null ? Math.round(r.wrong_answers) : '—'}</td>
-              <td>{r.unattempted != null ? Math.round(r.unattempted) : '—'}</td>
-              <td>{formatSubject(r.physics_marks, r.max_marks_physics)}</td>
-              <td>{formatSubject(r.chemistry_marks, r.max_marks_chemistry)}</td>
-              <td>{formatSubject(r.maths_marks, r.max_marks_maths)}</td>
-              <td>{formatSubject(r.biology_marks, r.max_marks_biology)}</td>
-              <td>{Number(r.total || 0).toFixed(2)}</td>
-              <td>{Number(r.percentage || 0).toFixed(2)}%</td>
-              <td>{r.class_rank}</td>
-              <td>{r.school_rank}</td>
-              <td>{r.all_schools_rank}</td>
-            </tr>
-          );
-        })}
+            return (
+              <tr key={i}>
+                <td>{r.date}</td>
+                <td>{r.exam}</td>
+                <td>{r.program}</td>
+                <td>{r.correct_answers != null ? Math.round(r.correct_answers) : '—'}</td>
+                <td>{r.wrong_answers != null ? Math.round(r.wrong_answers) : '—'}</td>
+                <td>{r.unattempted != null ? Math.round(r.unattempted) : '—'}</td>
+                <td>{formatSubject(r.physics_marks, r.max_marks_physics)}</td>
+                <td>{formatSubject(r.chemistry_marks, r.max_marks_chemistry)}</td>
+                <td>{formatSubject(r.maths_marks, r.max_marks_maths)}</td>
+                <td>{formatSubject(r.biology_marks, r.max_marks_biology)}</td>
+                <td>{Number(r.total || 0).toFixed(2)}</td>
+                <td>{Number(r.percentage || 0).toFixed(2)}%</td>
+                <td>{r.class_rank}</td>
+                <td>{r.school_rank}</td>
+                <td>{r.all_schools_rank}</td>
+              </tr>
+            );
+          })}
       </tbody>
     </table>
   </div>

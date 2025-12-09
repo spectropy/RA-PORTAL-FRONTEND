@@ -690,8 +690,12 @@ const generateStudentReportPDF = (studentData, schoolData, examResults) => {
       doc.setFontSize(18);
       doc.text("Exam Results", 10, y - 125);
       y += 10;
+
+      const sortedExamResults = examResults
+  .slice() // Avoid mutating the original array
+  .sort((a, b) => new Date(a.date) - new Date(b.date));
       
-      const tableData = examResults.map(r => {
+      const tableData = sortedExamResults.map(r => {
         const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
         const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
         const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
