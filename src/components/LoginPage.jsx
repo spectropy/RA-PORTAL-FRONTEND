@@ -41,6 +41,7 @@ export default function LoginPage({ onLogin }) {
   const [error, setError] = useState(""); // Admin error
   const [roleError, setRoleError] = useState(""); // Role login error
   const [schoolIdError, setSchoolIdError] = useState(""); // School ID error
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
 
   // ← Back to role selection
@@ -55,14 +56,18 @@ export default function LoginPage({ onLogin }) {
     setError("");
     setRoleError("");
     setSchoolIdError("");
+    setIsSubmitting(false);
   };
 
   const handleAdminSubmit = (e) => {
   e.preventDefault();
+  setIsSubmitting(true);
+  setError("");
   const matchedAdmin = CREDENTIALS.ADMIN.find(
     (admin) => admin.username === username && admin.password === password
   );
-
+   
+  setTimeout(() => {
   if (matchedAdmin) {
     setError("");
     // ✅ Save admin identity in session (optional but useful)
@@ -74,12 +79,16 @@ export default function LoginPage({ onLogin }) {
   } else {
     setError("Invalid admin credentials");
   }
+  setIsSubmitting(false);
+   }, 300);
 };
 
    // 🏫 School Owner Login (Backend)
   const handleOwnerLogin = async (e) => {
   e.preventDefault();
+  setIsSubmitting(true);
   setSchoolIdError("");
+
   const username = schoolId.trim().toUpperCase(); // Using schoolId state for username
   const password = rolePassword.trim().toUpperCase(); // Use rolePassword for password field
 
@@ -92,6 +101,7 @@ export default function LoginPage({ onLogin }) {
 
   if (username !== password) {
     setSchoolIdError("Username and Password must be the same School ID.");
+    setIsSubmitting(false);
     return;
   }
 
@@ -99,6 +109,7 @@ export default function LoginPage({ onLogin }) {
     const res = await fetch(`${API_BASE}/api/schools/${username}`);
     if (!res.ok) {
       setSchoolIdError("Invalid School ID. School not found.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -115,11 +126,15 @@ export default function LoginPage({ onLogin }) {
     console.error("Network error:", err);
     setSchoolIdError("Network error. Is the server running?");
   }
+  finally {
+    setIsSubmitting(false);
+  }
 };
 
 // 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
 const handleRoleLogin = (role) => async (e) => {
   e.preventDefault();
+  setIsSubmitting(true);
   setRoleError("");
 
   const schoolId = sessionStorage.getItem("sp_school_id");
@@ -131,6 +146,7 @@ if (role === "TEACHER") {
 
   if (username !== password) {
     setRoleError("Teacher ID and password must be the same.");
+    setIsSubmitting(false);
     return;
   }
 
@@ -145,6 +161,7 @@ if (role === "TEACHER") {
 
     if (!res.ok) {
       setRoleError(data.error || "Invalid Teacher ID or password.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -164,6 +181,8 @@ if (role === "TEACHER") {
   } catch (err) {
     console.error("Network error during teacher login:", err);
     setRoleError("Network error. Please try again later.");
+  }finally {
+    setIsSubmitting(false);
   }
   return;
 }
@@ -176,6 +195,7 @@ if (role === "STUDENT") {
 
   if (username !== password) {
     setRoleError("Student ID and password must be the same.");
+    setIsSubmitting(false);
     return;
   }
 
@@ -190,6 +210,7 @@ if (role === "STUDENT") {
 
     if (!res.ok) {
       setRoleError(data.error || "Invalid Student ID or password.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -212,7 +233,9 @@ if (role === "STUDENT") {
   } catch (err) {
     console.error("Network error during student login:", err);
     setRoleError("Network error. Please try again later.");
-  }
+  } finally {
+      setIsSubmitting(false);
+    }
   return;
 }
 
@@ -223,6 +246,7 @@ if (role === "PARENT") {
 
   if (username !== password) {
     setRoleError("Parent ID and password must be the same (use Student ID).");
+    setIsSubmitting(false);
     return;
   }
 
@@ -237,6 +261,7 @@ if (role === "PARENT") {
 
     if (!res.ok) {
       setRoleError(data.error || "Invalid Student ID or password.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -259,7 +284,9 @@ if (role === "PARENT") {
   } catch (err) {
     console.error("Network error during parent login:", err);
     setRoleError("Network error. Please try again later.");
-  }
+  } finally {
+      setIsSubmitting(false);
+    }
   return;
 }
 };
@@ -296,11 +323,11 @@ if (role === "PARENT") {
           {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
 
           <div style={styles.formActions}>
-            <button type="button" onClick={handleBack} style={styles.cancelBtn}>
+            <button type="button" onClick={handleBack} style={styles.cancelBtn} disabled={isSubmitting}>
               ← Back
             </button>
-            <button type="submit" style={styles.submitBtn}>
-              Log In
+            <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
+              {isSubmitting ? "Processing…" : "Log In"}
             </button>
           </div>
         </form>
@@ -344,7 +371,8 @@ if (loginStep === "owner-login") {
       </div>
 
       {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
-    </>
+    </>,
+    isSubmitting
   );
 }
   // --- Teacher Login ---
@@ -373,7 +401,8 @@ if (loginStep === "owner-login") {
             placeholder="Enter password"
           />
         </div>
-      </>
+      </>,
+      isSubmitting
     );
   }
 
@@ -403,7 +432,8 @@ if (loginStep === "owner-login") {
             placeholder="Enter password"
           />
         </div>
-      </>
+      </>,
+      isSubmitting
     );
   }
 
@@ -433,7 +463,8 @@ if (loginStep === "owner-login") {
             placeholder="Enter password"
           />
         </div>
-      </>
+      </>,
+      isSubmitting
     );
   }
 
@@ -473,8 +504,8 @@ if (loginStep === "owner-login") {
               <button type="button" onClick={handleBack} style={styles.cancelBtn}>
                 ← Back
               </button>
-              <button type="submit" style={styles.submitBtn}>
-                Log In
+              <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
+                 {isSubmitting ? "Processing…" : "Log In"}
               </button>
             </div>
           </form>

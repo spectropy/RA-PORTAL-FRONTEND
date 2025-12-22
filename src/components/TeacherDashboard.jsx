@@ -126,6 +126,7 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
   const [examResults, setExamResults] = useState([]);
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState(null);
 
   const isViewingAsSchoolOwner = !!externalTeacherId && externalTeacherId.trim() !== '';
   console.log("✅ isViewingAsSchoolOwner =", isViewingAsSchoolOwner);
@@ -156,6 +157,7 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
         if (!schoolRes.ok) throw new Error("Failed to load school data.");
         const schoolData = await schoolRes.json();
         schoolName = schoolData.school?.school_name || "Unknown School";
+        const schoolLogoUrl = schoolData.school?.logo_url || null;
         
         console.log("Searching for:", externalTeacherId.trim());
         console.log("Available IDs:", schoolData.teachers?.map(t => t.teacher_id));
@@ -194,10 +196,13 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
         };
         schoolName = parsed.school_name || "Unknown School";
         schoolId = parsed.school_id;
+        const schoolLogoUrl = parsed.school_logo_url || null;
+        console.log("Teacher self-view mode for:logo", schoolLogoUrl);
       }
 
       setTeacher(teacherData);
       setSchoolName(schoolName);
+      setSchoolLogoUrl(schoolLogoUrl);
 
       // 🔹 Fetch all exams for the school
       const examsRes = await fetch(`${API_BASE}/api/exams?school_id=${schoolId}`);
@@ -237,9 +242,15 @@ const downloadPDF = () => {
     doc.setFont('times', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255); // White text
-    //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
-    //doc.text(schoolData.school_name || "School Name", 30, 12);
-    //doc.text(`Area: ${schoolData.area || 'N/A'}`, 30, 20);
+    if (schoolLogoUrl) {
+  try {
+    // You may need to adjust width/height based on your logo aspect ratio
+    doc.addImage(schoolLogoUrl, 8, 2.5, 20, 20);
+  } catch (e) {
+    console.warn('Failed to load school logo:', e);
+    // Optionally draw fallback text
+  }
+}
     doc.text(`${schoolName}` || 'Unknown School', 14, 12);
   
     // Powered BY SPECTROPY (Right)
