@@ -165,6 +165,8 @@ if (role === "TEACHER") {
       return;
     }
 
+    console.log("Teacher login response:", data.teacher);
+
     // ✅ Save full teacher + school info to session
     sessionStorage.setItem("sp_user", JSON.stringify({
       role: ROLES.TEACHER,
@@ -174,8 +176,17 @@ if (role === "TEACHER") {
       email: data.teacher.email,
       school_id: data.teacher.school_id,
       school_name: data.teacher.school_name,
+      school_logo_url: data.teacher.school_logo_url,
       teacher_assignments: data.teacher.teacher_assignments || []
     }));
+
+    console.log("Teacher session payload:", {
+      role: ROLES.TEACHER,
+      teacher_id: data.teacher.teacher_id,
+      school_id: data.teacher.school_id,
+      school_name: data.teacher.school_name,
+      school_logo_url: data.teacher.school_logo_url
+    });
 
     setLoginStep("teacher-dashboard");
   } catch (err) {
