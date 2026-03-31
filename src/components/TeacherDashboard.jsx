@@ -10,6 +10,11 @@ function normalizeClassSection(classValue, sectionValue) {
   return `${String(classValue || 'N/A').trim()}-${String(sectionValue || 'N/A').trim()}`;
 }
 
+function formatDisplayClassSection(classSection) {
+  const value = String(classSection || '').trim();
+  return value.startsWith('GRADE-') ? value.slice(6) : value;
+}
+
 function normalizeSubjectName(subject) {
   const normalized = String(subject || '').trim().toLowerCase();
   if (normalized === 'physics') return 'Physics';
@@ -29,7 +34,7 @@ function formatTeacherMetric(value, { suffix = '' } = {}) {
 }
 
 function buildTeacherPdfHeader(subject, classSection, metric) {
-  return `${subject}\n${classSection}\n${metric}`;
+  return `${subject}\n${formatDisplayClassSection(classSection)}\n${metric}`;
 }
 
 function getCompactTeacherSubjectLabel(subject) {
@@ -50,7 +55,7 @@ function buildAdaptiveTeacherPdfHeader(subject, classSection, metric, compact = 
     AIR: 'AIR'
   };
 
-  return `${getCompactTeacherSubjectLabel(subject)}\n${classSection}\n${compactMetricMap[metric] || metric}`;
+  return `${getCompactTeacherSubjectLabel(subject)}\n${formatDisplayClassSection(classSection)}\n${compactMetricMap[metric] || metric}`;
 }
 
 function normalizeExamDate(examDate) {
@@ -293,6 +298,7 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
   const [teacher, setTeacher] = useState(null);
   const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [ranksLoading, setRanksLoading] = useState(false);
   const [examResults, setExamResults] = useState([]);
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
@@ -429,6 +435,8 @@ useEffect(() => {
       if (!isActive) return;
       setExamPatterns(filteredExamPatterns);
       setBestWeekTestsByGrade(bestWeekTestsByGrade);
+      setLoading(false);
+      setRanksLoading(true);
 
       try {
         const ranksRes = await fetch(`${API_BASE}/api/teachers/ranks`, {
@@ -444,6 +452,7 @@ useEffect(() => {
           console.warn("Teacher rank endpoint returned non-OK status:", ranksRes.status);
           if (!isActive) return;
           setTeacherRankRows([]);
+          setRanksLoading(false);
           return;
         }
 
@@ -477,15 +486,17 @@ useEffect(() => {
         console.warn("Teacher rank data unavailable:", rankErr);
         if (!isActive) return;
         setTeacherRankRows([]);
+      } finally {
+        if (!isActive) return;
+        setRanksLoading(false);
       }
     } catch (err) {
       console.error("Error loading teacher dashboard:", err);
       if (!isActive) return;
+      setLoading(false);
+      setRanksLoading(false);
       alert(err.message || "Failed to load dashboard.");
       onBack?.();
-    } finally {
-      if (!isActive) return;
-      setLoading(false);
     }
   };
 
@@ -508,23 +519,7 @@ const downloadPDF = async () => {
       row
     ])
   );
-  const displayExamPatterns = Array.from(
-    new Map(
-      teacherRankRows.map((row) => {
-        const examKey = buildTeacherExamIdentity(row);
-        return [
-          examKey,
-          {
-            exam_key: examKey,
-            exam_pattern: row.exam_pattern,
-            program: row.program || 'N/A',
-            exam_date: normalizeExamDate(row.exam_date),
-            display_label: buildTeacherExamLabel(row)
-          }
-        ];
-      })
-    ).values()
-  ).sort(compareTeacherExamRows);
+  const displayExamPatterns = examPatterns;
   let pdfSchoolLogoUrl = schoolLogoUrl;
 
   if (teacher?.school_id) {
@@ -612,13 +607,13 @@ const downloadPDF = async () => {
   // Performance Analysis
   if (bestWeekTestsByGrade.length > 0) {
     doc.setFont(undefined, 'bold');
-    doc.text("Performance Analysis: Best Week Test by Grade", margin, y);
+    doc.text("Performance Analysis: Best Week Test", margin, y);
     doc.setFont(undefined, 'normal');
     y += 10;
 
-    const perfColumns = ["Grade", "Best Exam Pattern", "Best Average (%)"];
+    const perfColumns = ["Class", "Best Exam Pattern", "Best Average (%)"];
     const perfRows = bestWeekTestsByGrade.map(item => [
-      `Grade ${item.grade}`,
+      `${item.grade}`,
       item.bestExamPattern,
       `${item.bestAverage}%`
     ]);
@@ -723,23 +718,7 @@ const downloadPDF = async () => {
       row
     ])
   );
-  const displayExamPatterns = Array.from(
-    new Map(
-      teacherRankRows.map((row) => {
-        const examKey = buildTeacherExamIdentity(row);
-        return [
-          examKey,
-          {
-            exam_key: examKey,
-            exam_pattern: row.exam_pattern,
-            program: row.program || 'N/A',
-            exam_date: normalizeExamDate(row.exam_date),
-            display_label: buildTeacherExamLabel(row)
-          }
-        ];
-      })
-    ).values()
-  ).sort(compareTeacherExamRows);
+  const displayExamPatterns = examPatterns;
 
    return (
     <div style={styles.container}>
@@ -805,7 +784,7 @@ const downloadPDF = async () => {
       {/* Performance Analysis: Best Week Test by Grade (Card Blocks) */}
       {bestWeekTestsByGrade.length > 0 && (
         <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>📊 Performance Analysis: Best Week Test by Grade</h2>
+          <h2 style={styles.sectionTitle}>📊 Performance Analysis: Best Week Test</h2>
 
           {/* Highlight best overall grade */}
           {(() => {
@@ -824,7 +803,7 @@ const downloadPDF = async () => {
                 color: '#2d3748',
                 fontSize: '14px'
               }}>
-                🏆 Best Overall Grade: <strong>{bestOverall.grade}</strong> ({bestOverall.bestExamPattern}) — {bestOverall.bestAverage}%
+                🏆 Best Overall: <strong>{bestOverall.grade}</strong> ({bestOverall.bestExamPattern}) — {bestOverall.bestAverage}%
               </div>
             );
           })()}
@@ -855,7 +834,7 @@ const downloadPDF = async () => {
                   color: '#2d3748',
                   marginBottom: '8px'
                 }}>
-                  Grade {item.grade}
+                  {item.grade}
                 </div>
                 <div style={{
                   fontSize: '16px',
@@ -886,7 +865,16 @@ const downloadPDF = async () => {
       )}
 
       {/* Exam Performance Averages Table */}
-      {displayExamPatterns.length > 0 && (
+      {displayExamPatterns.length > 0 && ranksLoading && (
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>📊 Exam Performance Averages</h2>
+          <div style={styles.rankLoadingNotice}>
+            Exam Performance Averages Table are loading and may take up to 60 seconds. Please wait.
+          </div>
+        </div>
+      )}
+
+      {displayExamPatterns.length > 0 && !ranksLoading && (
         <div style={styles.card}>
           <h2 style={styles.sectionTitle}>📊 Exam Performance Averages</h2>
           <table style={styles.table}>
@@ -895,9 +883,9 @@ const downloadPDF = async () => {
                 <th style={styles.th}>Exam</th>
                 {columns.map((col, idx) => (
                   <React.Fragment key={idx}>
-                    <th style={styles.th}>{col.subject} ({col.classSection}) Avg</th>
-                    <th style={styles.th}>{col.subject} ({col.classSection}) School Rank</th>
-                    <th style={styles.th}>{col.subject} ({col.classSection}) All India Rank</th>
+                    <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) Avg</th>
+                    <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) School Rank</th>
+                    <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) All India Rank</th>
                   </React.Fragment>
                 ))}
               </tr>
@@ -909,10 +897,11 @@ const downloadPDF = async () => {
                   {columns.map((col, colIdx) => {
                     const rankKey = `${patternData.program || 'N/A'}|${patternData.exam_pattern}|${normalizeExamDate(patternData.exam_date)}|${col.classSection}|${col.subject}`;
                     const rankRow = teacherRankMap.get(rankKey);
+                    const averageValue = patternData.averagesByClassSection?.[col.classSection]?.[col.subject];
                     return (
                       <React.Fragment key={colIdx}>
                         <td style={styles.td}>
-                          {formatTeacherMetric(rankRow?.average, { suffix: '%' })}
+                          {formatTeacherMetric(averageValue, { suffix: '%' })}
                         </td>
                         <td style={styles.td}>
                           {formatTeacherMetric(rankRow?.school_rank)}
@@ -1004,6 +993,16 @@ const styles = {
     padding: '24px',
     marginBottom: '24px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  rankLoadingNotice: {
+    marginBottom: '16px',
+    padding: '10px 12px',
+    borderRadius: '8px',
+    background: '#fff7ed',
+    color: '#9a3412',
+    border: '1px solid #fdba74',
+    fontSize: '14px',
+    fontWeight: '500',
   },
   sectionTitle: {
     margin: '0 0 16px 0',
