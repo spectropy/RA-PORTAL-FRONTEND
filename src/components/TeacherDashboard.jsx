@@ -28,6 +28,31 @@ function formatTeacherMetric(value, { suffix = '' } = {}) {
   return `${value}${suffix}`;
 }
 
+function buildTeacherPdfHeader(subject, classSection, metric) {
+  return `${subject}\n${classSection}\n${metric}`;
+}
+
+function getCompactTeacherSubjectLabel(subject) {
+  const normalized = normalizeSubjectName(subject);
+  if (normalized === 'Physics') return 'Phy';
+  if (normalized === 'Chemistry') return 'Chem';
+  if (normalized === 'Biology') return 'Bio';
+  if (normalized === 'Maths') return 'Math';
+  return normalized.slice(0, 4) || 'Sub';
+}
+
+function buildAdaptiveTeacherPdfHeader(subject, classSection, metric, compact = false) {
+  if (!compact) return buildTeacherPdfHeader(subject, classSection, metric);
+
+  const compactMetricMap = {
+    Avg: 'Avg',
+    'School Rank': 'SR',
+    AIR: 'AIR'
+  };
+
+  return `${getCompactTeacherSubjectLabel(subject)}\n${classSection}\n${compactMetricMap[metric] || metric}`;
+}
+
 function normalizeExamDate(examDate) {
   if (!examDate) return 'NO_DATE';
   return String(examDate).trim();
@@ -472,8 +497,9 @@ useEffect(() => {
 }, [onBack, externalTeacherId, isViewingAsSchoolOwner]);
 
 const downloadPDF = async () => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation: 'landscape' });
   const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
   const margin = 14;
   let y = 20;
   const teacherRankMap = new Map(
@@ -562,7 +588,7 @@ const downloadPDF = async () => {
   doc.text(`ID: ${teacher.teacher_id}`, margin, y); y += 6;
   doc.line(margin, y, pageWidth - margin, y); 
   doc.setFontSize(8);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 150, y - 29);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, y - 29, { align: 'right' });
   y += 10;
 
   // Allotments
@@ -573,7 +599,7 @@ const downloadPDF = async () => {
   y += 8;
   if (teacher.teacher_assignments.length > 0) {
     teacher.teacher_assignments.forEach(a => {
-      if (y > 280) { doc.addPage(); y = 20; }
+      if (y > pageHeight - 20) { doc.addPage(); y = 20; }
       doc.text(`${a.class}-${a.section} | ${a.subject}`, margin, y);
       y += 6;
     });
@@ -622,15 +648,16 @@ const downloadPDF = async () => {
     )];
     const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
     const dynamicCols = [];
-    const tableColumns = ["Exam Pattern"];
+    const compactTableMode = teacher.teacher_assignments.length >= 4;
+    const tableColumns = [compactTableMode ? "Exam" : "Exam Pattern"];
 
     for (const subject of subjects) {
       for (const cs of teacherClassSections) {
         if (teacher.teacher_assignments.some(a => isSameSubject(a.subject, subject) && normalizeClassSection(a.class, a.section) === cs)) {
           dynamicCols.push({ subject, classSection: cs });
-          tableColumns.push(`${subject} (${cs}) Avg`);
-          tableColumns.push(`${subject} (${cs}) School Rank`);
-          tableColumns.push(`${subject} (${cs}) All India Rank`);
+          tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'Avg', compactTableMode));
+          tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'School Rank', compactTableMode));
+          tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'AIR', compactTableMode));
         }
       }
     }
@@ -652,9 +679,22 @@ const downloadPDF = async () => {
       head: [tableColumns],
       body: tableRows,
       theme: 'striped',
-      styles: { fontSize: 10, cellPadding: 2.5, halign: 'center' },
-      headStyles: { fillColor: [66, 153, 225] },
+      styles: {
+        fontSize: compactTableMode ? 7 : 9,
+        cellPadding: compactTableMode ? 1.5 : 2.5,
+        halign: 'center',
+        valign: 'middle',
+        overflow: 'linebreak'
+      },
+      headStyles: {
+        fillColor: [66, 153, 225],
+        fontSize: compactTableMode ? 6.5 : 8,
+        cellPadding: compactTableMode ? 1.2 : 2,
+        fontStyle: 'bold',
+        minCellHeight: compactTableMode ? 13 : 16
+      },
       margin: { left: margin, right: margin },
+      columnStyles: compactTableMode ? { 0: { cellWidth: 28 } } : { 0: { cellWidth: 42 } },
       willDrawCell: (data) => {
         if (data.cell && data.cell.text === '-') {
           data.cell.styles.textColor = [0, 0, 0];
