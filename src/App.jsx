@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 
 import LoginPage from './components/LoginPage.jsx';
 import Dashboard from './Dashboard.jsx'; // Your main page (SchoolForm + Table + Upload)
+import spectropyLogo from './assets/spectropy_logo.png';
 
 // ===== Auth Context Wrapper =====
 function Protected({ children, allowedRoles = ['SPECTROPY_ADMIN'] }) {
@@ -104,13 +105,15 @@ function AppRoutes() {
         )}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <img
-           src="https://spectropy.com/wp-content/uploads/2023/02/final-blue-white-bg.png" // 👈 replace this path with your actual logo file (e.g., './assets/logo.png')
+           src={spectropyLogo}
            alt="SPECTROPY Logo"
            style={{
-           height: "40px",
+           height: "55px", 
+           background: "white",
            width: "auto",
-           borderRadius: "6px",
+           borderRadius: "4px",
            objectFit: "contain",
+           padding: "6px"
         }}
        />
        </div>

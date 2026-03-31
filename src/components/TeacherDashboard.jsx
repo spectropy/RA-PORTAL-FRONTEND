@@ -51,7 +51,6 @@ function buildAdaptiveTeacherPdfHeader(subject, classSection, metric, compact = 
 
   const compactMetricMap = {
     Avg: 'Avg',
-    'School Rank': 'SR',
     AIR: 'AIR'
   };
 
@@ -651,7 +650,6 @@ const downloadPDF = async () => {
         if (teacher.teacher_assignments.some(a => isSameSubject(a.subject, subject) && normalizeClassSection(a.class, a.section) === cs)) {
           dynamicCols.push({ subject, classSection: cs });
           tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'Avg', compactTableMode));
-          tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'School Rank', compactTableMode));
           tableColumns.push(buildAdaptiveTeacherPdfHeader(subject, cs, 'AIR', compactTableMode));
         }
       }
@@ -663,7 +661,6 @@ const downloadPDF = async () => {
         const rankKey = `${pattern.program || 'N/A'}|${pattern.exam_pattern}|${normalizeExamDate(pattern.exam_date)}|${col.classSection}|${col.subject}`;
         const rankRow = teacherRankMap.get(rankKey);
         row.push(formatTeacherMetric(rankRow?.average, { suffix: '%' }));
-        row.push(formatTeacherMetric(rankRow?.school_rank));
         row.push(formatTeacherMetric(rankRow?.all_india_rank));
       });
       return row;
@@ -675,18 +672,18 @@ const downloadPDF = async () => {
       body: tableRows,
       theme: 'striped',
       styles: {
-        fontSize: compactTableMode ? 7 : 9,
-        cellPadding: compactTableMode ? 1.5 : 2.5,
+        fontSize: compactTableMode ? 8.5 : 10.5,
+        cellPadding: compactTableMode ? 1.8 : 2.8,
         halign: 'center',
         valign: 'middle',
         overflow: 'linebreak'
       },
       headStyles: {
         fillColor: [66, 153, 225],
-        fontSize: compactTableMode ? 6.5 : 8,
-        cellPadding: compactTableMode ? 1.2 : 2,
+        fontSize: compactTableMode ? 8 : 9.5,
+        cellPadding: compactTableMode ? 1.5 : 2.4,
         fontStyle: 'bold',
-        minCellHeight: compactTableMode ? 13 : 16
+        minCellHeight: compactTableMode ? 15 : 18
       },
       margin: { left: margin, right: margin },
       columnStyles: compactTableMode ? { 0: { cellWidth: 28 } } : { 0: { cellWidth: 42 } },
@@ -869,7 +866,7 @@ const downloadPDF = async () => {
         <div style={styles.card}>
           <h2 style={styles.sectionTitle}>📊 Exam Performance Averages</h2>
           <div style={styles.rankLoadingNotice}>
-            Exam Performance Averages Table are loading and may take up to 60 seconds. Please wait.
+            Exam Performance Averages is loading and may take up to 60 seconds. Please wait.
           </div>
         </div>
       )}
@@ -884,7 +881,6 @@ const downloadPDF = async () => {
                 {columns.map((col, idx) => (
                   <React.Fragment key={idx}>
                     <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) Avg</th>
-                    <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) School Rank</th>
                     <th style={styles.th}>{col.subject} ({formatDisplayClassSection(col.classSection)}) All India Rank</th>
                   </React.Fragment>
                 ))}
@@ -902,9 +898,6 @@ const downloadPDF = async () => {
                       <React.Fragment key={colIdx}>
                         <td style={styles.td}>
                           {formatTeacherMetric(averageValue, { suffix: '%' })}
-                        </td>
-                        <td style={styles.td}>
-                          {formatTeacherMetric(rankRow?.school_rank)}
                         </td>
                         <td style={styles.td}>
                           {formatTeacherMetric(rankRow?.all_india_rank)}
