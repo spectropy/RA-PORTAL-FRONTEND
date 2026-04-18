@@ -23,6 +23,7 @@ const getExamPatternsByProgram = (program) => {
         { id: 'UNIT_TEST_2', name: 'Unit Test 2', type: 'UNIT_TEST' },
         { id: 'UNIT_TEST_3', name: 'Unit Test 3', type: 'UNIT_TEST' },
         { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
+        { id: 'GRAND_TEST_2', name: 'Grand Test 2', type: 'GRAND_TEST' }
       ];
     case 'MAE':
     case 'PIO':
