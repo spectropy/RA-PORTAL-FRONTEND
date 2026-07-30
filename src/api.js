@@ -1,4 +1,43 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5173';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+
+/**
+ * Parses and formats backend API error responses into clean, user-friendly messages.
+ */
+async function parseAndFormatError(r) {
+  let text = "";
+  try {
+    text = await r.text();
+  } catch (e) {
+    return `Request failed with status ${r.status}`;
+  }
+
+  try {
+    const json = JSON.parse(text);
+
+    // 1. PostgreSQL 23505 Duplicate Key Error
+    if (
+      json.details?.code === "23505" ||
+      (json.error && json.error.includes("duplicate key"))
+    ) {
+      const match = json.details?.details?.match(
+        /Key \((.*?)\)=\((.*?)\) already exists/,
+      );
+      if (match) {
+        const [, field, val] = match;
+        const fieldLabel =
+          field === "student_id" ? "Roll Number / Student ID" : field;
+        return `Student with ${fieldLabel} "${val}" already exists in the database. Please check your Excel/CSV file for duplicates.`;
+      }
+      if (json.details?.details) {
+        return json.details.details;
+      }
+    }
+
+    return json.error || json.message || text;
+  } catch (e) {
+    return text || `Request failed with status ${r.status}`;
+  }
+}
 
 // ========================
 // 🏫 SCHOOL MANAGEMENT
@@ -6,30 +45,24 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5173';
 
 export async function getSchools() {
   const r = await fetch(`${API_BASE}/api/schools`);
-  if (!r.ok) throw new Error(`GET /api/schools failed: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
   return j.data || [];
 }
 
 export async function createSchool(payload) {
   const r = await fetch(`${API_BASE}/api/schools`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`POST /api/schools failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   return r.json();
 }
 
 export async function getSchoolById(schoolId) {
   const r = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`GET /api/schools/${schoolId} failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
   return j;
 }
@@ -40,40 +73,31 @@ export async function getSchoolById(schoolId) {
 
 export async function createClass(payload) {
   const r = await fetch(`${API_BASE}/api/classes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`POST /api/classes failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   return r.json();
 }
 
 export async function createTeacher(payload) {
   const r = await fetch(`${API_BASE}/api/teachers`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`POST /api/teachers failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   return r.json();
 }
 
 export async function assignTeacherToClass(payload) {
   const r = await fetch(`${API_BASE}/api/teacher-assignments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`POST /api/teacher-assignments failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   return r.json();
 }
 
@@ -87,44 +111,56 @@ export async function assignTeacherToClass(payload) {
  * @param {FormData} formData - Must include: file (Blob), class_section (string)
  */
 export const uploadStudents = async (schoolId, formData) => {
-  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students/upload`, {
-    method: 'POST',
-    body: formData
-  });
+  const res = await fetch(
+    `${API_BASE}/api/schools/${schoolId}/students/upload`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`POST /api/schools/${schoolId}/students/upload failed: ${res.status} ${errorText}`);
+    throw new Error(await parseAndFormatError(res));
   }
 
   // Try to parse JSON, fallback to text
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
     return res.json();
   } else {
     return { message: await res.text() };
   }
 };
 
-export const getStudentsByClassSection = async (schoolId, classValue, sectionValue) => {
-  const url = new URL(`${API_BASE}/api/schools/${schoolId}/students`);
-  url.searchParams.append('class', classValue);
-  url.searchParams.append('section', sectionValue);
+export const getStudentsByClassSection = async (
+  schoolId,
+  classValue,
+  sectionValue,
+) => {
+  const query = new URLSearchParams({
+    class: classValue,
+    section: sectionValue,
+  }).toString();
+  const res = await fetch(
+    `${API_BASE}/api/schools/${schoolId}/students?${query}`,
+    {
+      method: "GET",
+    },
+  );
 
-  const res = await fetch(url, {
-    method: 'GET'
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`GET ${url} failed: ${res.status} ${errorText}`);
+  if (res.status === 404) {
+    return [];
   }
 
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
+  if (!res.ok) {
+    throw new Error(await parseAndFormatError(res));
+  }
+
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
     return res.json();
   } else {
-    throw new Error('Expected JSON response');
+    return [];
   }
 };
 
@@ -134,45 +170,29 @@ export const getStudentsByClassSection = async (schoolId, classValue, sectionVal
 
 export async function getFoundations() {
   const r = await fetch(`${API_BASE}/api/foundations`);
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`GET /api/foundations failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
   return j;
 }
 
 export async function getPrograms() {
   const r = await fetch(`${API_BASE}/api/programs`);
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`GET /api/programs failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
   return j;
 }
 
 export async function createExam(payload) {
   const r = await fetch(`${API_BASE}/api/exams`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
-  // ✅ CRITICAL FIX: Extract error message from backend JSON response
   if (!r.ok) {
-    let errorData;
-    try {
-      errorData = await r.json(); // Try to parse as JSON
-    } catch (e) {
-      errorData = { error: await r.text() }; // Fallback: raw text if not JSON
-    }
-
-    const errorMessage = errorData.error || 'Unknown error creating exam';
-    throw new Error(errorMessage); // 👈 This shows REAL backend error!
+    throw new Error(await parseAndFormatError(r));
   }
 
-  // ✅ Success: Return the raw exam object (backend returns direct object, NOT { data: ... })
   return await r.json();
 }
 
@@ -183,31 +203,22 @@ export async function createExam(payload) {
 export async function getAcademicYears() {
   const currentYear = new Date().getFullYear();
   const years = [];
-  
+
   for (let i = -1; i < 4; i++) {
     const startYear = currentYear + i;
     const endYear = startYear + 1;
     years.push({
       id: `${startYear}-${endYear}`,
-      name: `${startYear}-${endYear}`
+      name: `${startYear}-${endYear}`,
     });
   }
-  
+
   return years;
 }
-// ========================
-// 📝 EXAM REGISTRATION
-// ========================
 
-// ... your existing getFoundations, getPrograms, createExam ...
-
-// 👇 ADD THIS FUNCTION
 export async function getExams() {
   const r = await fetch(`${API_BASE}/api/exams`);
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`GET /api/exams failed: ${r.status} ${t}`);
-  }
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
   return j;
 }
@@ -215,19 +226,17 @@ export async function getExams() {
 // Delete class by ID
 export const deleteClassById = async (id) => {
   const res = await fetch(`${API_BASE}/api/classes/${id}`, {
-    method: 'DELETE'
+    method: "DELETE",
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to delete class');
-  return data;
+  if (!res.ok) throw new Error(await parseAndFormatError(res));
+  return res.json();
 };
 
 // Delete teacher assignment by ID
 export const deleteAssignmentById = async (id) => {
   const res = await fetch(`${API_BASE}/api/teacher-assignments/${id}`, {
-    method: 'DELETE'
+    method: "DELETE",
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to delete assignment');
-  return data;
+  if (!res.ok) throw new Error(await parseAndFormatError(res));
+  return res.json();
 };

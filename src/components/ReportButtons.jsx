@@ -198,76 +198,33 @@ export default function ReportButtons({ rows }) {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 12, marginTop: '16px', flexWrap: 'wrap' }}>
-      {/* PDF Button */}
-      <button
-        onClick={downloadPDF}
-        disabled={!hasData || exporting}
-        aria-label={exporting === 'pdf' ? 'Generating PDF...' : 'Download PDF report'}
-        title="Download school list as PDF"
-        style={{
-          padding: '8px 16px',
-          backgroundColor: exporting === 'pdf' ? '#6b7280' : hasData ? '#1a56db' : '#9ca3af',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: hasData && !exporting ? 'pointer' : 'not-allowed',
-          fontSize: '14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
-      >
-        {exporting === 'pdf' ? (
-          <>
-            🔄 Generating...
-          </>
-        ) : (
-          <>
-            📄 PDF Report
-          </>
-        )}
-      </button>
+    <div className="report-buttons-wrap">
+      <div className="report-buttons-row">
+        {/* PDF Button */}
+        <button
+          className={`btn-report btn-report--pdf ${!hasData || exporting ? 'disabled' : ''}`}
+          onClick={downloadPDF}
+          disabled={!hasData || exporting}
+          aria-label={exporting === 'pdf' ? 'Generating PDF...' : 'Download PDF report'}
+          title="Download school list as PDF"
+        >
+          {exporting === 'pdf' ? '🔄 Generating...' : '📄 PDF Report'}
+        </button>
 
-      {/* CSV Button */}
-      <button
-        onClick={downloadCSV}
-        disabled={!hasData || exporting}
-        aria-label={exporting === 'csv' ? 'Generating CSV...' : 'Download CSV report'}
-        title="Download school list as CSV"
-        style={{
-          padding: '8px 16px',
-          backgroundColor: exporting === 'csv' ? '#6b7280' : hasData ? '#10b981' : '#9ca3af',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: hasData && !exporting ? 'pointer' : 'not-allowed',
-          fontSize: '14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
-      >
-        {exporting === 'csv' ? (
-          <>
-            🔄 Exporting...
-          </>
-        ) : (
-          <>
-            📊 CSV Export
-          </>
-        )}
-      </button>
+        {/* CSV Button */}
+        <button
+          className={`btn-report btn-report--csv ${!hasData || exporting ? 'disabled' : ''}`}
+          onClick={downloadCSV}
+          disabled={!hasData || exporting}
+          aria-label={exporting === 'csv' ? 'Generating CSV...' : 'Download CSV report'}
+          title="Download school list as CSV"
+        >
+          {exporting === 'csv' ? '🔄 Exporting...' : '📊 CSV Export'}
+        </button>
+      </div>
 
       {/* Info Tooltip */}
-      <div
-        style={{
-          fontSize: '12px',
-          color: '#666',
-          fontStyle: 'italic',
-          alignSelf: 'center',
-        }}
-      >
+      <div className="report-last-updated">
         {hasData ? `Last updated: ${now}` : 'No data to export'}
       </div>
     </div>

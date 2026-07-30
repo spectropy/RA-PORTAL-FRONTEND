@@ -1,167 +1,389 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import LoginPage from "./components/LoginPage";
+import Dashboard from "./Dashboard";
+import SchoolOwnerDashboard from "./components/SchoolOwnerDashboard";
+import TeacherDashboard from "./components/TeacherDashboard";
+import StudentDashboard from "./components/StudentDashboard";
+import ParentDashboard from "./components/ParentDashboard";
+import GuestPage from "./components/GuestPage";
 
-import LoginPage from './components/LoginPage.jsx';
-import Dashboard from './Dashboard.jsx'; // Your main page (SchoolForm + Table + Upload)
-import spectropyLogo from './assets/spectropy_logo.png';
+// ─── Role → Route map ────────────────────────────────────────────
+const ROLE_ROUTES = {
+  SPECTROPY_ADMIN: "/admin",
+  SCHOOL_OWNER: "/school",
+  TEACHER: "/teacher",
+  STUDENT: "/student",
+  PARENT: "/parent",
+  GUEST: "/guest",
+};
 
-// ===== Auth Context Wrapper =====
-function Protected({ children, allowedRoles = ['SPECTROPY_ADMIN'] }) {
-  const raw = sessionStorage.getItem('sp_user');
-  let user = null;
-
-  try {
-    user = raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    console.error('Invalid user session:', e);
-    sessionStorage.removeItem('sp_user');
+// ─── Route Guard ─────────────────────────────────────────────────
+// Redirects unauthenticated users to /login.
+// Redirects authenticated users away from their wrong role's route.
+function Protected({ user, allowedRole, children }) {
+  const location = useLocation();
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (user.role !== allowedRole) {
+    const correctRoute = ROLE_ROUTES[user.role] || "/login";
+    return <Navigate to={correctRoute} replace />;
   }
-
-  const hasValidRole = user && allowedRoles.includes(user.role);
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!hasValidRole) {
-    // Optional: show unauthorized page or redirect
-    return <Navigate to="/login" replace />;
-  }
-
   return children;
 }
 
-// ===== Login Handler Component =====
-function AppRoutes() {
+// ─── App Shell (header + routing) ────────────────────────────────
+function AppShell() {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleLogin = (user) => {
-    const { role } = user;
-
-    // Validate role
-    if (!role) {
-      alert('Invalid login: Missing role');
-      return;
-    }
-
-    // Only allow known roles (extend later if needed)
-    if (role !== 'SPECTROPY_ADMIN') {
-      alert('Access denied: You do not have permission to view this page.');
-      return;
-    }
-
-    // Save to session
+  // Restore session on mount
+  useEffect(() => {
     try {
-      sessionStorage.setItem('sp_user', JSON.stringify(user));
-      navigate('/dashboard', { replace: true });
-    } catch (err) {
-      console.error('Failed to save session:', err);
-      alert('Login failed due to browser settings (private mode?)');
+      const stored =
+        localStorage.getItem("sp_user") || sessionStorage.getItem("sp_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setUser(parsed);
+        localStorage.setItem("sp_user", stored); // sync
+      }
+    } catch (e) {
+      console.error("Failed to restore session:", e);
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  const handleLogin = (userData) => {
+    const str = JSON.stringify(userData);
+    localStorage.setItem("sp_user", str);
+    sessionStorage.setItem("sp_user", str);
+    setUser(userData);
+    // Redirect to role-specific route after login
+    navigate(ROLE_ROUTES[userData.role] || "/login", { replace: true });
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('sp_user');
-    navigate('/login', { replace: true });
+    localStorage.removeItem("sp_user");
+    localStorage.removeItem("sp_school_id");
+    localStorage.removeItem("sp_school_name");
+    sessionStorage.clear();
+    setUser(null);
+    navigate("/login", { replace: true });
   };
 
-  // For now, you can add a Logout button inside Dashboard conditionally
-
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Header (shown on all pages) */}
-      <header style={{
-        padding: "clamp(10px, 2vw, 18px) clamp(16px, 4vw, 28px)",
-        backgroundColor: "#1a56db",
-        color: "white",
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "10px",
-        fontSize: "clamp(16px, 2vw, 20px)",
-        fontWeight: "bold",
-        lineHeight: 1.3,
-        textAlign: "center",
-        boxShadow: "0 3px 12px rgba(26,86,219,0.3)",
-      }}>
-        <span>SPECTROPY School Portal</span>
-      
-        {sessionStorage.getItem('sp_user') && (
-          <button
-            onClick={handleLogout}
+  if (loading) {
+    return (
+      <div style={S.loadingWrap}>
+        <div style={S.loadingBox}>
+          <span className="spinner" style={{ width: "24px", height: "24px" }} />
+          <span
             style={{
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "var(--color-text-main)",
             }}
           >
-            🔐 Logout
+            Loading SPECTROPY Portal...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={S.container}>
+      {/* ── Fixed Brand Header ───────────────────────────────── */}
+      <header style={S.header} className="app-header">
+        {/* Hamburger — Admin only */}
+        {user?.role === "SPECTROPY_ADMIN" && (
+          <button
+            className="app-hamburger-btn"
+            onClick={() =>
+              window.dispatchEvent(new Event("toggleAdminSidebar"))
+            }
+            aria-label="Open Navigation"
+          >
+            ☰
           </button>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <img
-           src={spectropyLogo}
-           alt="SPECTROPY Logo"
-           style={{
-           height: "55px", 
-           background: "white",
-           width: "auto",
-           borderRadius: "4px",
-           objectFit: "contain",
-           padding: "6px"
-        }}
-       />
-       </div>
+        {/* Hamburger — School Owner */}
+        {user?.role === "SCHOOL_OWNER" && (
+          <button
+            className="app-hamburger-btn"
+            onClick={() =>
+              window.dispatchEvent(new Event("toggleSchoolAdminSidebar"))
+            }
+            aria-label="Open Navigation"
+          >
+            ☰
+          </button>
+        )}
+        {/* Hamburger — Teacher */}
+        {user?.role === "TEACHER" && (
+          <button
+            className="app-hamburger-btn"
+            onClick={() =>
+              window.dispatchEvent(new Event("toggleTeacherSidebar"))
+            }
+            aria-label="Open Navigation"
+          >
+            ☰
+          </button>
+        )}
+
+        {/* Brand */}
+        <div style={S.brandGroup} className="app-brand-group">
+          <div style={S.logoContainer}>
+            <img
+              src="/spectropy_logo.png"
+              alt="SPECTROPY Logo"
+              style={S.logoImg}
+              onError={(e) => {
+                e.target.style.display = "none";
+                e.target.nextSibling.style.display = "flex";
+              }}
+            />
+            <div style={{ ...S.logoFallback, display: "none" }}>S</div>
+          </div>
+          <div style={S.titleBox}>
+            <div style={S.titleRow}>
+              <span style={S.brandTitle}>SPECTROPY</span>
+            </div>
+            <span style={S.subtitle}>Result Analysis Portal</span>
+          </div>
+        </div>
+
+        {/* User pill + logout — hidden for SPECTROPY_ADMIN (sidebar) and TEACHER (sidebar has Sign Out) */}
+        {user && user.role !== "SPECTROPY_ADMIN" && (
+          <div
+            style={S.userMeta}
+            className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
+          >
+            <div style={S.userPill}>
+              <span style={{ fontSize: "14px" }}>
+                {user.role === "SCHOOL_OWNER"
+                  ? "🏫"
+                  : user.role === "TEACHER"
+                    ? "👩‍🏫"
+                    : user.role === "PARENT"
+                      ? "👨‍👧"
+                      : "👤"}
+              </span>
+              <span style={{ fontWeight: 600 }}>
+                {user.username || user.name || user.role}
+              </span>
+            </div>
+            {/* Sign Out hidden for TEACHER — already in sidebar */}
+            {user.role !== "TEACHER" && (
+              <button
+                onClick={handleLogout}
+                style={S.logoutBtn}
+                className="btn btn-outline"
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
-      {/* Page Content */}
-      <main style={{ flex: 1, padding: '0px', backgroundColor: '#f7fafc' }}>
+      {/* ── Routes ────────────────────────────────────────────── */}
+      <main style={S.mainContent}>
         <Routes>
-          {/* Redirect root to login */}
+          {/* Default: redirect to login */}
           <Route path="/" element={<Navigate to="/login" replace />} />
 
-          {/* Login Page */}
-          <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-
-          {/* Admin Dashboard (Protected) */}
+          {/* Public */}
           <Route
-            path="/dashboard"
+            path="/login"
             element={
-              <Protected allowedRoles={['SPECTROPY_ADMIN']}>
-                <Dashboard />
+              user ? (
+                <Navigate to={ROLE_ROUTES[user.role] || "/login"} replace />
+              ) : (
+                <LoginPage onLogin={handleLogin} />
+              )
+            }
+          />
+
+          {/* Super Admin — /* allows nested tab routes */}
+          <Route
+            path="/admin/*"
+            element={
+              <Protected user={user} allowedRole="SPECTROPY_ADMIN">
+                <Dashboard user={user} onLogout={handleLogout} />
               </Protected>
             }
           />
 
-          {/* Catch-all: invalid routes */}
+          {/* School Owner — /* allows nested tab routes */}
+          <Route
+            path="/school/*"
+            element={
+              <Protected user={user} allowedRole="SCHOOL_OWNER">
+                <SchoolOwnerDashboard onBack={handleLogout} />
+              </Protected>
+            }
+          />
+
+          {/* Teacher — /* allows nested tab routes */}
+          <Route
+            path="/teacher/*"
+            element={
+              <Protected user={user} allowedRole="TEACHER">
+                <TeacherDashboard onBack={handleLogout} />
+              </Protected>
+            }
+          />
+
+          {/* Student */}
+          <Route
+            path="/student"
+            element={
+              <Protected user={user} allowedRole="STUDENT">
+                <StudentDashboard onBack={handleLogout} />
+              </Protected>
+            }
+          />
+
+          {/* Parent */}
+          <Route
+            path="/parent"
+            element={
+              <Protected user={user} allowedRole="PARENT">
+                <ParentDashboard onBack={handleLogout} />
+              </Protected>
+            }
+          />
+
+          {/* Guest */}
+          <Route
+            path="/guest"
+            element={
+              <Protected user={user} allowedRole="GUEST">
+                <GuestPage onBack={handleLogout} />
+              </Protected>
+            }
+          />
+
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </main>
-
-      {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '10px',
-        fontSize: '12px',
-        color: '#666',
-        backgroundColor: '#f1f5f9',
-      }}>
-        © {new Date().getFullYear()} SPECTROPY. All rights reserved.
-      </footer>
     </div>
   );
 }
 
-// ===== Main App =====
+// ─── Root App ────────────────────────────────────────────────────
+// BrowserRouter is provided by main.jsx — do NOT add another one here.
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  );
+  return <AppShell />;
 }
+
+// ─── Shell Styles ─────────────────────────────────────────────────
+const S = {
+  container: {
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "var(--color-bg)",
+  },
+  header: {
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #1d4ed8 100%)",
+    color: "#ffffff",
+    padding: "10px clamp(16px, 3vw, 32px)",
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 8px 24px -4px rgba(15,23,42,0.3)",
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
+  brandGroup: { display: "flex", alignItems: "center", gap: "14px" },
+  logoContainer: {
+    background: "#ffffff",
+    padding: "4px 8px",
+    borderRadius: "8px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoImg: {
+    height: "34px",
+    width: "auto",
+    maxWidth: "130px",
+    objectFit: "contain",
+  },
+  logoFallback: {
+    width: "32px",
+    height: "32px",
+    borderRadius: "6px",
+    backgroundColor: "var(--primary-600)",
+    color: "#ffffff",
+    fontWeight: 700,
+    fontSize: "18px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  titleBox: { display: "flex", flexDirection: "column", gap: "2px" },
+  titleRow: { display: "flex", alignItems: "center", gap: "8px" },
+  brandTitle: {
+    fontSize: "clamp(17px, 2.2vw, 20px)",
+    fontWeight: 800,
+    letterSpacing: "0.8px",
+    color: "#ffffff",
+    lineHeight: 1.1,
+  },
+  subtitle: { fontSize: "12px", color: "#93c5fd", fontWeight: 500 },
+  userMeta: { display: "flex", alignItems: "center", gap: "12px" },
+  userPill: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "6px 14px",
+    borderRadius: "99px",
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    color: "#ffffff",
+    fontSize: "13px",
+  },
+  logoutBtn: {
+    padding: "6px 14px",
+    fontSize: "13px",
+    minHeight: "36px",
+    color: "#ffffff",
+    borderColor: "rgba(255,255,255,0.3)",
+    background: "rgba(255,255,255,0.08)",
+  },
+  mainContent: { flex: 1, display: "flex", flexDirection: "column" },
+  loadingWrap: {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--color-bg)",
+  },
+  loadingBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "16px 24px",
+    background: "#ffffff",
+    borderRadius: "12px",
+    border: "1px solid var(--color-border)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+  },
+};

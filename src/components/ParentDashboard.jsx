@@ -1,789 +1,135 @@
-// src/StudentDashboard.jsx
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
-// 👉 Charts
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+// src/components/ParentDashboard.jsx
+// ─────────────────────────────────────────────────────────────────
+// Data-fetching shell for the PARENT view.
+// Parent session contains the child's student_id / school_id.
+// Fetches child's exam results + school data, then delegates all
+// rendering to the shared <StudentPerformanceView> component.
+// ─────────────────────────────────────────────────────────────────
+import React, { useState, useEffect, useRef } from "react";
+import StudentPerformanceView from "./StudentPerformanceView";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+// Helper: sort exam results by type + number
+const EXAM_TYPE_PRIORITY = (name = "") => {
+  if (name.startsWith("WEEK_TEST"))  return 0;
+  if (name.startsWith("UNIT_TEST"))  return 1;
+  if (name.startsWith("GRAND_TEST")) return 2;
+  return 3;
+};
+const EXAM_NUM = (name = "") => {
+  const m = name.match(/.*_(\d+)$/);
+  return m ? parseInt(m[1], 10) : 0;
+};
+const sortExams = (list) =>
+  [...list].sort((a, b) => {
+    const pa = EXAM_TYPE_PRIORITY(a.exam), pb = EXAM_TYPE_PRIORITY(b.exam);
+    if (pa !== pb) return pa - pb;
+    const na = EXAM_NUM(a.exam),           nb = EXAM_NUM(b.exam);
+    if (na !== nb) return na - nb;
+    return a.exam.localeCompare(b.exam);
+  });
 
-export default function StudentDashboard({ onBack }) {
-  const [student, setStudent] = useState(null);
-  const [teachers, setTeachers] = useState([]);
-  const [examResults, setExamResults] = useState([]); // 👈 NEW
-  const [school, setSchool] = useState(null); // 👈 ADD THIS
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+export default function ParentDashboard({ onBack }) {
+  const [student,     setStudent]     = useState(null);
+  const [school,      setSchool]      = useState(null);
+  const [examResults, setExamResults] = useState([]);
+  const [teachers,    setTeachers]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState("");
   const hasFetched = useRef(false);
 
   useEffect(() => {
-    const user = sessionStorage.getItem("sp_user");
-    const parsedUser = user ? JSON.parse(user) : null;
-
-    const studentId = parsedUser?.student_id || null;
-    const schoolId = parsedUser?.school_id || null;
-    const classValue = parsedUser?.class || null;
-    const sectionValue = parsedUser?.section || null;
-
-    if (!studentId || !schoolId || !classValue || !sectionValue) {
-      setError("No student or school context found. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
     if (hasFetched.current) return;
     hasFetched.current = true;
 
-   const fetchStudentData = async () => {
-  try {
-    setStudent(parsedUser);
+    const fetchData = async () => {
+      try {
+        // ── 1. Read parent session (contains child context) ──
+        const raw = localStorage.getItem("sp_user") || sessionStorage.getItem("sp_user");
+        const parsedUser = raw ? JSON.parse(raw) : null;
 
-    // 👉 FETCH EXAM RESULTS
-    const resultsRes = await fetch(`${API_BASE}/api/exams/results?student_id=${encodeURIComponent(studentId)}`);
-    if (!resultsRes.ok) throw new Error("Failed to fetch exam results");
-    const resultsData = await resultsRes.json();
-    setExamResults(resultsData || []);
+        if (
+          !parsedUser?.student_id ||
+          !parsedUser?.school_id  ||
+          !parsedUser?.class      ||
+          !parsedUser?.section
+        ) {
+          throw new Error("No child or school context found. Please log in again.");
+        }
 
-    // ✅ ===== INSERT SORTING LOGIC HERE =====
-    const getExamTypePriority = (examName) => {
-      if (examName.startsWith('WEEK_TEST')) return 0;
-      if (examName.startsWith('UNIT_TEST')) return 1;
-      if (examName.startsWith('GRAND_TEST')) return 2;
-      return 3;
-    };
+        const { student_id, school_id, class: cls, section } = parsedUser;
+        setStudent(parsedUser);
 
-    const parseExamNumber = (examName) => {
-      const match = examName.match(/.*_(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
+        // ── 2. Child's exam results ──────────────────────────
+        const resRes = await fetch(
+          `${API_BASE}/api/exams/results?student_id=${encodeURIComponent(student_id)}`
+        );
+        if (!resRes.ok) throw new Error("Failed to fetch exam results.");
+        const rawResults = await resRes.json();
+        setExamResults(sortExams(rawResults || []));
 
-    const sortedResults = [...(resultsData || [])].sort((a, b) => {
-      const prioA = getExamTypePriority(a.exam);
-      const prioB = getExamTypePriority(b.exam);
-      if (prioA !== prioB) return prioA - prioB;
+        // ── 3. School data + teachers ────────────────────────
+        const schRes = await fetch(`${API_BASE}/api/schools/${school_id}`);
+        if (!schRes.ok) throw new Error("Failed to fetch school details.");
+        const schData = await schRes.json();
+        setSchool(schData.school);
 
-      const numA = parseExamNumber(a.exam);
-      const numB = parseExamNumber(b.exam);
-      if (numA !== numB) return numA - numB;
-
-      return a.exam.localeCompare(b.exam);
-    });
-    // ✅ =====================================
-
-    setExamResults(sortedResults); // 👈 use sortedResults instead of raw resultsData
-
-    // 👉 FETCH FULL SCHOOL DATA (includes logo_url, area, etc.)
-    const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-    if (!schoolRes.ok) throw new Error(`Failed to fetch school details: ${schoolRes.status}`);
-    const schoolData = await schoolRes.json();
-
-    // ✅ Save the full school object (from `schoolData.school`)
-    setSchool(schoolData.school); // 👈 This gives you access to logo_url, area, etc.
-
-    // 👉 Build assigned teachers list
-    const assignedTeachers = [];
-    if (Array.isArray(schoolData.teachers)) {
-      for (const teacher of schoolData.teachers) {
-        if (Array.isArray(teacher.teacher_assignments)) {
-          const assignments = teacher.teacher_assignments.filter(
-            a => a.class === classValue && a.section === sectionValue
-          );
-          if (assignments.length > 0) {
-            assignedTeachers.push({
-              name: teacher.name,
-              subject: assignments[0].subject,
-              email: teacher.email,
-              phone: teacher.contact,
-            });
+        // Filter teachers assigned to child's class/section
+        const assigned = [];
+        for (const teacher of schData.teachers || []) {
+          for (const a of teacher.teacher_assignments || []) {
+            if (a.class === cls && a.section === section) {
+              assigned.push({
+                name:    teacher.name,
+                subject: a.subject,
+                email:   teacher.email,
+                phone:   teacher.contact,
+              });
+              break;
+            }
           }
         }
+        setTeachers(assigned);
+      } catch (err) {
+        console.error("ParentDashboard fetch error:", err);
+        setError(err.message || "Failed to load child data.");
+      } finally {
+        setLoading(false);
       }
-    }
-    setTeachers(assignedTeachers);
-  } catch (err) {
-    console.error("Error fetching student data:", err);
-    setError("Failed to load student data. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+    };
 
-    fetchStudentData();
+    fetchData();
   }, []);
 
-  // ===== Derived Metrics for Performance Dashboard (FIXED) =====
-const { bestExam, averagesData, strengthSubject, weakSubject } = useMemo(() => {
-  if (!Array.isArray(examResults) || examResults.length === 0) {
-    return { bestExam: null, averagesData: [], strengthSubject: null, weakSubject: null };
-  }
-
-  const toNum = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const best = [...examResults].sort((a, b) => toNum(b.percentage) - toNum(a.percentage))[0];
-
-  // 🔹 Calculate subject percentages per exam, then average
-  let physicsPctSum = 0;
-  let chemistryPctSum = 0;
-  let mathsPctSum = 0;
-  let biologyPctSum = 0;
-  let validCount = 0;
-
-  for (const r of examResults) {
-    const physicsPct = r.max_marks_physics > 0 
-      ? (toNum(r.physics_marks) / toNum(r.max_marks_physics)) * 100 
-      : 0;
-    const chemistryPct = r.max_marks_chemistry > 0 
-      ? (toNum(r.chemistry_marks) / toNum(r.max_marks_chemistry)) * 100 
-      : 0;
-    const mathsPct = r.max_marks_maths > 0 
-      ? (toNum(r.maths_marks) / toNum(r.max_marks_maths)) * 100 
-      : 0;
-    const biologyPct = r.max_marks_biology > 0 
-      ? (toNum(r.biology_marks) / toNum(r.max_marks_biology)) * 100 
-      : 0;
-
-    physicsPctSum += physicsPct;
-    chemistryPctSum += chemistryPct;
-    mathsPctSum += mathsPct;
-    biologyPctSum += biologyPct;
-    validCount++;
-  }
-
-  const avgPhysics = validCount ? Number((physicsPctSum / validCount).toFixed(2)) : 0;
-  const avgChemistry = validCount ? Number((chemistryPctSum / validCount).toFixed(2)) : 0;
-  const avgMaths = validCount ? Number((mathsPctSum / validCount).toFixed(2)) : 0;
-  const avgBiology = validCount ? Number((biologyPctSum / validCount).toFixed(2)) : 0;
-
-  // ✅ Structure data with subject percentages
-  const averagesData = [
-    { subject: 'Physics', average: avgPhysics },
-    { subject: 'Chemistry', average: avgChemistry },
-    { subject: 'Mathematics', average: avgMaths },
-    { subject: 'Biology', average: avgBiology }
-  ];
-
-  const sorted = [...averagesData].sort((a, b) => b.average - a.average);
-  const strength = sorted[0] || null;
-  const weak = sorted[sorted.length - 1] || null;
-
-  return {
-    bestExam: best,
-    averagesData,
-    strengthSubject: strength,
-    weakSubject: weak,
-  };
-}, [examResults]);
-
-const downloadPDF = async (studentData, schoolData, examResults) => {
-  if (!studentData || !schoolData || !examResults?.length) {
-    throw new Error('Missing required data for PDF generation');
-  }
-
-  // 📄 CREATE LANDSCAPE PDF
-  const doc = new jsPDF({
-    orientation: 'landscape', // ← KEY CHANGE
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  const pageWidth = doc.internal.pageSize.width; // ~297mm
-  const pageHeight = doc.internal.pageSize.height; // ~210mm
-
-  // 🔹 Helper: Get subject percentage
-  const getSubjectPct = (marks, max) => {
-    if (!max || max <= 0) return 0;
-    return ((marks || 0) / max) * 100;
-  };
-
-  // ======================
-  // 🎨 THEME COLORS
-  // ======================
-  const BLUE = [30, 80, 150];   // Deep blue
-  const LIGHT_BLUE = [230, 240, 255]; // Light blue background
-  const WHITE = [255, 255, 255];
-
-  // ======================
-  // 🏫 HEADER (Blue Theme)
-  // ======================
-  let y = 15;
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setFillColor(...BLUE);
-  doc.setTextColor(255, 255, 255);
-  doc.rect(0, 0, pageWidth, 25, 'F'); // Full header bar
-  doc.text(schoolData.school_name || "School Name", 15, 15);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(255, 255, 255);
-  doc.text(`Area: ${schoolData.area || 'N/A'}`, 15, 22);
-  doc.text(`Powered BY SPECTROPY`, 240, 15);
-  y = 30;
-
-  // ======================
-  // 🧑‍🎓 STUDENT INFO BOXES (with Strength & Weak Subject)
-  // ======================
-  const boxX = 12;
-  const boxY = y;
-  const boxW = 50;
-  const boxH = 22;
-  const gap = 1;
-
-  // Calculate strength & weak subjects
-  const subjKeys = [
-    { key: 'physics', label: 'Physics' },
-    { key: 'chemistry', label: 'Chemistry' },
-    { key: 'maths', label: 'Mathematics' },
-    { key: 'biology', label: 'Biology' }
-  ];
-
-  const avgMap = {};
-  for (const subj of subjKeys) {
-    const marksKey = `${subj.key}_marks`;
-    const maxKey = `max_marks_${subj.key}`;
-    const totalPct = examResults.reduce((sum, r) => {
-      return sum + getSubjectPct(r[marksKey], r[maxKey]);
-    }, 0);
-    avgMap[subj.key] = examResults.length ? totalPct / examResults.length : 0;
-  }
-
-  const sortedSubj = Object.entries(avgMap)
-    .sort(([, a], [, b]) => b - a)
-    .map(([key, pct]) => ({ key, pct }));
-
-  const strength = sortedSubj[0]?.key || '—';
-  const weak = sortedSubj[sortedSubj.length - 1]?.key || '—';
-
-  // Box 1: Name
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  doc.rect(boxX, boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Student Name", boxX + 3, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text(studentData.name || "—", boxX + 3, boxY + 14);
-  
-  // Box 2: Roll No
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  doc.rect(boxX + boxW + gap, boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Roll No", boxX + boxW + gap + 1, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(String(studentData.roll_no || "—"), boxX + boxW + gap + 1, boxY + 14);
-
-  // Box 3: Class
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  doc.rect(boxX + 2 * (boxW + gap), boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Class Section", boxX + 2 * (boxW + gap) + 1, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(`${studentData.class}-${studentData.section}`, boxX + 2 * (boxW + gap) + 1, boxY + 14);
-
-  // Box 4: Best Performance
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  const bestExam = examResults.reduce((best, curr) =>
-    (curr.percentage || 0) > (best.percentage || 0) ? curr : best, {});
-  doc.rect(boxX + 3 * (boxW + gap), boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Best Performed Exam %", boxX + 3 * (boxW + gap) + 1, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(`${(bestExam.percentage || 0).toFixed(1)}%`, boxX + 3 * (boxW + gap) + 1, boxY + 14);
-
-  // Box 5: Strength Subject
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  doc.rect(boxX + 4 * (boxW + gap), boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Strength Subject", boxX + 4 * (boxW + gap) + 1, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(strength.charAt(0).toUpperCase() + strength.slice(1), boxX + 4 * (boxW + gap) + 1, boxY + 14);
-
-  // Box 6: Weak Subject
-  doc.setFillColor(...WHITE);
-  doc.setTextColor(0, 0, 0);
-  doc.rect(boxX + 5 * (boxW + gap), boxY, boxW, boxH, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("Weak Subject", boxX + 5 * (boxW + gap) + 1, boxY + 6);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(weak.charAt(0).toUpperCase() + weak.slice(1), boxX + 5 * (boxW + gap) + 1, boxY + 14);
-
-  y = boxY + boxH + 10;
-
-  // ======================
-  // 📊 CUMULATIVE SUBJECT AVERAGES (P, C, M, B) — as boxes
-  // ======================
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text("Cumulative Performance", 15, y);
-  y += 8;
-
-  const graphX = 15;
-  const graphY = y;
-  const graphW = 35;
-  const graphH = 25;
-  const graphGap = 8;
-
-  subjKeys.forEach((subj, i) => {
-    const x = graphX + i * (graphW + graphGap);
-    doc.setFillColor(...LIGHT_BLUE);
-    doc.rect(x, graphY, graphW, graphH, 'F');
-    doc.setFillColor(...WHITE);
-    doc.rect(x + 1, graphY + 1, graphW - 2, graphH - 2, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(subj.label, x + 5, graphY + 8);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(24);
-    doc.text(`${avgMap[subj.key].toFixed(1)}%`, x + 5, graphY + 18);
-  });
-  
-  y = doc.lastAutoTable.finalY + 10;
-
-  // ======================
-  // ✍️ SIGNATURES (at bottom)
-  // ======================
-  const sigY = pageHeight - 30;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'italic');
-
-  // Signature lines with light blue background
-  doc.setFillColor(...LIGHT_BLUE);
-
-  doc.text("Remarks: ___________", 20, sigY - 48);
-
-  doc.setTextColor(0, 0, 0);
-  doc.text("Parent/Guardian", 20, sigY);
-  doc.text("School Principal", 130, sigY);
-  doc.text("Organization Head", 240, sigY);
-
-  doc.text("Date: ___________", 20, sigY + 8);
-  doc.text("Date: ___________", 130, sigY + 8);
-  doc.text("Date: ___________", 240, sigY + 8);
-  
-  
-  y = graphY + graphH + 15;
-  doc.addPage();
-  // ======================
-// 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
-// ======================
-doc.setFont('helvetica', 'bold');
-doc.setFontSize(18);
-doc.text("Exam Results", 15, y - 85);
-y += 10;
-
-const tableData = examResults.map(r => {
-  const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
-  const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
-  const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
-  const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
-
-  return [
-    r.date || "—",
-    r.exam.replace(/_/g, ' ') || "—",
-    String(Math.round(r.correct_answers || 0)),
-    String(Math.round(r.wrong_answers || 0)),
-    String(Math.round(r.unattempted || 0)),
-    `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
-    `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
-    `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
-    `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
-    (r.total || 0).toFixed(0),
-    `${(r.percentage || 0).toFixed(1)}%`,
-    r.class_rank ?? "—",          // Class Rank
-    r.school_rank ?? "—",         // School Rank
-    r.all_schools_rank ?? "—"     // All Schools Rank
-  ];
-});
-
-doc.autoTable({
-  head: [
-    [
-      "Date",
-      "Exam",
-      "correct",
-      "wrong",
-      "unattempted",
-      "Physics",
-      "Chemistry",
-      "Maths",
-      "Biology",
-      "Total",
-      "%",
-      "Class\nRank",
-      "School\nRank",
-      "All India\nRank"
-    ]
-  ],
-  body: tableData,
-  startY: y - 85,
-  theme: 'grid',
-  styles: {
-    fontSize: 10,
-    cellPadding: 2,
-    fontStyle: 'bold',
-    fillColor: WHITE,
-    textColor: 0,
-  },
-  headStyles: {
-    fillColor: BLUE,
-    textColor: 255,
-    fontStyle: 'bold',
-    fontSize: 9,
-    halign: 'center'
-  },
-  columnStyles: {
-    0: { cellWidth: 22 }, // Date
-    1: { cellWidth: 32 }, // Exam
-    2: { cellWidth: 15}, //correct
-    3: { cellWidth: 15},//wrong
-    4: { cellWidth: 15},//unattempted 
-    5: { cellWidth: 26 }, // Physics
-    6: { cellWidth: 26 }, // Chemistry
-    7: { cellWidth: 26 }, // Maths
-    8: { cellWidth: 26 }, // Biology
-    9: { cellWidth: 15 }, // Total
-    10: { cellWidth: 15 }, // %
-    11: { cellWidth: 15 }, // Class Rank
-    12: { cellWidth: 15 }, // School Rank
-    13: { cellWidth: 15 } // All Schools Rank
-  },
-  margin: { left: 9, right: 9 },
-  tableWidth: 'wrap'
-});
-
-  // ======================
-  // 💾 SAVE
-  // ======================
-  const fileName = `ReportCard_${studentData.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(fileName);
-};
-
-
+  // ── Loading / error states ───────────────────────────────────
   if (loading) {
     return (
-      <div style={styles.container}>
-        <button onClick={onBack} style={styles.backButton}>← Back</button>
-        <p>Loading student data...</p>
+      <div style={{ padding: 32, textAlign: "center", color: "#64748b" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+        Loading your child's dashboard...
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <button onClick={onBack} style={styles.backButton}>← Back</button>
-        <p style={{ color: 'red', fontWeight: 'bold' }}>{error}</p>
+      <div style={{ padding: 32 }}>
+        <p style={{ color: "crimson", fontWeight: "bold" }}>⚠️ {error}</p>
+        {onBack && <button onClick={onBack}>← Back</button>}
       </div>
     );
   }
 
-  if (!student) {
-    return (
-      <div style={styles.container}>
-        <button onClick={onBack} style={styles.backButton}>← Back</button>
-        <p style={{ color: 'red' }}>Student data unavailable.</p>
-      </div>
-    );
-  }
-
+  // ── Delegate rendering to shared view ───────────────────────
   return (
-    <div style={styles.container}>
-      <button onClick={onBack} style={styles.backButton}>← Back</button>
-      <h2>Your Child Profile</h2>
-      <h2>🎓 Student Dashboard</h2>
-      <div style={styles.profile}>
-  <p><strong>School:</strong> {student.school_name || '—'}</p>
-  <p><strong>Student Name:</strong> {student.name}</p>
-  <p><strong>Roll No:</strong> {student.roll_no}</p>
-  <p><strong>Class:</strong> {student.class} - {student.section}</p>
-</div>
-
-      {/* ===== Performance Metrics Dashboard ===== */}
-      {examResults.length > 0 && (
-        <div style={styles.metricsGrid}>
-          {/* Best Performed Exam */}
-          <div style={styles.card}>
-            <h3 style={{ marginTop: 0 }}>🏆 Best Performed Exam</h3>
-            {bestExam ? (
-              <div>
-                <p style={styles.metricLine}><strong>Exam:</strong> {bestExam.exam} ({bestExam.program})</p>
-                <p style={styles.metricLine}><strong>Date:</strong> {bestExam.date}</p>
-                <p style={styles.metricLine}><strong>Percentage:</strong> {(Number(bestExam.percentage) || 0).toFixed(2)}%</p>
-                <p style={styles.metricLine}><strong>Class Rank:</strong> {bestExam.class_rank ?? '—'}</p>
-                <p style={styles.metricLine}><strong>School Rank:</strong> {bestExam.school_rank ?? '—'}</p>
-                <p style={styles.metricLine}><strong>All India Rank:</strong> {bestExam.all_schools_rank ?? '—'}</p>
-              </div>
-            ) : (
-              <p style={{ color: '#718096', fontStyle: 'italic' }}>Not enough data.</p>
-            )}
-          </div>
-
-             {/* Cumulative Averages Bar Chart */}
-          <div style={{ width: '100%', height: 260 }}>
-            <ResponsiveContainer>
-              <BarChart
-                data={averagesData}
-                barSize={60}
-                margin={{ top: 10, right: 10, left: -20, bottom: 50 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="subject"
-                  tick={{ fontSize: 12, fontWeight: 'bold' }}
-                  interval={0}
-                  angle={0}
-                  dy={10}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip formatter={(v) => [`${v}%`, 'Average']} />
-                <Legend />
-                <Bar dataKey="average" name="Average %" fill="#1f77b4" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Strength & Weakness */}
-          <div style={styles.card}>
-            <h3 style={{ marginTop: 0 }}>🧭 Strength & Weak Area</h3>
-            {strengthSubject && weakSubject ? (
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                <div style={styles.pillSuccess}>
-                  <span style={{ fontWeight: 700 }}>Strength:</span>&nbsp;{strengthSubject.subject}
-                  &nbsp;•&nbsp;{strengthSubject.average}%
-                </div>
-                <div style={styles.pillWarning}>
-                  <span style={{ fontWeight: 700 }}>Weak:</span>&nbsp;{weakSubject.subject}
-                  &nbsp;•&nbsp;{weakSubject.average}%
-                </div>
-              </div>
-            ) : (
-              <p style={{ color: '#718096', fontStyle: 'italic' }}>Insights will appear after a few exams.</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <hr style={styles.divider} />
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3>📊 Exam Results</h3>
-        {examResults.length > 0 && (
-          <button 
-  onClick={async () => {
-    // 🔹 Validation
-    if (!school) {
-      alert('School data not loaded yet. Please wait.');
-      return;
-    }
-    if (examResults.length === 0) {
-      alert('No exam results to download.');
-      return;
-    }
-    try {
-      await downloadPDF(student, school, examResults);
-    } catch (err) {
-      console.error('PDF generation failed:', err);
-      alert('Failed to generate PDF. Please try again.');
-    }
-  }}
-  disabled={!school || examResults.length === 0 || loading}
-  style={styles.downloadButton}
->
-  📄 Download Report Card (PDF)
-</button>
-        )}
-      </div>
-
-      {examResults.length > 0 ? (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={styles.table}>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Exam</th>
-          <th>Program</th>
-          <th>correct</th>
-          <th>wrong</th>
-          <th>unattempted</th>
-          <th>Physics</th>
-          <th>Chemistry</th>
-          <th>Maths</th>
-          <th>Biology</th>
-          <th>Total</th>
-          <th>%</th>
-          <th>Class Rank</th>
-          <th>School Rank</th>
-          <th>All India Rank</th>
-        </tr>
-      </thead>
-      <tbody>
-        {examResults.map((r, i) => {
-          // Helper to format "marks (percentage%)"
-          const formatSubject = (marks, max) => {
-            if (max == null || max === 0) return `${marks || 0}`;
-            const pct = ((marks || 0) / max) * 100;
-            return `${marks || 0} (${pct.toFixed(0)}%)`;
-          };
-
-          return (
-            <tr key={i}>
-              <td>{r.date}</td>
-              <td>{r.exam}</td>
-              <td>{r.program}</td>
-              <td>{r.correct_answers != null ? Math.round(r.correct_answers) : '—'}</td>
-              <td>{r.wrong_answers != null ? Math.round(r.wrong_answers) : '—'}</td>
-              <td>{r.unattempted != null ? Math.round(r.unattempted) : '—'}</td>
-              <td>{formatSubject(r.physics_marks, r.max_marks_physics)}</td>
-              <td>{formatSubject(r.chemistry_marks, r.max_marks_chemistry)}</td>
-              <td>{formatSubject(r.maths_marks, r.max_marks_maths)}</td>
-              <td>{formatSubject(r.biology_marks, r.max_marks_biology)}</td>
-              <td>{Number(r.total || 0).toFixed(2)}</td>
-              <td>{Number(r.percentage || 0).toFixed(2)}%</td>
-              <td>{r.class_rank}</td>
-              <td>{r.school_rank}</td>
-              <td>{r.all_schools_rank}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-) : (
-  <p style={{ color: '#718096', fontStyle: 'italic' }}>
-    No exam results available yet.
-  </p>
-)}
-
-      <hr style={styles.divider} />
-
-      <h3>👨‍🏫 Teachers</h3>
-      {teachers.length > 0 ? (
-        <div style={{ overflowX: 'auto' }}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Teacher</th>
-              <th>Subject</th>
-              <th>Email</th>
-              <th>Phone</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teachers.map((t, i) => (
-              <tr key={i}>
-                <td>{t.name}</td>
-                <td>{t.subject}</td>
-                <td><a href={`mailto:${t.email}`}>{t.email}</a></td>
-                <td>{t.phone}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      ) : (
-        <p style={{ color: '#718096', fontStyle: 'italic' }}>
-          No teachers assigned to your class yet.
-        </p>
-      )}
-    </div>
+    <StudentPerformanceView
+      student={student}
+      school={school}
+      examResults={examResults}
+      teachers={teachers}
+      title="👨‍👧 Your Child's Profile"
+      onBack={onBack}
+    />
   );
 }
-
-// === Styles ===
-const styles = {
-  container: { padding: 20, fontFamily: 'Arial, sans-serif', maxWidth: 1200, margin: '0 auto' },
-  backButton: { padding: '8px 16px', margin: '0 0 16px', border: '1px solid #4682b4', background: 'white', color: '#4682b4', borderRadius: 6, cursor: 'pointer' },
-  downloadButton: {
-    padding: '10px 20px',
-    background: '#4682b4',
-    color: 'white',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-    fontWeight: 'bold'
-  },
-  profile: { background: '#f8fafc', padding: 16, borderRadius: 8,  border: '1px solid #e2e8f0', marginBottom: 20 ,  boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-  divider: { margin: '20px 0', borderColor: '#ddd' },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: 10,
-    fontSize: '0.9em',
-    whiteSpace: 'nowrap'
-  },
-  th: {
-    textAlign: 'left',
-    padding: '12px 8px',
-    borderBottom: '2px solid #ddd',
-    background: '#f0f8ff',
-    position: 'sticky',
-    top: 0
-  },
-  td: {
-    padding: '10px 8px',
-    borderBottom: '1px solid #eee'
-  },
-  // ===== New styles for metrics =====
-  metricsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: 16,
-    marginBottom: 10,
-  },
-  card: {
-    background: '#ffffff',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-  },
-  metricLine: { margin: '6px 0' },
-  pillSuccess: {
-    display: 'inline-block',
-    padding: '6px 10px',
-    background: '#e6fffa',
-    color: '#036666',
-    border: '1px solid #99f6e4',
-    borderRadius: 9999,
-  },
-  pillWarning: {
-    display: 'inline-block',
-    padding: '6px 10px',
-    background: '#fff7ed',
-    color: '#9a3412',
-    border: '1px solid #fed7aa',
-    borderRadius: 9999,
-  },
-};
