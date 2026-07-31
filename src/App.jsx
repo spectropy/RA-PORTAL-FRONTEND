@@ -161,37 +161,39 @@ function AppShell() {
         </div>
 
         {/* User pill + logout — hidden for SPECTROPY_ADMIN (sidebar) and TEACHER (sidebar has Sign Out) */}
-        {user && user.role !== "SPECTROPY_ADMIN" && (
-          <div
-            style={S.userMeta}
-            className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
-          >
-            <div style={S.userPill}>
-              <span style={{ fontSize: "14px" }}>
-                {user.role === "SCHOOL_OWNER"
-                  ? "🏫"
-                  : user.role === "TEACHER"
-                    ? "👩‍🏫"
-                    : user.role === "PARENT"
-                      ? "👨‍👧"
-                      : "👤"}
-              </span>
-              <span style={{ fontWeight: 600 }}>
-                {user.username || user.name || user.role}
-              </span>
+        {user &&
+          user.role !== "SPECTROPY_ADMIN" &&
+          user.role !== "SCHOOL_OWNER" && (
+            <div
+              style={S.userMeta}
+              className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
+            >
+              <div style={S.userPill}>
+                <span style={{ fontSize: "14px" }}>
+                  {user.role === "SCHOOL_OWNER"
+                    ? "🏫"
+                    : user.role === "TEACHER"
+                      ? "👩‍🏫"
+                      : user.role === "PARENT"
+                        ? "👨‍👧"
+                        : "👤"}
+                </span>
+                <span style={{ fontWeight: 600 }}>
+                  {user.username || user.name || user.role}
+                </span>
+              </div>
+              {/* Sign Out hidden for TEACHER — already in sidebar */}
+              {user.role !== "TEACHER" && (
+                <button
+                  onClick={handleLogout}
+                  style={S.logoutBtn}
+                  className="btn btn-outline"
+                >
+                  Sign Out
+                </button>
+              )}
             </div>
-            {/* Sign Out hidden for TEACHER — already in sidebar */}
-            {user.role !== "TEACHER" && (
-              <button
-                onClick={handleLogout}
-                style={S.logoutBtn}
-                className="btn btn-outline"
-              >
-                Sign Out
-              </button>
-            )}
-          </div>
-        )}
+          )}
       </header>
 
       {/* ── Routes ────────────────────────────────────────────── */}

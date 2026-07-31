@@ -1,6 +1,11 @@
 import React, { useMemo } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import spectropyLogoUrl from "../assets/logo.png";
+import physicsicon from "../assets/icons/physics.png";
+import chemistryicon from "../assets/icons/chemistry.png";
+import mathsicon from "../assets/icons/Maths.png";
+import biologyicon from "../assets/icons/biology.png";
 import {
   Area,
   AreaChart,
@@ -159,204 +164,578 @@ function EmptyState() {
   );
 }
 
-function generatePDF(studentData, schoolData, examResults) {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
+const generatePDF = (studentData, schoolData, examResults) => {
+  if (!studentData || !schoolData || !examResults?.length) {
+    throw new Error("Missing required data for PDF generation");
+  }
 
-  const BLUE = [37, 99, 235];
-  const NAVY = [15, 23, 42];
-  const LIGHT_BLUE = [239, 246, 255];
-  const WHITE = [255, 255, 255];
-  const BORDER = [203, 213, 225];
-
-  const validSubjectAverages = SUBJECTS.map((subject) => {
-    const scores = examResults
-      .map((result) =>
-        getSubjectPct(
-          result[`${subject.key}_marks`],
-          result[`max_marks_${subject.key}`],
-        ),
-      )
-      .filter((value) => value !== null);
-
-    return {
-      ...subject,
-      average: scores.length
-        ? scores.reduce((sum, value) => sum + value, 0) / scores.length
-        : 0,
-    };
+  // 📄 CREATE LANDSCAPE PDF
+  const doc = new jsPDF({
+    orientation: "landscape", // ← KEY CHANGE
+    unit: "mm",
+    format: "a4",
   });
 
-  const sortedSubjects = [...validSubjectAverages].sort(
-    (a, b) => b.average - a.average,
-  );
-  const bestExam = [...examResults].sort(
-    (a, b) => toNum(b.percentage) - toNum(a.percentage),
-  )[0];
-  const overallAverage = examResults.length
-    ? examResults.reduce((sum, result) => sum + toNum(result.percentage), 0) /
-      examResults.length
-    : 0;
+  const pageWidth = doc.internal.pageSize.width; // ~297mm
+  const pageHeight = doc.internal.pageSize.height; // ~210mm
 
-  doc.setFillColor(...NAVY);
-  doc.rect(0, 0, pageWidth, 28, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(17);
-  doc.setTextColor(...WHITE);
+  // 🔹 Helper: Get subject percentage
+  const getSubjectPct = (marks, max) => {
+    if (!max || max <= 0) return 0;
+    return ((marks || 0) / max) * 100;
+  };
+
+  // ======================
+  // 🎨 THEME COLORS
+  // ======================
+  const BLUE = [30, 80, 150]; // Deep blue
+  const LIGHT_BLUE = [230, 240, 255]; // Light blue background
+  const WHITE = [255, 255, 255];
+
+  // ======================
+  // 🏫 HEADER (Blue Theme)
+  // ======================
+  let y = 15;
+
+  doc.setFontSize(16);
+  doc.setFont("Times New Roman", "bold");
+  doc.setFillColor(...BLUE);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, 25, "F"); // Full header bar
+  //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
+  // ✅ Safely add school logo only if valid
+  if (schoolData.logo_url && typeof schoolData.logo_url === "string") {
+    try {
+      doc.addImage(schoolData.logo_url, "PNG", 8, 2.5, 20, 20);
+    } catch (e) {
+      console.warn("Failed to load school logo:", e);
+      // Optionally draw a placeholder or skip
+    }
+  }
+  doc.text(schoolData.school_name || "School Name", 30, 12);
+
+  doc.setFontSize(12);
+  doc.setFont("Times New Roman", "normal");
+  doc.setTextColor(255, 255, 255);
   doc.text(
-    schoolData?.school_name || studentData?.school_name || "School",
-    14,
-    13,
-  );
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(`Area: ${schoolData?.area || "N/A"}`, 14, 21);
-  doc.text("Powered by SPECTROPY", pageWidth - 55, 17);
-
-  const studentName = studentData?.name || "Student";
-  doc.setTextColor(...NAVY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("Student Performance Report", 14, 41);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    `${studentName}  •  Roll No: ${studentData?.roll_no || studentData?.student_id || "—"}  •  Class ${studentData?.class || "—"}-${studentData?.section || "—"}`,
-    14,
-    49,
+    `Area: ${schoolData.area || "N/A"} | AY: ${schoolData.academic_year}`,
+    30,
+    20,
   );
 
-  const cards = [
-    ["Overall Average", `${round(overallAverage)}%`],
-    ["Best Score", `${round(bestExam?.percentage)}%`],
-    ["Best Subject", sortedSubjects[0]?.label || "—"],
-    [
-      "Priority Subject",
-      sortedSubjects[sortedSubjects.length - 1]?.label || "—",
-    ],
+  doc.setFontSize(26);
+  doc.setFont("Times New Roman", "bold");
+  doc.text("IIT Foundation Report Card", 108, 15);
+  try {
+    doc.addImage(
+      spectropyLogoUrl,
+      "PNG",
+      doc.internal.pageSize.width - 30,
+      2,
+      15,
+      15,
+    );
+  } catch (e) {
+    console.warn("Failed to load Spectropy logo, falling back to text:", e);
+  }
+  doc.setFontSize(12);
+  doc.setFont("Times New Roman", "normal");
+  doc.text(`Powered BY SPECTROPY`, 250, 21);
+  y = 30;
+
+  // ======================
+  // 🧑‍🎓 STUDENT INFO BOXES — SIX INDIVIDUAL ROUNDED BOXES
+  // ======================
+
+  const boxX = 12;
+  const boxY = y;
+  const boxW = 44;
+  const boxH = 18;
+  const gap = 8;
+
+  // --- Map program code to name ---
+  const programCode = examResults[0]?.program || "—";
+  let programName = "—";
+  switch (programCode) {
+    case "MAE":
+      programName = "Maestro";
+      break;
+    case "CAT":
+      programName = "Catalyst";
+      break;
+    case "PIO":
+      programName = "Pioneer";
+      break;
+    case "FF":
+      programName = "Future Foundation";
+      break;
+    default:
+      programName = programCode;
+  }
+
+  // --- Determine stream (IIT, MED, IIT-MED) based on subjects ---
+  let hasPhysics = false,
+    hasChemistry = false,
+    hasMaths = false,
+    hasBiology = false;
+
+  // Check subjects from first exam (assume consistent across exams)
+  const firstExam = examResults[0] || {};
+  if (firstExam.physics_marks !== undefined) hasPhysics = true;
+  if (firstExam.chemistry_marks !== undefined) hasChemistry = true;
+  if (firstExam.maths_marks !== undefined) hasMaths = true;
+  if (firstExam.biology_marks !== undefined) hasBiology = true;
+
+  let stream = "";
+  if (hasPhysics && hasChemistry && hasMaths && hasBiology) {
+    stream = "IIT-MED";
+  } else if (hasPhysics && hasChemistry && hasMaths) {
+    stream = "IIT";
+  } else if (hasPhysics && hasChemistry && hasBiology) {
+    stream = "MED";
+  } else {
+    // Optional: derive from subject keys if marks not reliable
+    const keys = Object.keys(firstExam);
+    hasPhysics = keys.some((k) => k.includes("physics"));
+    hasChemistry = keys.some((k) => k.includes("chemistry"));
+    hasMaths = keys.some((k) => k.includes("maths"));
+    hasBiology = keys.some((k) => k.includes("biology"));
+    if (hasPhysics && hasChemistry && hasMaths && hasBiology)
+      stream = "IIT-MED";
+    else if (hasPhysics && hasChemistry && hasMaths) stream = "IIT";
+    else if (hasPhysics && hasChemistry && hasBiology) stream = "MED";
+    else stream = "—";
+  }
+
+  const fullProgram = stream === "—" ? programName : `${programName}-${stream}`;
+
+  // --- Calculate strength & weak subjects ---
+  const subjKeys = [
+    { key: "physics", label: "Physics" },
+    { key: "chemistry", label: "Chemistry" },
+    { key: "maths", label: "Mathematics" },
+    { key: "biology", label: "Biology" },
   ];
 
-  cards.forEach(([label, value], index) => {
-    const x = 14 + index * 69;
-    doc.setFillColor(...LIGHT_BLUE);
-    doc.setDrawColor(...BORDER);
-    doc.roundedRect(x, 57, 62, 24, 2, 2, "FD");
-    doc.setTextColor(71, 85, 105);
+  const avgMap = {};
+  for (const subj of subjKeys) {
+    const marksKey = `${subj.key}_marks`;
+    const maxKey = `max_marks_${subj.key}`;
+    const totalPct = examResults.reduce((sum, r) => {
+      return sum + getSubjectPct(r[marksKey], r[maxKey]);
+    }, 0);
+    avgMap[subj.key] = examResults.length ? totalPct / examResults.length : 0;
+  }
+
+  const sortedSubj = Object.entries(avgMap)
+    .sort(([, a], [, b]) => b - a)
+    .map(([key, pct]) => ({ key, pct }));
+
+  const strength = sortedSubj[0]?.key || "—";
+  const weak = sortedSubj[sortedSubj.length - 1]?.key || "—";
+
+  // --- Best Exam ---
+  const bestExam = examResults.reduce(
+    (best, curr) =>
+      (curr.percentage || 0) > (best.percentage || 0) ? curr : best,
+    {},
+  );
+
+  // --- Helper: Draw one labeled rounded box with auto-fit/wrap ---
+  function drawRoundedBox(offsetIndex, label, value, maxFontSize = 14) {
+    const x = boxX + offsetIndex * (boxW + gap);
+    const y = boxY;
+    const width = boxW;
+    const height = boxH;
+
+    // Draw box
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(30, 30, 30);
+    doc.setLineWidth(0.1);
+    //doc.roundedRect(x, y, width, height, 3, 3, 'FD');
+
+    // --- Draw LABEL (small, top) ---
+    doc.setFont("Times New Roman", "normal");
     doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.text(label.toUpperCase(), x + 4, 65);
-    doc.setTextColor(...NAVY);
-    doc.setFontSize(15);
-    doc.text(String(value), x + 4, 75);
+    doc.setTextColor(0, 0, 0);
+    const labelLines = doc.splitTextToSize(label, width - 6); // 3px padding each side
+    const labelY = y + 4;
+    doc.text(labelLines, x + width / 2, labelY, { align: "center" });
+
+    // --- Prepare VALUE text ---
+    let valueStr = String(value);
+    if (valueStr === "—") {
+      valueStr = "—";
+    }
+
+    // Try to fit value by reducing font size until it fits in 1–2 lines
+    let fontSize = maxFontSize;
+    let lines = [];
+    let finalFontSize = 8; // min size
+    let finalLines = [valueStr];
+
+    // Try from maxFontSize down to 8
+    for (let size = maxFontSize; size >= 8; size--) {
+      doc.setFont("Times New Roman", "bold");
+      doc.setFontSize(size);
+      const attemptLines = doc.splitTextToSize(valueStr, width - 6);
+
+      // Allow up to 2 lines of text
+      if (attemptLines.length <= 2) {
+        // Check vertical fit: 2 lines need ~10px, 1 line ~7px
+        const lineHeight = size * 0.6;
+        const totalHeight = attemptLines.length * lineHeight;
+        if (totalHeight <= height - 8) {
+          // leave 4px top/bottom margin
+          finalFontSize = size;
+          finalLines = attemptLines;
+          break;
+        }
+      }
+    }
+
+    // Draw value
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(finalFontSize);
+    const textHeight = finalLines.length * (finalFontSize * 0.6);
+    const valueY = y + (height - textHeight) / 2 + finalFontSize * 0.8; // adjust for baseline
+
+    doc.text(finalLines, x + width / 2, valueY - 3, { align: "center" });
+  }
+
+  // --- Draw all 6 rounded boxes ---
+  //drawRoundedBox(0, "STUDENT NAME", studentData.name || "—", 14);
+  // Box position & size
+  const boxWidth = 180;
+  const boxHeight = 20; // slightly taller so text fits nicely
+
+  // Draw box
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.1);
+  doc.roundedRect(10, 28, boxWidth, boxHeight, 4, 4, "S");
+
+  // Text style
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(0, 0, 0);
+  // First line — NAME
+  doc.text(`${studentData.name || "—"}`, boxX + 6, boxY + 7);
+
+  // Second line — ROLL NO
+  doc.text(`${studentData.class}-${studentData.section}`, boxX + 6, boxY + 14);
+
+  /*doc.setFont('Times New Roman', 'bold');
+doc.setTextColor( 0, 0, 0);
+doc.setFontSize(16);
+doc.text(`NAME :    ${studentData.name || "—"}`, 15,35);
+//drawRoundedBox(1, "CLASS SECTION", `${studentData.class}-${studentData.section}`, 14);
+doc.setFont('Times New Roman', 'bold');
+doc.setTextColor( 0, 0, 0);
+doc.setFontSize(14);
+doc.text(`CLASS SECTION : ${studentData.class}-${studentData.section}`, 15,45);*/
+
+  //drawRoundedBox(2, "ROLL NO", studentData.roll_no || "—", 18);
+  doc.setFont("Times New Roman", "normal");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.text("ROLL NO", 143, 33);
+  doc.setFont("Times New Roman", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(30);
+  doc.text(`${studentData.roll_no || "—"}`, 135, 43);
+
+  doc.setFillColor(255, 236, 158);
+  doc.roundedRect(195, 35, 80, 10, 3, 3, "FD");
+
+  // White text on badge
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(14);
+  doc.text(`PROGRAM : ${fullProgram}`, 200, 41);
+  //drawRoundedBox(4, "STRENGTH SUBJECT", strength.charAt(0).toUpperCase() + strength.slice(1), 14);
+  //drawRoundedBox(5, "WEAK SUBJECT", weak.charAt(0).toUpperCase() + weak.slice(1), 14);
+
+  y = boxY + boxH + 10;
+
+  // ======================
+  // 📊 SUBJECT WISE PERFORMANCE SUMMARY — GRAPHICAL PROGRESS BARS
+  // ======================
+
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(18);
+  doc.text("Subject Wise Performance Summary", 15, y + 3);
+  // Optional underline
+  //doc.setLineWidth(0.5);
+  //doc.line(15, y + 2, 15 + doc.getTextDimensions("Subject Wise Performance Summary").w, y + 2);
+  y += 12; // move y down after title
+
+  // Subject colors
+  const subjectColors = {
+    physics: [180, 255, 210],
+    chemistry: [200, 230, 255],
+    maths: [230, 200, 255],
+    biology: [200, 255, 255],
+  };
+
+  // Layout constants (relative to current y)
+  const labelX = 25;
+  const barX = 55;
+  const barWidth = 105;
+  const barHeight = 12;
+  const barGap = 16;
+  const pctX = barX + barWidth + 5;
+
+  doc.addImage(physicsicon, "PNG", 15, 70, 10, 10);
+  doc.addImage(chemistryicon, "PNG", 15, 87, 10, 10);
+  doc.addImage(mathsicon, "PNG", 15, 103, 10, 10);
+  doc.addImage(biologyicon, "PNG", 15, 119, 10, 10);
+
+  // Draw each subject row
+  subjKeys.forEach((subj, i) => {
+    const avgPct = avgMap[subj.key] || 0;
+    const barFillWidth = (avgPct / 100) * barWidth;
+    const barY = y + i * barGap;
+
+    // Subject label + icon
+    //const icon = subjectIcons[subj.key] || '';
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`${subj.label}`, labelX, barY + 8); // ✅ Icon + Subject Name
+
+    // Background bar
+    doc.setFillColor(240, 240, 240);
+    doc.roundedRect(barX, barY, barWidth, barHeight, 6, 6, "FD");
+
+    // Filled portion
+    const [r, g, b] = subjectColors[subj.key] || [230, 230, 230];
+    doc.setFillColor(r, g, b);
+    doc.roundedRect(barX, barY, barFillWidth, barHeight, 6, 6, "FD");
+
+    // Dark cap (optional visual polish)
+    if (barFillWidth > 0) {
+      doc.setFillColor(r * 0.7, g * 0.7, b * 0.7);
+      doc.rect(barX + barFillWidth - 4, barY, 4, barHeight, "FD");
+    }
+
+    // Percentage
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(16);
+    doc.text(`${avgPct.toFixed(1)}%`, pctX, barY + 8);
   });
 
-  doc.setFont("helvetica", "bold");
+  // ✅ Update y to below the last bar
+  y += subjKeys.length * barGap + 10;
+  // ======================
+  // 🎯 BEST EXAM DONUT — jsPDF COMPATIBLE (no arc())
+  // ======================
+  // Position: to the right of bars
+  const donutCenterX = 230;
+  const barChartTop = y - subjKeys.length * barGap - 10;
+  const barChartHeight = subjKeys.length * barGap;
+  const donutCenterY = barChartTop + barChartHeight / 2;
+
+  // Outer ring (light gray background)
+  doc.setFillColor(30, 80, 150);
+  doc.circle(donutCenterX, donutCenterY - 5, 35, "FD");
+
+  // Inner white circle (creates "donut hole")
+  doc.setFillColor(255, 255, 255);
+  doc.circle(donutCenterX, donutCenterY - 5, 22, "FD");
+
+  // Main color fill: simulate progress with a solid color circle scaled visually
+  // Since we can't draw arcs, we’ll just use a solid colored ring for full effect
+  // and rely on the percentage text for accuracy (common in reports)
+  doc.setFillColor(30, 80, 150);
+  // Trick: draw full circle if >=95%, otherwise use a workaround (not perfect)
+  // But for clarity in PDF, just use full ring + accurate text
+
+  doc.circle(donutCenterX, donutCenterY - 5, 35, "FD");
+  // Re-draw inner hole to restore donut shape
+  doc.setFillColor(255, 255, 255);
+  doc.circle(donutCenterX, donutCenterY - 5, 22, "FD");
+
+  // Add percentage in center
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(40);
+  const pctText = `${(bestExam.percentage || 0).toFixed(1)}%`;
+  const textWidth = doc.getTextDimensions(pctText).w;
+  doc.text(pctText, donutCenterX - textWidth / 2, donutCenterY);
+
+  // Label
+  doc.setFontSize(18);
+  doc.setFont("Times New Roman", "bold");
+  const label = "Overall Score";
+  const labelWidth = doc.getTextDimensions(label).w;
+  doc.text(label, donutCenterX - labelWidth / 2, donutCenterY - 45);
+  doc.setFillColor(102, 204, 102); // same as text color
+  doc.circle(205, 140 - 2, 3, "FD");
   doc.setFontSize(13);
-  doc.setTextColor(...NAVY);
-  doc.text("Subject averages", 14, 94);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`${strength.charAt(0).toUpperCase() + strength.slice(1)}`, 210, 140);
+  doc.setFillColor(255, 99, 132); // same as weak text color
+  doc.circle(238, 140 - 2, 3, "FD");
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`${weak.charAt(0).toUpperCase() + weak.slice(1)}`, 243, 140);
 
-  validSubjectAverages.forEach((subject, index) => {
-    const x = 14 + index * 48;
-    doc.setDrawColor(...BORDER);
-    doc.roundedRect(x, 100, 42, 29, 2, 2, "S");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text(subject.label, x + 4, 109);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
-    doc.text(`${round(subject.average)}%`, x + 4, 121);
-  });
-
-  const insightX = 220;
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(...BORDER);
-  doc.roundedRect(insightX, 94, 62, 35, 2, 2, "FD");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("Teacher focus", insightX + 4, 103);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  const focusText = `Prioritise ${sortedSubjects[sortedSubjects.length - 1]?.label || "the weakest subject"} and review progress after the next assessment.`;
-  doc.text(doc.splitTextToSize(focusText, 54), insightX + 4, 111);
-
-  const signatureY = pageHeight - 25;
+  //y = doc.lastAutoTable.finalY + 10;
+  // ======================
+  // ✍️ SIGNATURES (at bottom)
+  // ======================
+  const sigY = pageHeight - 30;
+  doc.setFontSize(11);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(10);
-  doc.text("Parent / Guardian", 20, signatureY);
-  doc.text("Class Teacher", 126, signatureY);
-  doc.text("School Principal", 232, signatureY);
 
+  // Signature lines with light blue background
+  doc.setFillColor(...LIGHT_BLUE);
+
+  // --- Auto-generated Remarks based on best exam percentage ---
+  const overallPct = bestExam.percentage || 0;
+
+  let remark = "";
+  if (overallPct >= 91) {
+    remark = "Outstanding performance! Keep excelling.";
+  } else if (overallPct >= 81) {
+    remark = "Excellent work. Aim for the top!";
+  } else if (overallPct >= 71) {
+    remark = "Good performance. Maintain consistency.";
+  } else if (overallPct >= 61) {
+    remark = "Satisfactory. Focus on weak areas.";
+  } else if (overallPct >= 51) {
+    remark = "Needs improvement. Regular practice advised.";
+  } else if (overallPct >= 41) {
+    remark = "Below average. Extra effort required.";
+  } else {
+    remark = "Significant improvement needed. Seek help.";
+  }
+
+  // Optional: Keep underline for empty space after remark
+  const remarkPrefix = "Remarks: ";
+  const fullRemarkLine = remark;
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(0, 0, 0);
+  doc.text(remarkPrefix, 20, sigY - 28);
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(255, 140, 0);
+  doc.text(fullRemarkLine, 50, sigY - 28);
+
+  doc.setTextColor(0, 0, 0);
+  doc.text("Spectropy CEO", 20, sigY);
+  doc.text("Parent/Guardian", 90, sigY);
+  doc.text("IIT Coordinator", 160, sigY);
+  doc.text("School Principal", 240, sigY);
+
+  doc.setFont("courier", "italic");
+  doc.text("Krishna", 20, sigY + 8);
+  doc.setFont("Times New Roman", "bold");
+  doc.text("Date: ___________", 90, sigY + 8);
+  doc.text("Date: ___________", 160, sigY + 8);
+  doc.text("Date: ___________", 240, sigY + 8);
+
+  //y = graphY + graphH + 15;
   doc.addPage();
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(17);
-  doc.setTextColor(...NAVY);
-  doc.text("Detailed Exam Results", 14, 16);
+  // ======================
+  // 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
+  // ======================
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(18);
+  doc.text("Exam Results", 10, y - 125);
+  y += 10;
 
-  const tableData = examResults.map((result) => [
-    formatDate(result.date),
-    formatExamName(result.exam, "—"),
-    result.program || "—",
-    Math.round(toNum(result.correct_answers)),
-    Math.round(toNum(result.wrong_answers)),
-    Math.round(toNum(result.unattempted)),
-    ...SUBJECTS.map((subject) => {
-      const pct = getSubjectPct(
-        result[`${subject.key}_marks`],
-        result[`max_marks_${subject.key}`],
-      );
-      return pct === null
-        ? "—"
-        : `${toNum(result[`${subject.key}_marks`])} (${round(pct, 0)}%)`;
-    }),
-    round(result.total, 0),
-    `${round(result.percentage)}%`,
-    result.class_rank ?? "—",
-  ]);
+  // Sort examResults by date in ascending order (oldest → newest)
+  const sortedExamResults = examResults
+    .slice() // Avoid mutating the original array
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const tableData = sortedExamResults.map((r) => {
+    const pPct = getSubjectPct(r.physics_marks, r.max_marks_physics);
+    const cPct = getSubjectPct(r.chemistry_marks, r.max_marks_chemistry);
+    const mPct = getSubjectPct(r.maths_marks, r.max_marks_maths);
+    const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
+
+    return [
+      r.date || "—",
+      r.exam.replace(/_/g, " ") || "—",
+      String(Math.round(r.correct_answers || 0)),
+      String(Math.round(r.wrong_answers || 0)),
+      String(Math.round(r.unattempted || 0)),
+      `${(r.physics_marks || 0).toFixed(0)} (${pPct.toFixed(0)}%)`,
+      `${(r.chemistry_marks || 0).toFixed(0)} (${cPct.toFixed(0)}%)`,
+      `${(r.maths_marks || 0).toFixed(0)} (${mPct.toFixed(0)}%)`,
+      `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
+      (r.total || 0).toFixed(0),
+      `${(r.percentage || 0).toFixed(1)}%`,
+      r.class_rank ?? "—", // Class Rank
+      r.school_rank ?? "—", // School Rank
+      r.all_schools_rank ?? "—", // All Schools Rank
+    ];
+  });
 
   doc.autoTable({
     head: [
       [
         "Date",
         "Exam",
-        "Program",
-        "Correct",
-        "Wrong",
-        "Not attempted",
+        "correct",
+        "wrong",
+        "unattempted",
         "Physics",
         "Chemistry",
         "Maths",
         "Biology",
         "Total",
         "%",
-        "Class rank",
+        "Class\nRank",
+        "School\nRank",
+        "All India\nRank",
       ],
     ],
     body: tableData,
-    startY: 22,
+    startY: y - 125,
     theme: "grid",
     styles: {
-      fontSize: 7.5,
-      cellPadding: 1.7,
-      textColor: NAVY,
-      lineColor: BORDER,
-      overflow: "linebreak",
-    },
-    headStyles: {
-      fillColor: BLUE,
-      textColor: WHITE,
-      fontStyle: "bold",
+      fontSize: 10,
+      cellPadding: 2,
+      fontStyle: "normal",
+      fillColor: WHITE,
+      textColor: 0,
       halign: "center",
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 8, right: 8 },
+    headStyles: {
+      fillColor: [30, 80, 150],
+      textColor: 255,
+      fontStyle: "bold",
+      fontSize: 9,
+      halign: "center",
+    },
+    columnStyles: {
+      0: { cellWidth: 22 }, // Date
+      1: { cellWidth: 32, fontStyle: "bold" }, // Exam
+      2: { cellWidth: 15 }, //correct
+      3: { cellWidth: 15 }, //wrong
+      4: { cellWidth: 15 }, //unattempted
+      5: { cellWidth: 26 }, // Physics
+      6: { cellWidth: 26 }, // Chemistry
+      7: { cellWidth: 26 }, // Maths
+      8: { cellWidth: 26 }, // Biology
+      9: { cellWidth: 15 }, // Total
+      10: { cellWidth: 15, fontStyle: "bold" }, // %
+      11: { cellWidth: 15, fontStyle: "bold" }, // Class Rank
+      12: { cellWidth: 15 }, // School Rank
+      13: { cellWidth: 15, fontStyle: "bold" }, // All Schools Rank
+    },
+    margin: { left: 9, right: 9 },
+    tableWidth: "wrap",
   });
 
-  const safeName = studentName.replace(/[^a-z0-9]+/gi, "_");
-  doc.save(
-    `ReportCard_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`,
-  );
-}
+  // ======================
+  // 💾 SAVE
+  // ======================
+  const fileName = `ReportCard_${studentData.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
+  doc.save(fileName);
+};
 
 export default function StudentPerformanceView({
   student,
@@ -597,593 +976,617 @@ export default function StudentPerformanceView({
         </div>
       )}
 
-    <div className="sp-dashboard">
-
-      <header className="sp-hero">
-        <div className="sp-hero-content">
-          <div className="sp-avatar" aria-hidden="true">
-            {getInitials(studentName)}
-          </div>
-          <div className="sp-identity">
-            <span className="sp-hero-kicker">{title}</span>
-            <h1>{studentName}</h1>
-            <div className="sp-identity-meta">
-              <span>Class {classLabel}</span>
-              <span>
-                Roll No. {student?.roll_no || student?.student_id || "—"}
-              </span>
+      <div className="sp-dashboard">
+        <header className="sp-hero">
+          <div className="sp-hero-content">
+            <div className="sp-avatar" aria-hidden="true">
+              {getInitials(studentName)}
             </div>
-          </div>
-          {examResults.length > 0 && (
-            <div className={`sp-status-badge sp-status-${scoreBand.tone}`}>
-              <span className="sp-status-dot" />
-              {scoreBand.label}
-            </div>
-          )}
-        </div>
-      </header>
-
-      {examResults.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <>
-          <section className="sp-metrics-grid" aria-label="Performance summary">
-            <MetricCard
-              icon="◎"
-              label="Average score"
-              value={`${overallAverage}%`}
-              helper={`${examResults.length} assessment${examResults.length === 1 ? "" : "s"}`}
-              tone={scoreBand.tone}
-            />
-            <MetricCard
-              icon={getTrendIcon(improvement)}
-              label="Current score"
-              value={`${round(latestExam?.percentage)}%`}
-              helper={getTrendText(improvement)}
-              tone={
-                improvement < -0.4
-                  ? "danger"
-                  : improvement > 0.4
-                    ? "success"
-                    : "primary"
-              }
-            />
-            <MetricCard
-              icon="✓"
-              label="Accuracy"
-              value={`${accuracy}%`}
-              helper={`${attemptRate}% questions attempted`}
-              tone={
-                accuracy >= 75
-                  ? "success"
-                  : accuracy >= 60
-                    ? "warning"
-                    : "danger"
-              }
-            />
-            <MetricCard
-              icon="#"
-              label="Class rank"
-              value={latestExam?.class_rank ? `#${latestExam.class_rank}` : "—"}
-              helper="Current exam"
-              tone="primary"
-            />
-            <MetricCard
-              icon="#"
-              label="School rank"
-              value={latestExam?.school_rank ? `#${latestExam.school_rank}` : "â€”"}
-              helper="Current exam"
-              tone="primary"
-            />
-            <MetricCard
-              icon="#"
-              label="All India rank"
-              value={latestExam?.all_schools_rank ? `#${latestExam.all_schools_rank}` : "â€”"}
-              helper="Current exam"
-              tone="primary"
-            />
-          </section>
-
-          <section className="sp-insight-strip">
-            <div className="sp-insight-main">
-              <span className="sp-insight-icon" aria-hidden="true">
-                🎯
-              </span>
-              <div>
-                <span className="sp-eyebrow">Next performance target</span>
-                <strong>{nextTarget}%</strong>
-                <p>
-                  Focus first on{" "}
-                  {weakSubject?.label || "the lowest scoring subject"} while
-                  protecting strength in{" "}
-                  {strengthSubject?.label || "the strongest subject"}.
-                </p>
-              </div>
-            </div>
-            <div className="sp-insight-stats">
-              <div>
-                <span>Consistency</span>
-                <strong>{consistency}%</strong>
-              </div>
-              <div>
-                <span>Best exam</span>
-                <strong>{formatExamName(bestExam?.exam, "—")}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="sp-dashboard-section">
-            <SectionHeader
-              eyebrow="Analytics"
-              title="Score overview"
-              description="Score movement, subject balance, and assessment behaviour at a glance."
-            />
-
-            <div className="sp-chart-grid sp-chart-grid-main">
-              <ChartCard
-                className="sp-chart-wide"
-                title="Overall score trend"
-                subtitle="Percentage scored across assessments"
-                badge={`${round(latestExam?.percentage)}% latest`}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={performanceTrend}
-                    margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="spScoreGradient"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor={COLORS.blue}
-                          stopOpacity={0.28}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor={COLORS.blue}
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      stroke="#e2e8f0"
-                      strokeDasharray="4 4"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="shortExam"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 12 }}
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      ticks={[0, 25, 50, 75, 100]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 12 }}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      labelFormatter={(_, payload) => {
-                        const row = payload?.[0]?.payload;
-                        return row ? `${row.exam} • ${row.date}` : "Assessment";
-                      }}
-                      formatter={(value) => [`${value}%`, "Score"]}
-                    />
-                    <ReferenceLine
-                      y={75}
-                      stroke="#94a3b8"
-                      strokeDasharray="5 5"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="overall"
-                      stroke={COLORS.blue}
-                      strokeWidth={3}
-                      fill="url(#spScoreGradient)"
-                      dot={{
-                        r: 4,
-                        fill: COLORS.blue,
-                        strokeWidth: 2,
-                        stroke: "#ffffff",
-                      }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-              <ChartCard
-                title="Question outcome"
-                subtitle="Combined attempt pattern"
-                badge={`${accuracy}% accuracy`}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={attemptData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="46%"
-                      innerRadius="50%"
-                      outerRadius="72%"
-                      paddingAngle={4}
-                      stroke="none"
-                    >
-                      {attemptData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Legend
-                      verticalAlign="bottom"
-                      iconType="circle"
-                      wrapperStyle={{ fontSize: 12, color: "#475569" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
-
-            <div className="sp-chart-grid">
-              <ChartCard
-                title="Subject performance"
-                subtitle="Average percentage by subject"
-                badge={`${strengthSubject?.label || "—"} leads`}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={subjectAverages}
-                    layout="vertical"
-                    margin={{ top: 4, right: 24, left: 12, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      stroke="#e2e8f0"
-                      strokeDasharray="4 4"
-                      horizontal={false}
-                    />
-                    <XAxis
-                      type="number"
-                      domain={[0, 100]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 11 }}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="label"
-                      width={88}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#334155", fontSize: 12, fontWeight: 600 }}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      formatter={(value) => [`${value}%`, "Average"]}
-                    />
-                    <Bar dataKey="average" radius={[0, 8, 8, 0]} barSize={20}>
-                      {subjectAverages.map((subject) => (
-                        <Cell key={subject.key} fill={subject.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-              <ChartCard
-                className="sp-chart-wide"
-                title="Subject trend"
-                subtitle="How each subject is moving over time"
-                badge={`${examResults.length} exams`}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={performanceTrend}
-                    margin={{ top: 8, right: 10, left: -16, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      stroke="#e2e8f0"
-                      strokeDasharray="4 4"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="shortExam"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 12 }}
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 11 }}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      labelFormatter={(_, payload) =>
-                        payload?.[0]?.payload?.exam || "Assessment"
-                      }
-                      formatter={(value, name) => [`${value}%`, name]}
-                    />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                    {SUBJECTS.map((subject) => (
-                      <Line
-                        key={subject.key}
-                        type="monotone"
-                        dataKey={subject.key}
-                        name={subject.label}
-                        stroke={subject.color}
-                        strokeWidth={2.2}
-                        connectNulls
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5 }}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
-          </section>
-
-          <section className="sp-dashboard-section">
-            <div className="sp-teacher-insight-grid">
-              <section className="sp-panel sp-recommendation-panel">
-                <div className="sp-panel-header">
-                  <div>
-                    <h3>Recommended teacher actions</h3>
-                    <p>
-                      Suggested from the student’s current performance pattern.
-                    </p>
-                  </div>
-                  <span className="sp-panel-badge">Auto insight</span>
-                </div>
-                <ol className="sp-action-list">
-                  {recommendations.map((recommendation, index) => (
-                    <li key={recommendation}>
-                      <span>{index + 1}</span>
-                      <p>{recommendation}</p>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-
-              <section className="sp-panel sp-snapshot-panel">
-                <div className="sp-panel-header">
-                  <div>
-                    <h3>Learning snapshot</h3>
-                    <p>Fast summary for student or parent discussion.</p>
-                  </div>
-                </div>
-                <dl className="sp-snapshot-list">
-                  <div>
-                    <dt>Strongest subject</dt>
-                    <dd>
-                      {strengthSubject?.label || "—"}{" "}
-                      <span>{strengthSubject?.average ?? 0}%</span>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Priority subject</dt>
-                    <dd>
-                      {weakSubject?.label || "—"}{" "}
-                      <span>{weakSubject?.average ?? 0}%</span>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Exam consistency</dt>
-                    <dd>
-                      {consistency >= 80
-                        ? "High"
-                        : consistency >= 65
-                          ? "Moderate"
-                          : "Needs attention"}{" "}
-                      <span>{consistency}%</span>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Attempt behaviour</dt>
-                    <dd>
-                      {attemptRate >= 85
-                        ? "Confident"
-                        : attemptRate >= 70
-                          ? "Selective"
-                          : "Low completion"}{" "}
-                      <span>{attemptRate}%</span>
-                    </dd>
-                  </div>
-                </dl>
-              </section>
-            </div>
-          </section>
-
-          <section className="sp-dashboard-section">
-            <SectionHeader
-              eyebrow="History"
-              title="Exam-wise results"
-              description="Detailed marks, attempt data, and class rank for every recorded exam."
-              action={
-                <span className="sp-count-chip">
-                  {examResults.length} result
-                  {examResults.length === 1 ? "" : "s"}
+            <div className="sp-identity">
+              <span className="sp-hero-kicker">{title}</span>
+              <h1>{studentName}</h1>
+              <div className="sp-identity-meta">
+                <span>Class {classLabel}</span>
+                <span>
+                  Roll No. {student?.roll_no || student?.student_id || "—"}
                 </span>
-              }
-            />
-
-            <div className="sp-panel sp-table-panel sp-desktop-results">
-              <div className="sp-table-scroll">
-                <table className="sp-table">
-                  <thead>
-                    <tr>
-                      {[
-                        "Date",
-                        "Exam",
-                        "Program",
-                        "Correct",
-                        "Wrong",
-                        "Not attempted",
-                        "Physics",
-                        "Chemistry",
-                        "Maths",
-                        "Biology",
-                        "Total",
-                        "%",
-                        "Class rank",
-                      ].map((heading) => (
-                        <th key={heading}>{heading}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderedResults.map((result, index) => (
-                      <tr
-                        key={`${result.exam || "exam"}-${result.date || index}-${index}`}
-                      >
-                        <td>{formatDate(result.date)}</td>
-                        <td className="sp-cell-strong">
-                          {formatExamName(result.exam, "—")}
-                        </td>
-                        <td>{result.program || "—"}</td>
-                        <td>
-                          <span className="sp-table-number sp-number-good">
-                            {Math.round(toNum(result.correct_answers))}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="sp-table-number sp-number-bad">
-                            {Math.round(toNum(result.wrong_answers))}
-                          </span>
-                        </td>
-                        <td>{Math.round(toNum(result.unattempted))}</td>
-                        {SUBJECTS.map((subject) => {
-                          const pct = getSubjectPct(
-                            result[`${subject.key}_marks`],
-                            result[`max_marks_${subject.key}`],
-                          );
-                          return (
-                            <td key={subject.key}>
-                              {pct === null
-                                ? "—"
-                                : `${toNum(result[`${subject.key}_marks`])} (${round(pct, 0)}%)`}
-                            </td>
-                          );
-                        })}
-                        <td>{round(result.total, 0)}</td>
-                        <td className="sp-cell-score">
-                          {round(result.percentage)}%
-                        </td>
-                        <td>{result.class_rank ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
+            {examResults.length > 0 && (
+              <div className={`sp-status-badge sp-status-${scoreBand.tone}`}>
+                <span className="sp-status-dot" />
+                {scoreBand.label}
+              </div>
+            )}
+          </div>
+        </header>
 
-            <div className="sp-mobile-results">
-              {orderedResults.map((result, index) => (
-                <article
-                  className="sp-mobile-result-card"
-                  key={`${result.exam || "exam"}-${result.date || index}-mobile`}
+        {examResults.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <>
+            <section
+              className="sp-metrics-grid"
+              aria-label="Performance summary"
+            >
+              <MetricCard
+                icon="◎"
+                label="Average score"
+                value={`${overallAverage}%`}
+                helper={`${examResults.length} assessment${examResults.length === 1 ? "" : "s"}`}
+                tone={scoreBand.tone}
+              />
+              <MetricCard
+                icon={getTrendIcon(improvement)}
+                label="Current score"
+                value={`${round(latestExam?.percentage)}%`}
+                helper={getTrendText(improvement)}
+                tone={
+                  improvement < -0.4
+                    ? "danger"
+                    : improvement > 0.4
+                      ? "success"
+                      : "primary"
+                }
+              />
+              <MetricCard
+                icon="✓"
+                label="Accuracy"
+                value={`${accuracy}%`}
+                helper={`${attemptRate}% questions attempted`}
+                tone={
+                  accuracy >= 75
+                    ? "success"
+                    : accuracy >= 60
+                      ? "warning"
+                      : "danger"
+                }
+              />
+              <MetricCard
+                icon="#"
+                label="Class rank"
+                value={
+                  latestExam?.class_rank ? `#${latestExam.class_rank}` : "—"
+                }
+                helper="Current exam"
+                tone="primary"
+              />
+              <MetricCard
+                icon="#"
+                label="School rank"
+                value={
+                  latestExam?.school_rank ? `#${latestExam.school_rank}` : "â€”"
+                }
+                helper="Current exam"
+                tone="primary"
+              />
+              <MetricCard
+                icon="#"
+                label="All India rank"
+                value={
+                  latestExam?.all_schools_rank
+                    ? `#${latestExam.all_schools_rank}`
+                    : "â€”"
+                }
+                helper="Current exam"
+                tone="primary"
+              />
+            </section>
+
+            <section className="sp-insight-strip">
+              <div className="sp-insight-main">
+                <span className="sp-insight-icon" aria-hidden="true">
+                  🎯
+                </span>
+                <div>
+                  <span className="sp-eyebrow">Next performance target</span>
+                  <strong>{nextTarget}%</strong>
+                  <p>
+                    Focus first on{" "}
+                    {weakSubject?.label || "the lowest scoring subject"} while
+                    protecting strength in{" "}
+                    {strengthSubject?.label || "the strongest subject"}.
+                  </p>
+                </div>
+              </div>
+              <div className="sp-insight-stats">
+                <div>
+                  <span>Consistency</span>
+                  <strong>{consistency}%</strong>
+                </div>
+                <div>
+                  <span>Best exam</span>
+                  <strong>{formatExamName(bestExam?.exam, "—")}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="sp-dashboard-section">
+              <SectionHeader
+                eyebrow="Analytics"
+                title="Score overview"
+                description="Score movement, subject balance, and assessment behaviour at a glance."
+              />
+
+              <div className="sp-chart-grid sp-chart-grid-main">
+                <ChartCard
+                  className="sp-chart-wide"
+                  title="Overall score trend"
+                  subtitle="Percentage scored across assessments"
+                  badge={`${round(latestExam?.percentage)}% latest`}
                 >
-                  <div className="sp-mobile-result-head">
-                    <div>
-                      <span>{formatDate(result.date)}</span>
-                      <h3>{formatExamName(result.exam, "—")}</h3>
-                      <p>{result.program || "Program not specified"}</p>
-                    </div>
-                    <strong>{round(result.percentage)}%</strong>
-                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={performanceTrend}
+                      margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="spScoreGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor={COLORS.blue}
+                            stopOpacity={0.28}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor={COLORS.blue}
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        stroke="#e2e8f0"
+                        strokeDasharray="4 4"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="shortExam"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        ticks={[0, 25, 50, 75, 100]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        labelFormatter={(_, payload) => {
+                          const row = payload?.[0]?.payload;
+                          return row
+                            ? `${row.exam} • ${row.date}`
+                            : "Assessment";
+                        }}
+                        formatter={(value) => [`${value}%`, "Score"]}
+                      />
+                      <ReferenceLine
+                        y={75}
+                        stroke="#94a3b8"
+                        strokeDasharray="5 5"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="overall"
+                        stroke={COLORS.blue}
+                        strokeWidth={3}
+                        fill="url(#spScoreGradient)"
+                        dot={{
+                          r: 4,
+                          fill: COLORS.blue,
+                          strokeWidth: 2,
+                          stroke: "#ffffff",
+                        }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </ChartCard>
 
-                  <div className="sp-mobile-result-kpis">
+                <ChartCard
+                  title="Question outcome"
+                  subtitle="Combined attempt pattern"
+                  badge={`${accuracy}% accuracy`}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={attemptData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="46%"
+                        innerRadius="50%"
+                        outerRadius="72%"
+                        paddingAngle={4}
+                        stroke="none"
+                      >
+                        {attemptData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 12, color: "#475569" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+              </div>
+
+              <div className="sp-chart-grid">
+                <ChartCard
+                  title="Subject performance"
+                  subtitle="Average percentage by subject"
+                  badge={`${strengthSubject?.label || "—"} leads`}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={subjectAverages}
+                      layout="vertical"
+                      margin={{ top: 4, right: 24, left: 12, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke="#e2e8f0"
+                        strokeDasharray="4 4"
+                        horizontal={false}
+                      />
+                      <XAxis
+                        type="number"
+                        domain={[0, 100]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 11 }}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        width={88}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: "#334155",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        formatter={(value) => [`${value}%`, "Average"]}
+                      />
+                      <Bar dataKey="average" radius={[0, 8, 8, 0]} barSize={20}>
+                        {subjectAverages.map((subject) => (
+                          <Cell key={subject.key} fill={subject.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+
+                <ChartCard
+                  className="sp-chart-wide"
+                  title="Subject trend"
+                  subtitle="How each subject is moving over time"
+                  badge={`${examResults.length} exams`}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={performanceTrend}
+                      margin={{ top: 8, right: 10, left: -16, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke="#e2e8f0"
+                        strokeDasharray="4 4"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="shortExam"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 11 }}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.exam || "Assessment"
+                        }
+                        formatter={(value, name) => [`${value}%`, name]}
+                      />
+                      <Legend
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 12 }}
+                      />
+                      {SUBJECTS.map((subject) => (
+                        <Line
+                          key={subject.key}
+                          type="monotone"
+                          dataKey={subject.key}
+                          name={subject.label}
+                          stroke={subject.color}
+                          strokeWidth={2.2}
+                          connectNulls
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+              </div>
+            </section>
+
+            <section className="sp-dashboard-section">
+              <div className="sp-teacher-insight-grid">
+                <section className="sp-panel sp-recommendation-panel">
+                  <div className="sp-panel-header">
                     <div>
-                      <span>Correct</span>
-                      <strong>
-                        {Math.round(toNum(result.correct_answers))}
-                      </strong>
+                      <h3>Recommended teacher actions</h3>
+                      <p>
+                        Suggested from the student’s current performance
+                        pattern.
+                      </p>
                     </div>
+                    <span className="sp-panel-badge">Auto insight</span>
+                  </div>
+                  <ol className="sp-action-list">
+                    {recommendations.map((recommendation, index) => (
+                      <li key={recommendation}>
+                        <span>{index + 1}</span>
+                        <p>{recommendation}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+
+                <section className="sp-panel sp-snapshot-panel">
+                  <div className="sp-panel-header">
                     <div>
-                      <span>Wrong</span>
-                      <strong>{Math.round(toNum(result.wrong_answers))}</strong>
-                    </div>
-                    <div>
-                      <span>Class rank</span>
-                      <strong>
-                        {result.class_rank ? `#${result.class_rank}` : "—"}
-                      </strong>
+                      <h3>Learning snapshot</h3>
+                      <p>Fast summary for student or parent discussion.</p>
                     </div>
                   </div>
+                  <dl className="sp-snapshot-list">
+                    <div>
+                      <dt>Strongest subject</dt>
+                      <dd>
+                        {strengthSubject?.label || "—"}{" "}
+                        <span>{strengthSubject?.average ?? 0}%</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Priority subject</dt>
+                      <dd>
+                        {weakSubject?.label || "—"}{" "}
+                        <span>{weakSubject?.average ?? 0}%</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Exam consistency</dt>
+                      <dd>
+                        {consistency >= 80
+                          ? "High"
+                          : consistency >= 65
+                            ? "Moderate"
+                            : "Needs attention"}{" "}
+                        <span>{consistency}%</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Attempt behaviour</dt>
+                      <dd>
+                        {attemptRate >= 85
+                          ? "Confident"
+                          : attemptRate >= 70
+                            ? "Selective"
+                            : "Low completion"}{" "}
+                        <span>{attemptRate}%</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </section>
 
-                  <div className="sp-mobile-subject-list">
-                    {SUBJECTS.map((subject) => {
-                      const pct = getSubjectPct(
-                        result[`${subject.key}_marks`],
-                        result[`max_marks_${subject.key}`],
-                      );
-                      return (
-                        <div key={subject.key}>
-                          <span>{subject.label}</span>
-                          <strong>
-                            {pct === null ? "—" : `${round(pct, 0)}%`}
-                          </strong>
-                        </div>
-                      );
-                    })}
+            <section className="sp-dashboard-section">
+              <SectionHeader
+                eyebrow="History"
+                title="Exam-wise results"
+                description="Detailed marks, attempt data, and class rank for every recorded exam."
+                action={
+                  <span className="sp-count-chip">
+                    {examResults.length} result
+                    {examResults.length === 1 ? "" : "s"}
+                  </span>
+                }
+              />
+
+              <div className="sp-panel sp-table-panel sp-desktop-results">
+                <div className="sp-table-scroll">
+                  <table className="sp-table">
+                    <thead>
+                      <tr>
+                        {[
+                          "Date",
+                          "Exam",
+                          "Program",
+                          "Correct",
+                          "Wrong",
+                          "Not attempted",
+                          "Physics",
+                          "Chemistry",
+                          "Maths",
+                          "Biology",
+                          "Total",
+                          "%",
+                          "Class rank",
+                        ].map((heading) => (
+                          <th key={heading}>{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orderedResults.map((result, index) => (
+                        <tr
+                          key={`${result.exam || "exam"}-${result.date || index}-${index}`}
+                        >
+                          <td>{formatDate(result.date)}</td>
+                          <td className="sp-cell-strong">
+                            {formatExamName(result.exam, "—")}
+                          </td>
+                          <td>{result.program || "—"}</td>
+                          <td>
+                            <span className="sp-table-number sp-number-good">
+                              {Math.round(toNum(result.correct_answers))}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="sp-table-number sp-number-bad">
+                              {Math.round(toNum(result.wrong_answers))}
+                            </span>
+                          </td>
+                          <td>{Math.round(toNum(result.unattempted))}</td>
+                          {SUBJECTS.map((subject) => {
+                            const pct = getSubjectPct(
+                              result[`${subject.key}_marks`],
+                              result[`max_marks_${subject.key}`],
+                            );
+                            return (
+                              <td key={subject.key}>
+                                {pct === null
+                                  ? "—"
+                                  : `${toNum(result[`${subject.key}_marks`])} (${round(pct, 0)}%)`}
+                              </td>
+                            );
+                          })}
+                          <td>{round(result.total, 0)}</td>
+                          <td className="sp-cell-score">
+                            {round(result.percentage)}%
+                          </td>
+                          <td>{result.class_rank ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="sp-mobile-results">
+                {orderedResults.map((result, index) => (
+                  <article
+                    className="sp-mobile-result-card"
+                    key={`${result.exam || "exam"}-${result.date || index}-mobile`}
+                  >
+                    <div className="sp-mobile-result-head">
+                      <div>
+                        <span>{formatDate(result.date)}</span>
+                        <h3>{formatExamName(result.exam, "—")}</h3>
+                        <p>{result.program || "Program not specified"}</p>
+                      </div>
+                      <strong>{round(result.percentage)}%</strong>
+                    </div>
+
+                    <div className="sp-mobile-result-kpis">
+                      <div>
+                        <span>Correct</span>
+                        <strong>
+                          {Math.round(toNum(result.correct_answers))}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Wrong</span>
+                        <strong>
+                          {Math.round(toNum(result.wrong_answers))}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Class rank</span>
+                        <strong>
+                          {result.class_rank ? `#${result.class_rank}` : "—"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="sp-mobile-subject-list">
+                      {SUBJECTS.map((subject) => {
+                        const pct = getSubjectPct(
+                          result[`${subject.key}_marks`],
+                          result[`max_marks_${subject.key}`],
+                        );
+                        return (
+                          <div key={subject.key}>
+                            <span>{subject.label}</span>
+                            <strong>
+                              {pct === null ? "—" : `${round(pct, 0)}%`}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        <section className="sp-dashboard-section sp-teachers-section">
+          <SectionHeader
+            eyebrow="Academic support"
+            title="Assigned teachers"
+            description="Subject contacts available to the student and parent."
+          />
+
+          {teachers.length > 0 ? (
+            <div className="sp-teacher-grid">
+              {teachers.map((teacher, index) => (
+                <article
+                  className="sp-teacher-card"
+                  key={`${teacher.email || teacher.name}-${index}`}
+                >
+                  <div className="sp-teacher-avatar">
+                    {getInitials(teacher.name)}
+                  </div>
+                  <div className="sp-teacher-copy">
+                    <h3>{teacher.name || "Teacher"}</h3>
+                    <span>{teacher.subject || "Subject teacher"}</span>
+                    <div className="sp-teacher-links">
+                      {teacher.email && (
+                        <a href={`mailto:${teacher.email}`}>Email</a>
+                      )}
+                      {teacher.phone && (
+                        <a href={`tel:${teacher.phone}`}>Call</a>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))}
             </div>
-          </section>
-        </>
-      )}
-
-      <section className="sp-dashboard-section sp-teachers-section">
-        <SectionHeader
-          eyebrow="Academic support"
-          title="Assigned teachers"
-          description="Subject contacts available to the student and parent."
-        />
-
-        {teachers.length > 0 ? (
-          <div className="sp-teacher-grid">
-            {teachers.map((teacher, index) => (
-              <article
-                className="sp-teacher-card"
-                key={`${teacher.email || teacher.name}-${index}`}
-              >
-                <div className="sp-teacher-avatar">
-                  {getInitials(teacher.name)}
-                </div>
-                <div className="sp-teacher-copy">
-                  <h3>{teacher.name || "Teacher"}</h3>
-                  <span>{teacher.subject || "Subject teacher"}</span>
-                  <div className="sp-teacher-links">
-                    {teacher.email && (
-                      <a href={`mailto:${teacher.email}`}>Email</a>
-                    )}
-                    {teacher.phone && <a href={`tel:${teacher.phone}`}>Call</a>}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="sp-inline-empty">
-            No teachers are assigned to this class yet.
-          </div>
-        )}
-      </section>
-    </div>
+          ) : (
+            <div className="sp-inline-empty">
+              No teachers are assigned to this class yet.
+            </div>
+          )}
+        </section>
+      </div>
     </>
   );
 }

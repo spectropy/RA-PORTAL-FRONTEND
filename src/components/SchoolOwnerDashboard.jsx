@@ -2673,6 +2673,100 @@ export default function SchoolOwnerDashboard({ onBack }) {
                       </tbody>
                     </table>
                   </div>
+                  {topStudents.length > 0 && (
+                    <div style={{ marginTop: "24px", overflowX: "auto" }}>
+                      <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>
+                        🏆 Top 5 Students (Cumulative Performance)
+                      </h4>
+                      <table
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          border: "1px solid #cbd5e1",
+                          textAlign: "center",
+                        }}
+                      >
+                        <thead>
+                          <tr style={{ background: "#e2e8f0" }}>
+                            <th
+                              style={{
+                                padding: "10px",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              Rank
+                            </th>
+                            <th
+                              style={{
+                                padding: "10px",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              Student ID
+                            </th>
+                            <th
+                              style={{
+                                padding: "10px",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              Name
+                            </th>
+                            <th
+                              style={{
+                                padding: "10px",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              Cumulative %
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topStudents.map((student) => (
+                            <tr
+                              key={student.id}
+                              style={{ background: "#f8fafc" }}
+                            >
+                              <td
+                                style={{
+                                  padding: "10px",
+                                  border: "1px solid #cbd5e1",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                {student.rank}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "10px",
+                                  border: "1px solid #cbd5e1",
+                                }}
+                              >
+                                {student.id}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "10px",
+                                  border: "1px solid #cbd5e1",
+                                }}
+                              >
+                                {student.name}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "10px",
+                                  border: "1px solid #cbd5e1",
+                                }}
+                              >
+                                {student.cumulative_percentage.toFixed(2)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2891,6 +2985,15 @@ export default function SchoolOwnerDashboard({ onBack }) {
       maths: "Maths",
       biology: "Biology",
     };
+    const activeSubs = getActiveSubjects(
+      getGroupByClassSection(currentOMRExam.class, currentOMRExam.section),
+    );
+    const filteredSubjectAverages = Object.fromEntries(
+      activeSubs.map((subject) => {
+        const key = subject.toLowerCase();
+        return [key, subjectAverages[key]];
+      }),
+    );
     const overallAverage =
       totalStudents > 0
         ? (
@@ -3610,19 +3713,65 @@ export default function SchoolOwnerDashboard({ onBack }) {
                   // === BLUE HEADER BANNER (as per Fig 2) ===
                   doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
                   doc.rect(0, 0, pageWidth, 20, "F"); // Full-width rectangle
-
+                  const headerHeight = 20;
+                  const schoolLogoSize = 15;
+                  const schoolLogoX = 8;
+                  const schoolLogoY = (headerHeight - schoolLogoSize) / 2;
+                  const schoolTextX = school?.logo_url
+                    ? schoolLogoX + schoolLogoSize + 6
+                    : 14;
+                  const spectropyLogoSize = 10;
+                  const spectropyLogoX = pageWidth - 24;
+                  const spectropyLogoY = 2;
+                  if (school?.logo_url) {
+                    try {
+                      doc.addImage(
+                        school.logo_url,
+                        "PNG",
+                        schoolLogoX,
+                        schoolLogoY,
+                        schoolLogoSize,
+                        schoolLogoSize,
+                      );
+                    } catch (e) {
+                      console.warn("Failed to load school logo:", e);
+                    }
+                  }
                   // School Name (Left)
                   doc.setFontSize(14);
                   doc.setTextColor(255, 255, 255); // White text
-                  doc.text(school.school_name || "Unknown School", 14, 12);
+                  doc.text(
+                    school.school_name || "Unknown School",
+                    schoolTextX,
+                    10,
+                  );
 
                   // Area (Below school name)
                   doc.setFontSize(10);
-                  doc.text(`Area: ${school.area || "Not Set"}`, 14, 18);
+                  doc.text(
+                    `Area: ${school.area || "Not Set"}`,
+                    schoolTextX,
+                    16,
+                  );
+                  try {
+                    doc.addImage(
+                      spectropyLogoUrl,
+                      "PNG",
+                      spectropyLogoX,
+                      spectropyLogoY,
+                      spectropyLogoSize,
+                      spectropyLogoSize,
+                    );
+                  } catch (e) {
+                    console.warn(
+                      "Failed to load Spectropy logo, falling back to text:",
+                      e,
+                    );
+                  }
 
                   // Powered BY SPECTROPY (Right)
                   doc.setFontSize(10);
-                  doc.text("Powered BY SPECTROPY", pageWidth - 20, 15, {
+                  doc.text("Powered BY SPECTROPY", pageWidth - 8, 16, {
                     align: "right",
                   });
                   yPos += 6;
