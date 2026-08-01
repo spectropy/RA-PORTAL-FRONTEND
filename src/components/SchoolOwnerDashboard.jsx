@@ -2329,9 +2329,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             <button
               onClick={() => {
                 if (examWiseClassSection) {
-                  alert(
-                    `Generating certificates for Class ${examWiseClassSection.class}-${examWiseClassSection.section}...`,
-                  );
+                  handleGenerateCertificates();
                 } else {
                   alert(
                     "Please select a Class - Section first to generate certificates.",

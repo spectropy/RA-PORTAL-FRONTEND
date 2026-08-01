@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { getSchoolById, uploadStudents, getAcademicYears } from '../api';
-
-// 👇 NEW: Import getStudentsByClassSection (you'll need to create this API function)
-import { getStudentsByClassSection } from '../api';
+import {
+  deleteStudent,
+  deleteStudentsByClassSection,
+  getAcademicYears,
+  getSchoolById,
+  getStudentsByClassSection,
+  uploadStudents
+} from '../api';
 
 export default function StudentRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
@@ -18,6 +22,8 @@ export default function StudentRegistration({ schools = [] }) {
   // 👇 NEW: State for students table
   const [students, setStudents] = useState([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
+  const [deletingStudentId, setDeletingStudentId] = useState(null);
+  const [deletingClassSection, setDeletingClassSection] = useState(false);
 
   useEffect(() => {
     const fetchAcademicYearsData = async () => {
@@ -71,6 +77,18 @@ export default function StudentRegistration({ schools = [] }) {
     }
   };
 
+  const getSelectedClassSectionParts = () => {
+    const lastDashIndex = selectedClassSection.lastIndexOf('-');
+    if (lastDashIndex <= 0) {
+      return { classValue: '', sectionValue: '' };
+    }
+
+    return {
+      classValue: selectedClassSection.substring(0, lastDashIndex).trim(),
+      sectionValue: selectedClassSection.substring(lastDashIndex + 1).trim()
+    };
+  };
+
   // 👇 Fetch students for selected school + class-section
   const fetchStudents = async () => {
     if (!selectedSchool || !selectedClassSection) return;
@@ -79,11 +97,8 @@ export default function StudentRegistration({ schools = [] }) {
     setError('');
     try {
       // Split class-section to get class and section
-      const lastDashIndex = selectedClassSection.lastIndexOf('-');
-      if (lastDashIndex <= 0) return;
-
-      const classValue = selectedClassSection.substring(0, lastDashIndex).trim();
-      const sectionValue = selectedClassSection.substring(lastDashIndex + 1).trim();
+      const { classValue, sectionValue } = getSelectedClassSectionParts();
+      if (!classValue || !sectionValue) return;
 
       const fetchedStudents = await getStudentsByClassSection(
         selectedSchool,
@@ -96,6 +111,66 @@ export default function StudentRegistration({ schools = [] }) {
       setError(err.message || 'Failed to load student list');
     } finally {
       setFetchingStudents(false);
+    }
+  };
+
+  const getStudentDisplayName = (student) => (
+    student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'this student'
+  );
+
+  const handleDeleteStudent = async (student) => {
+    if (!selectedSchool || !student.id) {
+      setError('Cannot delete this student because the database record ID is missing.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${getStudentDisplayName(student)}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingStudentId(student.id);
+    setError('');
+    setSuccess('');
+
+    try {
+      await deleteStudent(selectedSchool, student.id);
+      setSuccess('Student deleted successfully.');
+      await fetchStudents();
+    } catch (err) {
+      setError(err.message || 'Failed to delete student');
+    } finally {
+      setDeletingStudentId(null);
+    }
+  };
+
+  const handleDeleteClassSectionStudents = async () => {
+    if (!selectedSchool || !selectedClassSection) {
+      setError('Please select a school and class-section first.');
+      return;
+    }
+
+    const { classValue, sectionValue } = getSelectedClassSectionParts();
+    if (!classValue || !sectionValue) {
+      setError('Invalid class-section selection.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete all ${students.length} students in ${selectedClassSection}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingClassSection(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await deleteStudentsByClassSection(selectedSchool, classValue, sectionValue);
+      setSuccess(result.message || 'Students deleted successfully.');
+      await fetchStudents();
+    } catch (err) {
+      setError(err.message || 'Failed to delete students');
+    } finally {
+      setDeletingClassSection(false);
     }
   };
 
@@ -371,6 +446,26 @@ export default function StudentRegistration({ schools = [] }) {
                   👥 Students in {selectedClassSection || 'Selected Class'} ({students.length})
                 </div>
               </div>
+              {students.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteClassSectionStudents}
+                  disabled={deletingClassSection || fetchingStudents}
+                  style={{
+                    padding: '6px 10px',
+                    background: deletingClassSection ? '#fca5a5' : '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: deletingClassSection || fetchingStudents ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    marginBottom: '10px'
+                  }}
+                >
+                  {deletingClassSection ? 'Deleting...' : 'Delete Class Students'}
+                </button>
+              )}
               
               {fetchingStudents ? (
                 <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '8px 0' }}>Loading students...</p>
@@ -387,6 +482,7 @@ export default function StudentRegistration({ schools = [] }) {
                         <th>Student Name</th>
                         <th>Parent Phone</th>
                         <th>Parent Email</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -406,6 +502,26 @@ export default function StudentRegistration({ schools = [] }) {
                             <td><b>{fullName}</b></td>
                             <td>{phone}</td>
                             <td>{email}</td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteStudent(student)}
+                                disabled={!student.id || deletingStudentId === student.id || deletingClassSection}
+                                title={!student.id ? 'Missing database record ID' : `Delete ${fullName}`}
+                                style={{
+                                  padding: '5px 9px',
+                                  background: deletingStudentId === student.id ? '#fca5a5' : '#fee2e2',
+                                  color: '#b91c1c',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '4px',
+                                  cursor: !student.id || deletingStudentId === student.id || deletingClassSection ? 'not-allowed' : 'pointer',
+                                  fontSize: '12px',
+                                  fontWeight: '600'
+                                }}
+                              >
+                                {deletingStudentId === student.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}

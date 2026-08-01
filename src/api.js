@@ -164,6 +164,39 @@ export const getStudentsByClassSection = async (
   }
 };
 
+export const deleteStudent = async (schoolId, id) => {
+  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseAndFormatError(res));
+  }
+
+  return res.json();
+};
+
+export const deleteStudentsByClassSection = async (
+  schoolId,
+  classValue,
+  sectionValue,
+) => {
+  const query = new URLSearchParams({
+    class: classValue,
+    section: sectionValue,
+  }).toString();
+
+  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students?${query}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseAndFormatError(res));
+  }
+
+  return res.json();
+};
+
 // ========================
 // 📝 EXAM REGISTRATION
 // ========================
