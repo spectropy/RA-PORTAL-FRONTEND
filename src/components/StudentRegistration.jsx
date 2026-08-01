@@ -3,6 +3,7 @@ import { getSchoolById, uploadStudents, getAcademicYears } from '../api';
 
 // 👇 NEW: Import getStudentsByClassSection (you'll need to create this API function)
 import { getStudentsByClassSection } from '../api';
+import { deleteStudent, deleteStudentsByClassSection } from '../api';
 
 export default function StudentRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
@@ -18,6 +19,8 @@ export default function StudentRegistration({ schools = [] }) {
   // 👇 NEW: State for students table
   const [students, setStudents] = useState([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
+  const [deletingStudentId, setDeletingStudentId] = useState(null);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   useEffect(() => {
     const fetchAcademicYearsData = async () => {
@@ -100,6 +103,78 @@ export default function StudentRegistration({ schools = [] }) {
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+  };
+
+  const getSelectedClassSectionParts = () => {
+    const lastDashIndex = selectedClassSection.lastIndexOf('-');
+    if (lastDashIndex <= 0 || lastDashIndex === selectedClassSection.length - 1) {
+      return null;
+    }
+
+    return {
+      classValue: selectedClassSection.substring(0, lastDashIndex).trim(),
+      sectionValue: selectedClassSection.substring(lastDashIndex + 1).trim()
+    };
+  };
+
+  const handleDeleteStudent = async (student) => {
+    if (!student.id || deletingStudentId || deletingAll) return;
+
+    const visibleId = student.student_id || student.roll_no || 'Unknown ID';
+    const confirmed = window.confirm(
+      `Delete ${student.name} (${visibleId})? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingStudentId(student.id);
+    setError('');
+    setSuccess('');
+
+    try {
+      await deleteStudent(selectedSchool, student.id);
+      setStudents(current => current.filter(item => item.id !== student.id));
+      setSuccess(`Student ${visibleId} deleted successfully.`);
+    } catch (err) {
+      setError(err.message || 'Failed to delete student');
+    } finally {
+      setDeletingStudentId(null);
+    }
+  };
+
+  const handleDeleteAllStudents = async () => {
+    if (students.length === 0 || deletingStudentId || deletingAll) return;
+
+    const parts = getSelectedClassSectionParts();
+    if (!parts) {
+      setError('Please select a valid class-section');
+      return;
+    }
+
+    const confirmation = window.prompt(
+      `Delete all ${students.length} students from ${selectedClassSection}? ` +
+      'This action cannot be undone. Type DELETE ALL to continue.'
+    );
+    if (confirmation !== 'DELETE ALL') return;
+
+    setDeletingAll(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await deleteStudentsByClassSection(
+        selectedSchool,
+        parts.classValue,
+        parts.sectionValue
+      );
+      setStudents([]);
+      setSuccess(
+        `${result.deletedCount} student${result.deletedCount === 1 ? '' : 's'} deleted from ${selectedClassSection}.`
+      );
+    } catch (err) {
+      setError(err.message || 'Failed to delete students');
+    } finally {
+      setDeletingAll(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -203,6 +278,7 @@ export default function StudentRegistration({ schools = [] }) {
           <select
             value={selectedAcademicYear}
             onChange={(e) => setSelectedAcademicYear(e.target.value)}
+            disabled={deletingAll || Boolean(deletingStudentId)}
             style={{
               width: '100%',
               padding: '8px',
@@ -224,7 +300,15 @@ export default function StudentRegistration({ schools = [] }) {
           </label>
           <select
             value={selectedSchool}
-            onChange={(e) => setSelectedSchool(e.target.value)}
+            onChange={(e) => {
+              setSelectedSchool(e.target.value);
+              setSelectedClassSection('');
+              setStudents([]);
+              setSchoolData(null);
+              setError('');
+              setSuccess('');
+            }}
+            disabled={deletingAll || Boolean(deletingStudentId)}
             style={{
               width: '100%',
               padding: '8px',
@@ -257,8 +341,11 @@ export default function StudentRegistration({ schools = [] }) {
               onChange={(e) => {
                 setSelectedClassSection(e.target.value);
                 // 👇 Auto-fetch students when selection changes
-                if (e.target.value) fetchStudents();
+                setStudents([]);
+                setError('');
+                setSuccess('');
               }}
+              disabled={deletingAll || Boolean(deletingStudentId)}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -348,7 +435,7 @@ export default function StudentRegistration({ schools = [] }) {
                 cursor: 'pointer',
                 marginBottom: '30px' // 👈 Add space before table
               }}
-              disabled={loading}
+              disabled={loading || deletingAll || Boolean(deletingStudentId)}
             >
               {loading ? 'Uploading...' : 'Upload Students'}
             </button>
@@ -368,7 +455,26 @@ export default function StudentRegistration({ schools = [] }) {
                   No students found. Upload a file to get started.
                 </p>
               ) : (
-                <div style={{ 
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllStudents}
+                      disabled={deletingAll || Boolean(deletingStudentId)}
+                      style={{
+                        padding: '8px 14px',
+                        background: deletingAll ? '#9ca3af' : '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: deletingAll || deletingStudentId ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {deletingAll ? 'Deleting All...' : `Delete All Students (${students.length})`}
+                    </button>
+                  </div>
+                  <div style={{ 
                   overflowX: 'auto', 
                   border: '1px solid #ddd', 
                   borderRadius: '8px'
@@ -377,7 +483,7 @@ export default function StudentRegistration({ schools = [] }) {
                     width: '100%', 
                     borderCollapse: 'collapse',
                     fontSize: '14px',
-                    minWidth: '600px'
+                    minWidth: '720px'
                   }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f8f9fa' }}>
@@ -385,6 +491,7 @@ export default function StudentRegistration({ schools = [] }) {
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Phone</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Email</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -397,11 +504,30 @@ export default function StudentRegistration({ schools = [] }) {
                           <td style={{ padding: '12px' }}>{student.name}</td>
                           <td style={{ padding: '12px' }}>{student.parent_phone || '-'}</td>
                           <td style={{ padding: '12px' }}>{student.parent_email || '-'}</td>
+                          <td style={{ padding: '12px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStudent(student)}
+                              disabled={!student.id || deletingAll || Boolean(deletingStudentId)}
+                              aria-label={`Delete ${student.name}`}
+                              style={{
+                                padding: '6px 10px',
+                                background: deletingStudentId === student.id ? '#9ca3af' : '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: !student.id || deletingAll || deletingStudentId ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {deletingStudentId === student.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
           )}

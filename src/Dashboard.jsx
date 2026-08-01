@@ -203,7 +203,10 @@ export default function Dashboard() {
 
       {activeTab === "class-teacher-registration" && (
         <div style={styles.card}>
-          <ClassTeacherRegistration schools={schools} />
+          <ClassTeacherRegistration
+            schools={schools}
+            onSchoolsChanged={refresh}
+          />
         </div>
       )}
 

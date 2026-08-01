@@ -128,6 +128,37 @@ export const getStudentsByClassSection = async (schoolId, classValue, sectionVal
   }
 };
 
+const parseApiResponse = async (res, fallbackMessage) => {
+  const contentType = res.headers.get('content-type');
+  const data = contentType?.includes('application/json')
+    ? await res.json()
+    : { message: await res.text() };
+
+  if (!res.ok) {
+    throw new Error(data.error || data.message || fallbackMessage);
+  }
+
+  return data;
+};
+
+export const deleteStudent = async (schoolId, studentId) => {
+  const res = await fetch(
+    `${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students/${encodeURIComponent(studentId)}`,
+    { method: 'DELETE' }
+  );
+
+  return parseApiResponse(res, 'Failed to delete student');
+};
+
+export const deleteStudentsByClassSection = async (schoolId, classValue, sectionValue) => {
+  const url = new URL(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students`);
+  url.searchParams.set('class', classValue);
+  url.searchParams.set('section', sectionValue);
+
+  const res = await fetch(url, { method: 'DELETE' });
+  return parseApiResponse(res, 'Failed to delete students');
+};
+
 // ========================
 // 📝 EXAM REGISTRATION
 // ========================

@@ -1,5 +1,6 @@
 // src/ExamRegistration.jsx
 import React, { useState, useEffect } from 'react';
+import ExistingExamsView from './ExistingExamsView';
 import OMRUploadView from './OMRUploadView'; // 👈 Adjust path as needed
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
@@ -119,6 +120,7 @@ const getExamPatternsByProgram = (program) => {
 const getExamLabel = (exam) => `${exam.type} ${exam.index}`;
 
 export default function ExamRegistration({ schools = [] }) {
+  const [activeView, setActiveView] = useState('registration');
   const [selectedSchool, setSelectedSchool] = useState('');
   const [schoolData, setSchoolData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -366,6 +368,39 @@ const handleSubmit = (e) => {
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: 1000, margin: '0 auto' }}>
       <h2 style={{ color: '#1e90ff', marginBottom: '30px' }}>📝 Exam Registration</h2>
 
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+        <button
+          type="button"
+          onClick={() => setActiveView('registration')}
+          style={{
+            padding: '10px 18px',
+            border: '1px solid #1e90ff',
+            borderRadius: '5px',
+            background: activeView === 'registration' ? '#1e90ff' : 'white',
+            color: activeView === 'registration' ? 'white' : '#1e90ff',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          Registration
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('view')}
+          style={{
+            padding: '10px 18px',
+            border: '1px solid #1e90ff',
+            borderRadius: '5px',
+            background: activeView === 'view' ? '#1e90ff' : 'white',
+            color: activeView === 'view' ? 'white' : '#1e90ff',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          View Exams
+        </button>
+      </div>
+
       {error && (
         <div style={{
           padding: '10px',
@@ -430,7 +465,7 @@ const handleSubmit = (e) => {
 
       {loading && <p>Loading school data...</p>}
 
-      {schoolData && (
+      {activeView === 'registration' && schoolData && (
   <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '25px', borderRadius: '8px', border: '1px solid #ddd' }}>
     <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>📋 Register New Exam</h3>
 
@@ -563,7 +598,7 @@ const handleSubmit = (e) => {
   </form>
 )}
       {/* OMR Upload View (shown after submit) */}
-      {currentOMRExam && (
+      {activeView === 'registration' && currentOMRExam && (
         <OMRUploadView
           currentOMRExam={currentOMRExam}
           file={file}
@@ -577,6 +612,11 @@ const handleSubmit = (e) => {
           setCurrentOMRExam={setCurrentOMRExam}
           downloadPDF={downloadPDF}
         />
+      )}
+      {activeView === 'view' && (
+        <div style={{ background: '#fff', padding: '25px', borderRadius: '8px', border: '1px solid #ddd' }}>
+          <ExistingExamsView schoolId={selectedSchool} />
+        </div>
       )}
     </div>
   );

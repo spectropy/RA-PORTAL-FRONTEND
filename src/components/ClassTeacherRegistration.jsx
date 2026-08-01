@@ -33,7 +33,7 @@ const getSubjectOptions = (foundation) => {
   }
 };
 
-export default function ClassTeacherRegistration({ schools = [] }) {
+export default function ClassTeacherRegistration({ schools = [], onSchoolsChanged }) {
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('');
@@ -143,6 +143,13 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     }
   };
 
+  const refreshSchoolViews = async () => {
+    await Promise.all([
+      fetchSchoolData(),
+      typeof onSchoolsChanged === 'function' ? onSchoolsChanged() : Promise.resolve()
+    ]);
+  };
+
   const handleAddClass = async (e) => {
     e.preventDefault();
     if (!selectedSchool) {
@@ -179,8 +186,8 @@ export default function ClassTeacherRegistration({ schools = [] }) {
         numStudents: ''
       });
       
-      // Refresh school data
-      await fetchSchoolData();
+      // Refresh both the registration details and the dashboard school counts.
+      await refreshSchoolViews();
     } catch (err) {
       setError(err.message || 'Failed to add class');
     } finally {
@@ -219,8 +226,8 @@ export default function ClassTeacherRegistration({ schools = [] }) {
         email: ''
       });
       
-      // Refresh school data
-      await fetchSchoolData();
+      // Refresh both the registration details and the dashboard school counts.
+      await refreshSchoolViews();
     } catch (err) {
       setError(err.message || 'Failed to add teacher');
     } finally {
@@ -317,7 +324,7 @@ const handleDeleteClass = async (classId, className, section) => {
   try {
     await deleteClassById(classId);
     setSuccess('Class deleted successfully!');
-    await fetchSchoolData();
+    await refreshSchoolViews();
   } catch (err) {
     setError(err.message || 'Failed to delete class');
   } finally {
