@@ -19,10 +19,12 @@ const getExamPatternsByProgram = (program) => {
         { id: 'PART_TEST_6', name: 'Part Test 6', type: 'PART_TEST' },
         { id: 'PART_TEST_7', name: 'Part Test 7', type: 'PART_TEST' },
         { id: 'PART_TEST_8', name: 'Part Test 8', type: 'PART_TEST' },
+        { id: 'PART_TEST_9', name: 'Part Test 9', type: 'PART_TEST' },
         { id: 'UNIT_TEST_1', name: 'Unit Test 1', type: 'UNIT_TEST' },
         { id: 'UNIT_TEST_2', name: 'Unit Test 2', type: 'UNIT_TEST' },
         { id: 'UNIT_TEST_3', name: 'Unit Test 3', type: 'UNIT_TEST' },
         { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
+        { id: 'GRAND_TEST_2', name: 'Grand Test 2', type: 'GRAND_TEST' }
       ];
     case 'MAE':
     case 'PIO':
@@ -365,10 +367,10 @@ const handleSubmit = (e) => {
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: 1000, margin: '0 auto' }}>
+    <div className="legacy-responsive-page" style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: 1000, margin: '0 auto' }}>
       <h2 style={{ color: '#1e90ff', marginBottom: '30px' }}>📝 Exam Registration</h2>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+      <div className="responsive-tab-row" style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
         <button
           type="button"
           onClick={() => setActiveView('registration')}
@@ -450,7 +452,7 @@ const handleSubmit = (e) => {
           border: '1px solid #e9ecef'
         }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#495057' }}>🏫 School Information</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div><strong>School Name:</strong> {schoolData.school?.school_name || '—'}</div>
             <div>
               <strong>Program(s):</strong> {schoolData.classes && schoolData.classes.length > 0

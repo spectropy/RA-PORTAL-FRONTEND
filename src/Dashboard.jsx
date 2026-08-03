@@ -1,6 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useCallback } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import { getSchools, createSchool } from "./api.js";
+import { useState } from "react";
 import SchoolForm from "./components/SchoolForm.jsx";
 import SchoolTable from "./components/SchoolTable.jsx";
 import ReportButtons from "./components/ReportButtons.jsx";
@@ -9,238 +16,404 @@ import StudentRegistration from "./components/StudentRegistration.jsx";
 import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
-import TopStudentsSchool from './components/TopStudentsSchool.jsx';
+import TopStudentsSchool from "./components/TopStudentsSchool.jsx";
 
-export default function Dashboard() {
+// ─── Tab Definitions ────────────────────────────────────────────
+// path is relative to /admin/
+const TABS = [
+  { id: "schools", path: "schools", icon: "🏫", label: "Schools" },
+  { id: "classes", path: "classes", icon: "👩‍🏫", label: "Class & Teacher" },
+  { id: "students", path: "students", icon: "🎓", label: "Students" },
+  { id: "exams", path: "exams", icon: "📝", label: "OMR Exams" },
+  { id: "lms", path: "lms", icon: "📚", label: "LMS Converter" },
+  { id: "queries", path: "queries", icon: "🔍", label: "Queries" },
+  {
+    id: "top-students",
+    path: "top-students",
+    icon: "🏆",
+    label: "Top Students",
+  },
+];
+
+// ─── Skeleton rows while loading ─────────────────────────────────
+function SkeletonRows() {
+  return (
+    <div>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="skeleton-row">
+          <div className="skeleton" style={{ width: 72, height: 14 }} />
+          <div className="skeleton" style={{ width: 210, height: 14 }} />
+          <div className="skeleton" style={{ width: 90, height: 14 }} />
+          <div className="skeleton" style={{ width: 60, height: 14 }} />
+          <div className="skeleton" style={{ width: 50, height: 14 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────
+export default function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
-  const logout = () => {
-    sessionStorage.removeItem("sp_user");
-    navigate("/login", { replace: true });
-  };
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // -------------------- Responsive Styles --------------------
-  const styles = {
-    box: {
-      maxWidth: "min(1200px, 100%)",
-      margin: "auto",
-      padding: "clamp(12px, 3vw, 24px)",
-      fontFamily:
-        "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', Helvetica Neue, Arial",
-    },
-    headerWrap: {
-      display: "flex",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: "clamp(12px, 2vw, 24px)",
-      gap: 12,
-    },
-    title: {
-      margin: 0,
-      fontSize: "clamp(18px, 2.2vw, 26px)",
-      lineHeight: 1.3,
-    },
-    topButtons: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    smallButton: {
-      padding: "8px 12px",
-      border: "1px solid #cbd5e1",
-      borderRadius: 8,
-      background: "#f1f5f9",
-      cursor: "pointer",
-      fontSize: "clamp(13px, 1.5vw, 14px)",
-    },
-    logoutButton: {
-      padding: "8px 12px",
-      borderRadius: 8,
-      border: "none",
-      background: "#ef4444",
-      color: "#fff",
-      cursor: "pointer",
-      fontSize: "clamp(13px, 1.5vw, 14px)",
-    },
-    tabsWrap: {
-      display: "flex",
-      flexWrap: "nowrap",
-      gap: 10,
-      marginBottom: 20,
-      overflowX: "auto",
-      padding: "8px 4px",
-      borderBottom: "1px solid #e0e0e0",
-      WebkitOverflowScrolling: "touch",
-      scrollbarWidth: "none",
-    },
-    tabButton: (active) => ({
-       flex: "0 0 auto",
-  padding: "8px 12px", // Reduced from 10px 16px
-  background: active ? "#1e90ff" : "#f8f9fa",
-  color: active ? "white" : "#475569",
-  border: "1px solid #cbd5e1",
-  borderRadius: "8px 8px 0 0",
-  cursor: "pointer",
-  fontWeight: active ? 600 : 400,
-  whiteSpace: "nowrap",
-  fontSize: "clamp(12px, 1.3vw, 14px)", // Smaller font
-  transition: "all 0.2s ease",
-    }),
-    card: {
-      border: "1px solid #d3d8e6",
-      borderRadius: 12,
-      padding: "clamp(12px, 2vw, 20px)",
-      marginBottom: "clamp(12px, 2vw, 20px)",
-      background: "#fff",
-      boxShadow: "0 3px 10px rgba(0,0,0,0.04)",
-    },
-  };
+  // Derive active tab from current URL segment
+  // location.pathname inside /admin/* looks like "/admin/schools"
+  const segment = location.pathname.split("/")[2] || "schools"; // "schools" | "classes" | …
+  const activeTab = TABS.find((t) => t.path === segment)?.id || "schools";
+  const isAddSchool = location.pathname === "/admin/add-school";
 
-  // -------------------- State --------------------
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("school-registration");
 
-  // -------------------- Data Fetch --------------------
-  async function refresh() {
+  // ── Data ─────────────────────────────────────────────────────
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const rows = await getSchools();
-      setSchools(rows);
+      setSchools(await getSchools());
     } catch (e) {
       setError(e.message || "Failed to load schools");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // ── Mobile sidebar toggle event ──────────────────────────────
+  useEffect(() => {
+    const onToggle = () => setSidebarOpen((p) => !p);
+    window.addEventListener("toggleAdminSidebar", onToggle);
+    return () => window.removeEventListener("toggleAdminSidebar", onToggle);
   }, []);
 
-  async function onAddSchool(payload) {
-    setError("");
-    try {
-      await createSchool(payload);
-      await refresh();
-    } catch (e) {
-      setError(e.message || "Failed to create school");
-    }
+  // ── Navigation helpers ───────────────────────────────────────
+  const goTab = (tab) => {
+    navigate(`/admin/${tab.path}`);
+    setSidebarOpen(false);
+  };
+
+  async function handleAddSchool(payload) {
+    await createSchool(payload);
+    await refresh();
+    navigate("/admin/schools");
   }
 
-  const tabs = [
-    { id: "school-registration", label: "🏫 School Registration" },
-    { id: "class-teacher-registration", label: "👩‍🏫 Class/Teacher Registration" },
-    { id: "student-registration", label: "🎓 Student Registration" },
-    { id: "exams-registration", label: "📝 OMR Exams" },
-    { id: "lms-exam-registration", label: "📚 LMS Exam Converter" },
-    { id: "queries", label: "🔍 Queries" },
-    { id: "top-students", label: "🏆Top Students" },
-  ];
+  const totalClasses = schools.reduce(
+    (s, sc) => s + (sc.classes_count || 0),
+    0,
+  );
+  const totalTeachers = schools.reduce(
+    (s, sc) => s + (sc.teachers_count || 0),
+    0,
+  );
+  const adminName = user?.username || user?.name || "Admin";
 
-  // -------------------- Render --------------------
+  // ── Render ───────────────────────────────────────────────────
   return (
-    <div style={styles.box}>
-      {/* Header */}
-      <div style={styles.headerWrap}>
-        <h1 style={styles.title}>🎓 SPECTROPY — School Management System</h1>
-        <div style={styles.topButtons}>
-          <button
-            onClick={() => navigate("/login")}
-            style={styles.smallButton}
-          >
-            Back to Login
-          </button>
-          <button onClick={logout} style={styles.logoutButton}>
-            Logout
-          </button>
-        </div>
-      </div>
+    <div className="admin-layout">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Tabs */}
-      <div style={styles.tabsWrap}>
-        {tabs.map((tab) => (
+      {/* ── Sidebar Rail ──────────────────────────────────────── */}
+      <aside
+        className={`sidebar-rail${sidebarOpen ? " sidebar-rail--open" : ""}`}
+        aria-label="Admin navigation"
+      >
+        <button
+          className="sidebar-close-btn"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close navigation"
+        >
+          ✕
+        </button>
+
+        <span className="sidebar-section-label">Navigation</span>
+
+        {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={styles.tabButton(activeTab === tab.id)}
+            className={`sidebar-nav-item${activeTab === tab.id && !isAddSchool ? " sidebar-nav-item--active" : ""}`}
+            onClick={() => goTab(tab)}
+            title={tab.label}
+            aria-current={
+              activeTab === tab.id && !isAddSchool ? "page" : undefined
+            }
           >
-            {tab.label}
+            <span className="sidebar-nav-icon">{tab.icon}</span>
+            <span className="sidebar-nav-label">{tab.label}</span>
           </button>
         ))}
-      </div>
 
-      {/* Content */}
-      {activeTab === "school-registration" && (
-  <>
-    <div style={styles.card}>
-      {/* ✅ Pass existing schools to enable duplicate check */}
-      <SchoolForm onSubmit={onAddSchool} existingSchools={schools} />
-    </div>
-    <div style={styles.card}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 8,
-          gap: 8,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: "clamp(16px, 2vw, 20px)" }}>
-          School List
-        </h2>
-        <ReportButtons rows={schools} />
-      </div>
-      {loading ? <p>Loading...</p> : <SchoolTable rows={schools} />}
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-    </div>
-  </>
-)}
+        {/* Sidebar footer */}
+        <div className="sidebar-footer">
+          <div className="sidebar-admin-info">
+            <div className="sidebar-admin-avatar">
+              {adminName.charAt(0).toUpperCase()}
+              <span className="sidebar-avatar-status" title="Portal Online" />
+            </div>
+            <div className="sidebar-admin-details">
+              <div className="sidebar-admin-name">{adminName}</div>
+              <div className="sidebar-admin-role">Super Admin</div>
+            </div>
+          </div>
 
-      {activeTab === "class-teacher-registration" && (
-        <div style={styles.card}>
-          <ClassTeacherRegistration
-            schools={schools}
-            onSchoolsChanged={refresh}
+          {onLogout && (
+            <button className="sidebar-logout-btn" onClick={onLogout}>
+              <span>⏻</span>
+              <span className="sidebar-nav-label">Sign Out</span>
+            </button>
+          )}
+
+          <div className="sidebar-version">
+            v1.0 · {schools.length} school{schools.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Page Canvas ───────────────────────────────────────── */}
+      <div className="page-canvas">
+        <Routes>
+          {/* Default → redirect to /admin/schools */}
+          <Route index element={<Navigate to="schools" replace />} />
+
+          {/* ── Schools list ── */}
+          <Route
+            path="schools"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">
+                      🏫 School Registration
+                    </h1>
+                    <p className="page-header-subtitle">
+                      {schools.length} school{schools.length !== 1 ? "s" : ""}{" "}
+                      registered
+                      {totalClasses > 0 &&
+                        ` · ${totalClasses} classes · ${totalTeachers} teachers`}
+                    </p>
+                  </div>
+                  <div className="page-header-actions">
+                    <button
+                      className="btn-link-primary"
+                      onClick={() => navigate("/admin/add-school")}
+                      aria-label="Add a new school"
+                    >
+                      + Add School ↗
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="responsive-status-wrap" style={{ padding: "16px 32px 0" }}>
+                    <div className="alert-banner alert-banner--error">
+                      <span className="alert-banner-icon">⚠️</span>
+                      <span>{error}</span>
+                    </div>
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="responsive-status-wrap" style={{ padding: "0 32px" }}>
+                    <SkeletonRows />
+                  </div>
+                ) : (
+                  <SchoolTable
+                    rows={schools}
+                    onSchoolDeleted={refresh}
+                    exportButtons={<ReportButtons rows={schools} />}
+                  />
+                )}
+              </div>
+            }
           />
-        </div>
-      )}
 
-      {activeTab === "student-registration" && (
-        <div style={styles.card}>
-          <StudentRegistration schools={schools} />
-        </div>
-      )}
+          {/* ── Add School ── */}
+          <Route
+            path="add-school"
+            element={
+              <div className="animate-fade-in">
+                <div
+                  className="page-header"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
+                    gap: 16,
+                  }}
+                >
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Add New School</h1>
+                    <p className="page-header-subtitle">
+                      Fill in the details below to register a new school in the
+                      portal.
+                    </p>
+                  </div>
+                  <button
+                    className="page-back-nav"
+                    style={{ marginTop: 4 }}
+                    onClick={() => navigate("/admin/schools")}
+                  >
+                    ← Back to Schools
+                  </button>
+                </div>
+                <div className="page-content">
+                  <div className="form-page-wrap">
+                    <SchoolForm
+                      onSubmit={handleAddSchool}
+                      existingSchools={schools}
+                      onCancel={() => navigate("/admin/schools")}
+                    />
+                  </div>
+                </div>
+              </div>
+            }
+          />
 
-      {activeTab === "exams-registration" && (
-        <div style={styles.card}>
-          <ExamsRegistration schools={schools} />
-        </div>
-      )}
+          {/* ── Class & Teacher ── */}
+          <Route
+            path="classes/*"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">
+                      👩‍🏫 Class &amp; Teacher Registration
+                    </h1>
+                    <p className="page-header-subtitle">
+                      Add classes, sections, and assign teachers per subject.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <ClassTeacherRegistration schools={schools} />
+                </div>
+              </div>
+            }
+          />
 
-      {activeTab === "lms-exam-registration" && (
-        <div style={styles.card}>
-          <LMSExamRegistration />
-        </div>
-      )}
+          {/* ── Students ── */}
+          <Route
+            path="students"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">
+                      🎓 Student Registration
+                    </h1>
+                    <p className="page-header-subtitle">
+                      Register and manage student records across schools.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <StudentRegistration schools={schools} />
+                </div>
+              </div>
+            }
+          />
 
-      {activeTab === "queries" && (
-        <div style={styles.card}>
-          <QueriesPage />
-        </div>
-      )}
+          {/* ── OMR Exams ── */}
+          <Route
+            path="exams"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">
+                      📝 OMR Exam Registration
+                    </h1>
+                    <p className="page-header-subtitle">
+                      Create exam records and upload OMR score sheets.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <ExamsRegistration schools={schools} />
+                </div>
+              </div>
+            }
+          />
 
-      {activeTab === "top-students" && (
-  <div style={styles.card}>
-    <TopStudentsSchool />
-  </div>
-)}
+          {/* ── LMS Converter ── */}
+          <Route
+            path="lms"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">📚 LMS Exam Converter</h1>
+                    <p className="page-header-subtitle">
+                      Convert and import LMS exam result files.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <LMSExamRegistration />
+                </div>
+              </div>
+            }
+          />
 
+          {/* ── Queries ── */}
+          <Route
+            path="queries"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">🔍 Queries</h1>
+                    <p className="page-header-subtitle">
+                      View and respond to support queries.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <QueriesPage />
+                </div>
+              </div>
+            }
+          />
+
+          {/* ── Top Students ── */}
+          <Route
+            path="top-students"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">🏆 Top Students</h1>
+                    <p className="page-header-subtitle">
+                      View top 5 students by class &amp; section across all
+                      schools.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <TopStudentsSchool />
+                </div>
+              </div>
+            }
+          />
+
+          {/* Catch-all: unknown sub-paths → schools */}
+          <Route path="*" element={<Navigate to="schools" replace />} />
+        </Routes>
+      </div>
     </div>
-
   );
 }

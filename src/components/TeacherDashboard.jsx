@@ -1,546 +1,693 @@
 // src/components/TeacherDashboard.jsx
-import React, { useState, useEffect } from "react";
-import jsPDF from 'jspdf';
-import 'jspdf-autotable'; // 👈 Import autotable
-import spectropyLogoUrl from '../assets/logo.png';
+// ─────────────────────────────────────────────────────────────────
+// Data-fetching shell + sidebar navigation for the TEACHER role.
+// Sub-routes: /teacher/overview · /teacher/performance · /teacher/report
+// Also handles "proxy view" when called from SchoolOwnerDashboard
+// with an external teacherId prop.
+// ─────────────────────────────────────────────────────────────────
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
-// Helper: Compute exam patterns AND teacher-specific best week tests
+// ─── Tab Definitions ────────────────────────────────────────────
+const TEACHER_TABS = [
+  { id: "overview", path: "overview", icon: "👩‍🏫", label: "Overview" },
+  { id: "performance", path: "performance", icon: "📊", label: "Performance" },
+  { id: "report", path: "report", icon: "📄", label: "PDF Report" },
+];
+
+// ─── Analytics Helper ────────────────────────────────────────────
 function computeExamAnalytics(exams, teacherAssignments) {
-  const assignments = Array.isArray(teacherAssignments) ? teacherAssignments : [];
-  // Step 1: Group by (exam_pattern, class-section) and compute subject averages
-  const patternClassSectionMap = {};
+  const assignments = Array.isArray(teacherAssignments)
+    ? teacherAssignments
+    : [];
 
-  exams.forEach(exam => {
-    const pattern = exam.exam_pattern || 'N/A';
-    const classSection = `${exam.class || 'N/A'}-${exam.section || 'N/A'}`;
-
-    if (!patternClassSectionMap[pattern]) {
-      patternClassSectionMap[pattern] = {};
-    }
-    if (!patternClassSectionMap[pattern][classSection]) {
-      patternClassSectionMap[pattern][classSection] = {
-        physics: [], chemistry: [], maths: [], biology: []
+  // Group by (exam_pattern, class-section) and compute subject averages
+  const patternMap = {};
+  exams.forEach((exam) => {
+    const pattern = exam.exam_pattern || "N/A";
+    const classSection = `${exam.class || "N/A"}-${exam.section || "N/A"}`;
+    if (!patternMap[pattern]) patternMap[pattern] = {};
+    if (!patternMap[pattern][classSection])
+      patternMap[pattern][classSection] = {
+        physics: [],
+        chemistry: [],
+        maths: [],
+        biology: [],
       };
-    }
 
-    const g = patternClassSectionMap[pattern][classSection];
-    if (exam.physics_percentage != null && exam.physics_percentage !== '') {
+    const g = patternMap[pattern][classSection];
+    if (exam.physics_percentage != null && exam.physics_percentage !== "")
       g.physics.push(parseFloat(exam.physics_percentage));
-    }
-    if (exam.chemistry_percentage != null && exam.chemistry_percentage !== '') {
+    if (exam.chemistry_percentage != null && exam.chemistry_percentage !== "")
       g.chemistry.push(parseFloat(exam.chemistry_percentage));
-    }
-    if (exam.maths_percentage != null && exam.maths_percentage !== '') {
+    if (exam.maths_percentage != null && exam.maths_percentage !== "")
       g.maths.push(parseFloat(exam.maths_percentage));
-    }
-    if (exam.biology_percentage != null && exam.biology_percentage !== '') {
+    if (exam.biology_percentage != null && exam.biology_percentage !== "")
       g.biology.push(parseFloat(exam.biology_percentage));
-    }
   });
 
-  // Step 2: Build examPatterns
-  const examPatterns = Object.entries(patternClassSectionMap).map(([pattern, classSectionData]) => {
+  const avg = (arr) =>
+    arr.length
+      ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)
+      : null;
+
+  const examPatterns = Object.entries(patternMap).map(([pattern, csData]) => {
     const averagesByClassSection = {};
-    for (const [cs, subjects] of Object.entries(classSectionData)) {
+    for (const [cs, s] of Object.entries(csData)) {
       averagesByClassSection[cs] = {
-        Physics: subjects.physics.length > 0
-          ? (subjects.physics.reduce((a, b) => a + b, 0) / subjects.physics.length).toFixed(1)
-          : null,
-        Chemistry: subjects.chemistry.length > 0
-          ? (subjects.chemistry.reduce((a, b) => a + b, 0) / subjects.chemistry.length).toFixed(1)
-          : null,
-        Biology: subjects.biology.length > 0
-          ? (subjects.biology.reduce((a, b) => a + b, 0) / subjects.biology.length).toFixed(1)
-          : null,
-        Maths: subjects.maths.length > 0
-          ? (subjects.maths.reduce((a, b) => a + b, 0) / subjects.maths.length).toFixed(1)
-          : null,
+        Physics: avg(s.physics),
+        Chemistry: avg(s.chemistry),
+        Biology: avg(s.biology),
+        Maths: avg(s.maths),
       };
     }
     return { exam_pattern: pattern, averagesByClassSection };
   });
-
   examPatterns.sort((a, b) => a.exam_pattern.localeCompare(b.exam_pattern));
 
-  // Step 3: Compute best week test per grade — ONLY for teacher's assigned subjects
+  // Best week test per grade — only for teacher's assigned subjects
+  const teacherTeaches = new Set(
+    assignments.map((a) => `${a.class}-${a.section}|${a.subject}`),
+  );
+
   const gradeBest = {};
-
-  // Build a set of what the teacher teaches: "GRADE-9-A|Physics"
-  const teacherTeaches = new Set();
-  teacherAssignments.forEach(a => {
-    const key = `${a.class}-${a.section}|${a.subject}`;
-    teacherTeaches.add(key);
-  });
-
   examPatterns.forEach(({ exam_pattern, averagesByClassSection }) => {
-    Object.entries(averagesByClassSection).forEach(([classSection, subjects]) => {
-      // Extract numeric grade from classSection
-      let grade = 'N/A';
-      if (classSection.startsWith('GRADE-')) {
-        const parts = classSection.split('-');
-        if (parts.length >= 2) grade = parts[1]; // "GRADE-9-A" → "9"
+    Object.entries(averagesByClassSection).forEach(([cs, subjects]) => {
+      let grade = "N/A";
+      if (cs.startsWith("GRADE-")) {
+        const parts = cs.split("-");
+        if (parts.length >= 2) grade = parts[1];
       } else {
-        const parts = classSection.split('-');
-        if (parts.length >= 1) grade = parts[0]; // "9-A" → "9"
+        grade = cs.split("-")[0];
       }
+      if (!/^\d+$/.test(grade)) return;
 
-      if (!/^\d+$/.test(grade)) return; // Skip invalid grades
-
-      // Check each subject the teacher might teach in this class-section
-      ['Physics', 'Chemistry', 'Biology', 'Maths'].forEach(subject => {
-        const teachKey = `${classSection}|${subject}`;
-        if (!teacherTeaches.has(teachKey)) return; // Skip if not taught
-
-        const avgStr = subjects[subject];
-        if (avgStr == null) return;
-
-        const avg = parseFloat(avgStr);
-        if (isNaN(avg)) return;
-
-        // Update best for this grade
-        if (!gradeBest[grade] || avg > gradeBest[grade].bestAvg) {
-          gradeBest[grade] = {
-            bestTest: exam_pattern,
-            bestAvg: avg
-          };
-        }
+      ["Physics", "Chemistry", "Biology", "Maths"].forEach((subject) => {
+        if (!teacherTeaches.has(`${cs}|${subject}`)) return;
+        const avgVal = subjects[subject];
+        if (avgVal == null) return;
+        const n = parseFloat(avgVal);
+        if (isNaN(n)) return;
+        if (!gradeBest[grade] || n > gradeBest[grade].bestAvg)
+          gradeBest[grade] = { bestTest: exam_pattern, bestAvg: n };
       });
     });
   });
 
-  const bestWeekTestsByGrade = Object.entries(gradeBest).map(([grade, data]) => ({
-    grade,
-    bestExamPattern: data.bestTest,
-    bestAverage: data.bestAvg.toFixed(1)
-  }));
+  const bestWeekTestsByGrade = Object.entries(gradeBest).map(
+    ([grade, data]) => ({
+      grade,
+      bestExamPattern: data.bestTest,
+      bestAverage: data.bestAvg.toFixed(1),
+    }),
+  );
 
   return { examPatterns, bestWeekTestsByGrade };
 }
 
-export default function TeacherDashboard({ onBack, teacherId: externalTeacherId }) {
+// ─── Main Component ──────────────────────────────────────────────
+export default function TeacherDashboard({
+  onBack,
+  teacherId: externalTeacherId,
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive active tab from URL
+  const segment = location.pathname.split("/")[2] || "overview";
+  const activeTab =
+    TEACHER_TABS.find((t) => t.path === segment)?.id || "overview";
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [teacher, setTeacher] = useState(null);
   const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [examResults, setExamResults] = useState([]);
+  const [error, setError] = useState("");
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
-  const [schoolLogoUrl, setSchoolLogoUrl] = useState(null);
+  const hasFetched = useRef(false);
 
-  const isViewingAsSchoolOwner = !!externalTeacherId && externalTeacherId.trim() !== '';
-  console.log("✅ isViewingAsSchoolOwner =", isViewingAsSchoolOwner);
+  const isProxyView = !!externalTeacherId && externalTeacherId.trim() !== "";
 
+  // ── Sidebar toggle via global event (from App header hamburger) ──
   useEffect(() => {
-  const loadTeacherAndExams = async () => {
-    try {
-      let teacherData = null;
-      let schoolName = "Unknown School";
-      let schoolId = null;
+    if (isProxyView) return; // No sidebar in proxy view
+    const onToggle = () => setSidebarOpen((p) => !p);
+    window.addEventListener("toggleTeacherSidebar", onToggle);
+    return () => window.removeEventListener("toggleTeacherSidebar", onToggle);
+  }, [isProxyView]);
 
-      // 🔹 Get schoolId from session (works for both teacher and school owner)
-      const userSession = sessionStorage.getItem("sp_user");
-      if (!userSession) {
-        throw new Error("User session not found.");
-      }
-      const user = JSON.parse(userSession);
-      schoolId = user.school_id;
+  // ── Data Fetching ──────────────────────────────────────────────
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
 
-      if (isViewingAsSchoolOwner) {
-        // 🔹 SCHOOL OWNER MODE
-        if (!externalTeacherId) {
-          throw new Error("Teacher ID is required.");
+    const load = async () => {
+      try {
+        const raw =
+          localStorage.getItem("sp_user") || sessionStorage.getItem("sp_user");
+        if (!raw) throw new Error("User session not found. Please log in.");
+        const user = JSON.parse(raw);
+        const schoolId = user.school_id;
+
+        let teacherData = null;
+        let sName = "Unknown School";
+
+        if (isProxyView) {
+          // ── School Owner viewing a teacher by ID ──
+          const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
+          if (!schoolRes.ok) throw new Error("Failed to load school data.");
+          const schoolData = await schoolRes.json();
+          sName = schoolData.school?.school_name || "Unknown School";
+
+          const targetId = externalTeacherId.trim().toUpperCase();
+          const found = schoolData.teachers?.find(
+            (t) => t.teacher_id?.trim().toUpperCase() === targetId,
+          );
+          if (!found) throw new Error("Teacher not found in your school.");
+
+          teacherData = {
+            ...found,
+            teacher_assignments: Array.isArray(found.teacher_assignments)
+              ? found.teacher_assignments
+              : [],
+          };
+        } else {
+          // ── Teacher self-view ──
+          if (user.role !== "TEACHER")
+            throw new Error("Access denied. Teachers only.");
+          teacherData = {
+            ...user,
+            teacher_assignments: Array.isArray(user.teacher_assignments)
+              ? user.teacher_assignments
+              : [],
+          };
+          sName = user.school_name || "Unknown School";
         }
 
-        // Fetch school (which includes list of teachers)
-        const schoolRes = await fetch(`${API_BASE}/api/schools/${schoolId}`);
-        if (!schoolRes.ok) throw new Error("Failed to load school data.");
-        const schoolData = await schoolRes.json();
-        schoolName = schoolData.school?.school_name || "Unknown School";
-        const schoolLogoUrl = schoolData.school?.logo_url || null;
-        
-        console.log("Searching for:", externalTeacherId.trim());
-        console.log("Available IDs:", schoolData.teachers?.map(t => t.teacher_id));
-        // Find teacher in school.teachers by teacher_id
-        const targetId = externalTeacherId.trim().toUpperCase();
-        const teacher = schoolData.teachers?.find(
-        t => t.teacher_id?.trim().toUpperCase() === targetId
+        setTeacher(teacherData);
+        setSchoolName(sName);
+
+        const examsRes = await fetch(
+          `${API_BASE}/api/exams?school_id=${schoolId}`,
         );
+        if (!examsRes.ok) throw new Error("Failed to fetch exam data.");
+        const exams = await examsRes.json();
 
-        if (!teacher) {
-          throw new Error("Teacher not found in your school.");
-        }
-
-        // Ensure teacher_assignments exists
-        teacherData = {
-          ...teacher,
-          teacher_assignments: Array.isArray(teacher.teacher_assignments)
-            ? teacher.teacher_assignments
-            : [],
-        };
-      } else {
-        // 🔹 TEACHER SELF-VIEW MODE (existing logic)
-        const user = sessionStorage.getItem("sp_user");
-        if (!user) {
-          throw new Error("No user data found. Please log in again.");
-        }
-        const parsed = JSON.parse(user);
-        if (parsed.role !== "TEACHER") {
-          throw new Error("Access denied. Teachers only.");
-        }
-        teacherData = {
-          ...parsed,
-          teacher_assignments: Array.isArray(parsed.teacher_assignments)
-            ? parsed.teacher_assignments
-            : [],
-        };
-        schoolName = parsed.school_name || "Unknown School";
-        schoolId = parsed.school_id;
-        const schoolLogoUrl = parsed.school_logo_url || null;
-        console.log("Teacher self-view mode for:logo", schoolLogoUrl);
+        const { examPatterns, bestWeekTestsByGrade } = computeExamAnalytics(
+          exams,
+          teacherData.teacher_assignments,
+        );
+        setExamPatterns(examPatterns);
+        setBestWeekTestsByGrade(bestWeekTestsByGrade);
+      } catch (err) {
+        console.error("TeacherDashboard error:", err);
+        setError(err.message || "Failed to load dashboard.");
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setTeacher(teacherData);
-      setSchoolName(schoolName);
-      setSchoolLogoUrl(schoolLogoUrl);
+    load();
+  }, [isProxyView, externalTeacherId]);
 
-      // 🔹 Fetch all exams for the school
-      const examsRes = await fetch(`${API_BASE}/api/exams?school_id=${schoolId}`);
-      if (!examsRes.ok) throw new Error("Failed to fetch exam data.");
-      const exams = await examsRes.json();
-      setExamResults(exams);
+  // ── PDF Generator ─────────────────────────────────────────────
+  const downloadPDF = () => {
+    if (!teacher) return;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    let y = 20;
 
-      // 🔹 Compute analytics
-      const { examPatterns, bestWeekTestsByGrade } = computeExamAnalytics(
-        exams,
-        teacherData.teacher_assignments
-      );
-      setExamPatterns(examPatterns);
-      setBestWeekTestsByGrade(bestWeekTestsByGrade);
-    } catch (err) {
-      console.error("Error loading teacher dashboard:", err);
-      alert(err.message || "Failed to load dashboard.");
-      onBack?.();
-    } finally {
-      setLoading(false);
+    // Blue header banner
+    doc.setFillColor(30, 85, 160);
+    doc.rect(0, 0, pageWidth, 20, "F");
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text(schoolName || "Unknown School", 14, 12);
+    doc.setFontSize(10);
+    doc.text("Powered BY SPECTROPY", pageWidth - 20, 15, { align: "right" });
+    y += 10;
+
+    doc.setFontSize(20);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text("IIT Foundation Teacher Report", pageWidth / 2, y, {
+      align: "center",
+    });
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Teacher: ${teacher.name}`, margin, y);
+    y += 6;
+    doc.text(`ID: ${teacher.teacher_id}`, margin, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 150, y - 10);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    // Allotments
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Your ALLOTMENTS", margin, y);
+    doc.setFont("helvetica", "italic");
+    y += 8;
+    if (teacher.teacher_assignments.length > 0) {
+      teacher.teacher_assignments.forEach((a) => {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(`${a.class}-${a.section} | ${a.subject}`, margin, y);
+        y += 6;
+      });
+    } else {
+      doc.text("No assigned classes.", margin, y);
+      y += 6;
     }
+    y += 8;
+
+    // Best week test table
+    if (bestWeekTestsByGrade.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Performance Analysis: Best Week Test by Grade", margin, y);
+      doc.setFont("helvetica", "normal");
+      y += 10;
+      doc.autoTable({
+        startY: y,
+        head: [["Grade", "Best Exam Pattern", "Best Average (%)"]],
+        body: bestWeekTestsByGrade.map((item) => [
+          `Grade ${item.grade}`,
+          item.bestExamPattern,
+          `${item.bestAverage}%`,
+        ]),
+        theme: "grid",
+        styles: { fontSize: 10, cellPadding: 3, halign: "center" },
+        headStyles: { fillColor: [66, 153, 225] },
+        margin: { left: margin, right: margin },
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Exam averages table
+    if (examPatterns.length > 0) {
+      const teacherCS = [
+        ...new Set(
+          teacher.teacher_assignments.map((a) => `${a.class}-${a.section}`),
+        ),
+      ];
+      const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
+      const dynCols = [];
+      const colHeaders = ["Exam Pattern"];
+      for (const subj of subjects) {
+        for (const cs of teacherCS) {
+          if (
+            teacher.teacher_assignments.some(
+              (a) => a.subject === subj && `${a.class}-${a.section}` === cs,
+            )
+          ) {
+            dynCols.push({ subject: subj, classSection: cs });
+            colHeaders.push(`${subj} (${cs})`);
+          }
+        }
+      }
+      doc.setFont("helvetica", "bold");
+      doc.text("Exam Performance Averages", margin, y);
+      y += 10;
+      doc.autoTable({
+        startY: y,
+        head: [colHeaders],
+        body: examPatterns.map((p) => {
+          const row = [p.exam_pattern];
+          dynCols.forEach((col) => {
+            const a = p.averagesByClassSection[col.classSection]?.[col.subject];
+            row.push(a != null ? `${a}%` : "N/A");
+          });
+          return row;
+        }),
+        theme: "striped",
+        styles: { fontSize: 10, cellPadding: 2.5, halign: "center" },
+        headStyles: { fillColor: [66, 153, 225] },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    doc.save(
+      `Teacher_Report_${teacher.teacher_id}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
   };
 
-  loadTeacherAndExams();
-}, [onBack, externalTeacherId, isViewingAsSchoolOwner]);
-
-const downloadPDF = () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  const margin = 14;
-  let y = 20;
-  // === BLUE HEADER BANNER (as per Fig 2) ===
-    doc.setFillColor(30, 85, 160); // Deep Blue #1e55a0
-    doc.rect(0, 0, pageWidth, 20, 'F'); // Full-width rectangle
-    
-    // School Name (Left)
-    doc.setFont('times', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(255, 255, 255); // White text
-    if (schoolLogoUrl) {
-  try {
-    // You may need to adjust width/height based on your logo aspect ratio
-    doc.addImage(schoolLogoUrl, 8, 2.5, 20, 20);
-  } catch (e) {
-    console.warn('Failed to load school logo:', e);
-    // Optionally draw fallback text
-  }
-}
-    doc.text(`${schoolName}` || 'Unknown School', 14, 12);
-  
-    // Powered BY SPECTROPY (Right)
-    try {     
-      doc.addImage(spectropyLogoUrl, pageWidth - 25, 2,12,12);
-    } catch (e) {
-      console.warn('Failed to load Spectropy logo, falling back to text:', e);
-    }
-    doc.setFontSize(8);
-    doc.text('Powered BY SPECTROPY', pageWidth - 10, 18, { align: 'right' });
-  y += 10;
-
-  // Header
-  doc.setFontSize(20);
-  doc.setTextColor(0,0,0);
-  doc.setFont('bold');
-  doc.text("IIT Foundation Teacher Report", pageWidth / 2, y, { align: 'center' });
-  y += 10;
-  doc.setFontSize(12);
-  doc.setFont(undefined,'bold');
-  doc.text(`Teacher: ${teacher.name}`, margin, y); y += 6;
-  doc.text(`ID: ${teacher.teacher_id}`, margin, y); y += 6;
-  doc.line(margin, y, pageWidth - margin, y); 
-  doc.setFontSize(8);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 150, y - 29);
-  y += 10;
-
-  // Allotments
-  doc.setFontSize(14);
-  doc.setFont(undefined,'bold');
-  doc.text("Your ALLOTMENTS", margin, y);
-  doc.setFont(undefined, 'italic');
-  y += 8;
-  if (teacher.teacher_assignments.length > 0) {
-    teacher.teacher_assignments.forEach(a => {
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(`${a.class}-${a.section} | ${a.subject}`, margin, y);
-      y += 6;
-    });
-  } else {
-    doc.text("No assigned classes.", margin, y);
-    y += 6;
-  }
-  y += 8;
-
-  // Performance Analysis
-  if (bestWeekTestsByGrade.length > 0) {
-    doc.setFont(undefined, 'bold');
-    doc.text("Performance Analysis: Best Week Test by Grade", margin, y);
-    doc.setFont(undefined, 'normal');
-    y += 10;
-
-    const perfColumns = ["Grade", "Best Exam Pattern", "Best Average (%)"];
-    const perfRows = bestWeekTestsByGrade.map(item => [
-      `Grade ${item.grade}`,
-      item.bestExamPattern,
-      `${item.bestAverage}%`
-    ]);
-
-    doc.autoTable({
-      startY: y,
-      head: [perfColumns],
-      body: perfRows,
-      theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 3, halign:'center' },
-      headStyles: { fillColor: [66, 153, 225] },
-      margin: { left: margin, right: margin }
-    });
-
-    y = doc.lastAutoTable.finalY + 10;
-  }
-
-  // Exam Table
-  if (examPatterns.length > 0) {
-    doc.setFont(undefined, 'bold');
-    doc.text("Exam Performance Averages", margin, y);
-    doc.setFont(undefined, 'normal');
-    y += 10;
-
-    const teacherClassSections = [...new Set(
-      teacher.teacher_assignments.map(a => `${a.class}-${a.section}`)
-    )];
-    const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
-    const dynamicCols = [];
-    const tableColumns = ["Exam Pattern"];
-
-    for (const subject of subjects) {
-      for (const cs of teacherClassSections) {
-        if (teacher.teacher_assignments.some(a => a.subject === subject && `${a.class}-${a.section}` === cs)) {
-          dynamicCols.push({ subject, classSection: cs });
-          tableColumns.push(`${subject} (${cs})`);
-        }
-      }
-    }
-
-    const tableRows = examPatterns.map(pattern => {
-      const row = [pattern.exam_pattern];
-      dynamicCols.forEach(col => {
-        const avg = pattern.averagesByClassSection[col.classSection]?.[col.subject] || "N/A";
-        row.push(avg !== "N/A" ? `${avg}%` : "N/A");
-      });
-      return row;
-    });
-
-    doc.autoTable({
-      startY: y,
-      head: [tableColumns],
-      body: tableRows,
-      theme: 'striped',
-      styles: { fontSize: 10, cellPadding: 2.5, halign: 'center' },
-      headStyles: { fillColor: [66, 153, 225] },
-      margin: { left: margin, right: margin },
-      willDrawCell: (data) => {
-        if (data.cell && data.cell.text === 'N/A') {
-          data.cell.styles.textColor = [0, 0, 0];
-        }
-      }
-    });
-  }
-
-  doc.save(`Teacher_Report_${teacher.teacher_id}_${new Date().toISOString().slice(0, 10)}.pdf`);
-};
-
+  // ─────────────────────────────────────────────────────────────
+  // Loading / Error states
+  // ─────────────────────────────────────────────────────────────
   if (loading) {
-    return <div style={styles.centered}>Loading teacher dashboard...</div>;
+    return (
+      <div
+        style={{
+          padding: 40,
+          textAlign: "center",
+          color: "#64748b",
+          fontSize: 16,
+        }}
+      >
+        ⏳ Loading teacher dashboard...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 32 }}>
+        <p style={{ color: "crimson", fontWeight: "bold", marginBottom: 16 }}>
+          ⚠️ {error}
+        </p>
+        {onBack && (
+          <button className="btn btn-outline" onClick={onBack}>
+            ← Back
+          </button>
+        )}
+      </div>
+    );
   }
 
   if (!teacher) {
-    return <div style={styles.centered}>No teacher data available.</div>;
+    return (
+      <div style={{ padding: 32, color: "#64748b" }}>
+        No teacher data available.
+      </div>
+    );
   }
 
-  // Get unique (class-section) the teacher teaches
-  const teacherClassSections = [...new Set(
-    teacher.teacher_assignments.map(a => `${a.class}-${a.section}`)
-  )];
-
-  // Build column headers: one per (subject, class-section) combo the teacher teaches
-  const columns = [];
-  const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
-  for (const subject of subjects) {
-    for (const cs of teacherClassSections) {
-      if (teacher.teacher_assignments.some(a => a.subject === subject && `${a.class}-${a.section}` === cs)) {
-        columns.push({ subject, classSection: cs });
-      }
-    }
+  // ─────────────────────────────────────────────────────────────
+  // Proxy view (School Owner looking at a teacher) — no sidebar
+  // ─────────────────────────────────────────────────────────────
+  if (isProxyView) {
+    return (
+      <div className="td-proxy-wrap">
+        <div className="td-proxy-header">
+          <div>
+            <h2 className="td-proxy-title">👩‍🏫 {teacher.name}</h2>
+            <p className="td-proxy-meta">
+              {teacher.teacher_id} · {schoolName}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={downloadPDF}>
+              📄 Download PDF
+            </button>
+            {onBack && (
+              <button className="btn btn-outline" onClick={onBack}>
+                ← Back to Overview
+              </button>
+            )}
+          </div>
+        </div>
+        <OverviewContent teacher={teacher} />
+        <PerformanceContent
+          teacher={teacher}
+          examPatterns={examPatterns}
+          bestWeekTestsByGrade={bestWeekTestsByGrade}
+        />
+      </div>
+    );
   }
 
-  // Helper: Get avg for a specific (subject, class-section) in a given exam pattern
-  const getAvgForPattern = (subject, classSection, patternData) => {
-    return patternData.averagesByClassSection[classSection]?.[subject] || null;
+  // ─────────────────────────────────────────────────────────────
+  // Self-view: full sidebar layout with nested routes
+  // ─────────────────────────────────────────────────────────────
+  const goTab = (tab) => {
+    navigate(`/teacher/${tab.path}`);
+    setSidebarOpen(false);
   };
 
-   return (
-    <div style={styles.container}>
-      {/* Header with Download PDF button */}
-      <div style={styles.header}>
-  <div>
-    <h1 style={styles.title}>👩‍🏫 Teacher Dashboard</h1>
-    <p style={styles.subtitle}>
-      Welcome, <strong>{teacher.name}</strong> • {teacher.teacher_id}
-    </p>
-    <p style={styles.school}>
-      School: <strong>{schoolName}</strong>
-    </p>
-  </div>
-  <div style={{ display: 'flex', gap: '10px' }}>
-    <button onClick={downloadPDF} style={styles.downloadBtn}>
-      📄 Download PDF Report
-    </button>
-    {/* ✅ Only show Logout if NOT viewing as school owner */}
-    {!isViewingAsSchoolOwner && (
-      <button
-        onClick={() => {
-          sessionStorage.removeItem("sp_user");
-          onBack();
-        }}
-        style={styles.logoutBtn}
-      >
-        ← Logout
-      </button>
-    )}
-    {/* ✅ Always show "Back" for school owners */}
-    {isViewingAsSchoolOwner && (
-      <button onClick={onBack} style={styles.backBtn}>
-        ← Back to Overview
-      </button>
-    )}
-  </div>
-</div>
+  return (
+    <div className="admin-layout">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Assignments Section */}
-      <div style={styles.card}>
-        <h2 style={styles.sectionTitle}>📚 Your ALLOTMENTS</h2>
+      {/* ── Sidebar Rail ────────────────────────────────────── */}
+      <aside
+        className={`sidebar-rail${sidebarOpen ? " sidebar-rail--open" : ""}`}
+        aria-label="Teacher navigation"
+      >
+        <button
+          className="sidebar-close-btn"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close navigation"
+        >
+          ✕
+        </button>
+
+        <span className="sidebar-section-label">Navigation</span>
+
+        {TEACHER_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            className={`sidebar-nav-item${activeTab === tab.id ? " sidebar-nav-item--active" : ""}`}
+            onClick={() => goTab(tab)}
+            title={tab.label}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+          >
+            <span className="sidebar-nav-icon">{tab.icon}</span>
+            <span className="sidebar-nav-label">{tab.label}</span>
+          </button>
+        ))}
+
+        {/* Sidebar Footer */}
+        <div className="sidebar-footer">
+          <div className="sidebar-admin-info">
+            <div className="sidebar-admin-avatar">
+              {(teacher.name || "T").charAt(0).toUpperCase()}
+              <span className="sidebar-avatar-status" title="Online" />
+            </div>
+            <div className="sidebar-admin-details">
+              <div className="sidebar-admin-name">{teacher.name}</div>
+              <div className="sidebar-admin-role">{teacher.teacher_id}</div>
+            </div>
+          </div>
+
+          {onBack && (
+            <button className="sidebar-logout-btn" onClick={onBack}>
+              <span>⏻</span>
+              <span className="sidebar-nav-label">Sign Out</span>
+            </button>
+          )}
+
+          <div className="sidebar-version">{schoolName}</div>
+        </div>
+      </aside>
+
+      {/* ── Page Canvas ─────────────────────────────────────── */}
+      <div className="page-canvas">
+        <Routes>
+          <Route index element={<Navigate to="overview" replace />} />
+
+          <Route
+            path="overview"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">👩‍🏫 Overview</h1>
+                    <p className="page-header-subtitle">
+                      {teacher.name} · {teacher.teacher_id} · {schoolName}
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <OverviewContent teacher={teacher} />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="performance"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">📊 Performance</h1>
+                    <p className="page-header-subtitle">
+                      Grade analysis & exam pattern averages
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <PerformanceContent
+                    teacher={teacher}
+                    examPatterns={examPatterns}
+                    bestWeekTestsByGrade={bestWeekTestsByGrade}
+                  />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="report"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">📄 PDF Report</h1>
+                    <p className="page-header-subtitle">
+                      Download your full performance report
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <ReportContent
+                    teacher={teacher}
+                    schoolName={schoolName}
+                    bestWeekTestsByGrade={bestWeekTestsByGrade}
+                    examPatterns={examPatterns}
+                    onDownload={downloadPDF}
+                  />
+                </div>
+              </div>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="overview" replace />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sub-page: Overview — Profile card + Allotments
+// ─────────────────────────────────────────────────────────────────
+function OverviewContent({ teacher }) {
+  return (
+    <>
+      {/* Profile Card */}
+      <div className="td-card">
+        <div className="td-profile-grid">
+          <div className="td-avatar-wrap">
+            <div className="td-avatar-circle">
+              {(teacher.name || "T").charAt(0).toUpperCase()}
+            </div>
+          </div>
+          <div className="td-profile-info">
+            <h2 className="td-profile-name">{teacher.name}</h2>
+            <div className="td-profile-meta">
+              <span className="td-badge td-badge--blue">
+                ID: {teacher.teacher_id}
+              </span>
+              {teacher.email && (
+                <span className="td-badge td-badge--gray">
+                  ✉ {teacher.email}
+                </span>
+              )}
+              {teacher.contact && (
+                <span className="td-badge td-badge--gray">
+                  📞 {teacher.contact}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Allotments */}
+      <div className="td-card">
+        <h2 className="td-section-title">📚 Your Allotments</h2>
         {teacher.teacher_assignments.length > 0 ? (
-          <div style={styles.assignmentsGrid}>
-            {teacher.teacher_assignments.map((assignment, idx) => (
-              <div key={idx} style={styles.assignmentCard}>
-                <div style={styles.assignmentHeader}>
-                  <span style={styles.classTag}>
-                    {assignment.class} • {assignment.section}
+          <div className="td-assignments-grid">
+            {teacher.teacher_assignments.map((a, idx) => (
+              <div key={idx} className="td-assignment-card">
+                <div className="td-assignment-header">
+                  <span className="td-class-tag">
+                    {a.class} · {a.section}
                   </span>
                 </div>
-                <div style={styles.subject}>
-                  <strong>Subject:</strong> {assignment.subject}
+                <div className="td-subject-label">
+                  <strong>Subject:</strong> {a.subject}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p style={styles.noData}>You have no assigned classes yet.</p>
+          <p className="td-no-data">No assigned classes yet.</p>
         )}
       </div>
+    </>
+  );
+}
 
-      {/* Performance Analysis: Best Week Test by Grade (Card Blocks) */}
+// ─────────────────────────────────────────────────────────────────
+// Sub-page: Performance — Best week tests + Exam averages table
+// ─────────────────────────────────────────────────────────────────
+function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
+  const teacherCS = [
+    ...new Set(
+      teacher.teacher_assignments.map((a) => `${a.class}-${a.section}`),
+    ),
+  ];
+  const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
+  const columns = [];
+  for (const subj of subjects) {
+    for (const cs of teacherCS) {
+      if (
+        teacher.teacher_assignments.some(
+          (a) => a.subject === subj && `${a.class}-${a.section}` === cs,
+        )
+      ) {
+        columns.push({ subject: subj, classSection: cs });
+      }
+    }
+  }
+
+  const getAvg = (subject, classSection, patternData) =>
+    patternData.averagesByClassSection[classSection]?.[subject] || null;
+
+  return (
+    <>
+      {/* Best Week Test by Grade */}
       {bestWeekTestsByGrade.length > 0 && (
-        <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>📊 Performance Analysis: Best Week Test by Grade</h2>
+        <div className="td-card">
+          <h2 className="td-section-title">🏆 Best Week Test by Grade</h2>
 
-          {/* Highlight best overall grade */}
+          {/* Best overall highlight */}
           {(() => {
-            const bestOverall = bestWeekTestsByGrade.reduce((a, b) =>
-              parseFloat(a.bestAverage) > parseFloat(b.bestAverage) ? a : b
+            const best = bestWeekTestsByGrade.reduce((a, b) =>
+              parseFloat(a.bestAverage) > parseFloat(b.bestAverage) ? a : b,
             );
-
             return (
-              <div style={{
-                marginBottom: '16px',
-                padding: '8px 12px',
-                backgroundColor: '#f0f8ff',
-                borderRadius: '8px',
-                textAlign: 'center',
-                fontWeight: '500',
-                color: '#2d3748',
-                fontSize: '14px'
-              }}>
-                🏆 Best Overall Grade: <strong>{bestOverall.grade}</strong> ({bestOverall.bestExamPattern}) — {bestOverall.bestAverage}%
+              <div className="td-best-banner">
+                🏆 Best Overall: <strong>Grade {best.grade}</strong> —{" "}
+                {best.bestExamPattern} — <strong>{best.bestAverage}%</strong>
               </div>
             );
           })()}
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: '16px',
-            marginTop: '16px'
-          }}>
+          <div className="td-grade-grid">
             {bestWeekTestsByGrade.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  textAlign: 'center',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  cursor: 'default',
-                }}
-              >
-                <div style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#2d3748',
-                  marginBottom: '8px'
-                }}>
-                  Grade {item.grade}
-                </div>
-                <div style={{
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  color: '#2d3748',
-                  marginBottom: '4px'
-                }}>
-                  {item.bestExamPattern}
-                </div>
-                <div style={{
-                  fontSize: '18px',
-                  fontWeight: '800',
-                  color: '#4299e1',
-                }}>
-                  {item.bestAverage}%
-                </div>
-                <div style={{
-                  fontSize: '12px',
-                  color: '#718096',
-                  marginTop: '4px'
-                }}>
-                  Avg Score
-                </div>
+              <div key={i} className="td-grade-card">
+                <div className="td-grade-label">Grade {item.grade}</div>
+                <div className="td-grade-exam">{item.bestExamPattern}</div>
+                <div className="td-grade-score">{item.bestAverage}%</div>
+                <div className="td-grade-sub">Avg Score</div>
               </div>
             ))}
           </div>
@@ -549,173 +696,126 @@ const downloadPDF = () => {
 
       {/* Exam Performance Averages Table */}
       {examPatterns.length > 0 && (
-        <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>📊 Exam Performance Averages</h2>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Exam Pattern</th>
-                {columns.map((col, idx) => (
-                  <th key={idx} style={styles.th}>
-                    {col.subject} ({col.classSection}) Avg
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {examPatterns.map((patternData, idx) => (
-                <tr key={idx}>
-                  <td style={styles.td}>{patternData.exam_pattern}</td>
-                  {columns.map((col, colIdx) => {
-                    const avg = getAvgForPattern(col.subject, col.classSection, patternData);
-                    return (
-                      <td key={colIdx} style={styles.td}>
-                        {avg != null ? `${avg}%` : "N/A"}
-                      </td>
-                    );
-                  })}
+        <div className="td-card">
+          <h2 className="td-section-title">📋 Exam Performance Averages</h2>
+          <div className="td-table-scroll">
+            <table className="td-table">
+              <thead>
+                <tr>
+                  <th className="td-th">Exam Pattern</th>
+                  {columns.map((col, i) => (
+                    <th key={i} className="td-th">
+                      {col.subject}
+                      <span className="td-th-sub">{col.classSection}</span>
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {examPatterns.map((p, i) => (
+                  <tr
+                    key={i}
+                    className={i % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                  >
+                    <td className="td-td td-td--pattern">{p.exam_pattern}</td>
+                    {columns.map((col, j) => {
+                      const val = getAvg(col.subject, col.classSection, p);
+                      const n = val ? parseFloat(val) : null;
+                      return (
+                        <td key={j} className="td-td">
+                          {val != null ? (
+                            <span
+                              className={
+                                n >= 75
+                                  ? "td-score td-score--high"
+                                  : n >= 50
+                                    ? "td-score td-score--mid"
+                                    : "td-score td-score--low"
+                              }
+                            >
+                              {val}%
+                            </span>
+                          ) : (
+                            <span className="td-score td-score--na">N/A</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {examPatterns.length === 0 && teacher.teacher_assignments.length > 0 && (
-        <div style={styles.card}>
-          <p style={styles.noData}>No exam results found for your assigned classes.</p>
+        <div className="td-card">
+          <p className="td-no-data">
+            No exam results found for your assigned classes.
+          </p>
         </div>
       )}
-    </div>
+
+      {teacher.teacher_assignments.length === 0 && (
+        <div className="td-card">
+          <p className="td-no-data">
+            No class allotments found. Contact your administrator.
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 
-// ✅ Styles
-const styles = {
-  container: {
-    maxWidth: 1200,
-    margin: '24px auto',
-    padding: '0 16px',
-  },
-  centered: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '80vh',
-    fontSize: '18px',
-    color: '#4a5568',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: '24px 0',
-    borderBottom: '2px solid #e2e8f0',
-    marginBottom: '24px',
-  },
-  title: {
-    margin: '0 0 8px 0',
-    fontSize: '28px',
-    color: '#2d3748',
-  },
-  subtitle: {
-    margin: '0 0 4px 0',
-    fontSize: '16px',
-    color: '#4a5568',
-  },
-  school: {
-    margin: 0,
-    fontSize: '14px',
-    color: '#718096',
-  },
-  logoutBtn: {
-    padding: "8px",
-    borderRadius: '4px',
-    border: "none",
-    background: "#ef4444",
-    color: "#fff",
-    cursor: "pointer",
-    fontSize: "clamp(13px, 1.5vw, 14px)",
-  },
-  downloadBtn: {
-  padding: '8px',
-  background: '#3182ce',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '12px',
-  fontWeight: '500',
-},
-  card: {
-    overflow: 'auto',
-    background: 'white',
-    border: '1px solid #e2e8f0',
-    borderRadius: '12px',
-    padding: '24px',
-    marginBottom: '24px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-  },
-  sectionTitle: {
-    margin: '0 0 16px 0',
-    fontSize: '20px',
-    color: '#2d3748',
-    fontWeight: '600',
-  },
-  assignmentsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '16px',
-  },
-  assignmentCard: {
-    background: '#f8fafc',
-    border: '1px solid #cbd5e0',
-    borderRadius: '8px',
-    padding: '16px',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-  },
-  assignmentHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '8px',
-  },
-  classTag: {
-    background: '#4299e1',
-    color: 'white',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontSize: '14px',
-    fontWeight: '500',
-  },
-  subject: {
-    fontSize: '15px',
-    color: '#2d3748',
-    marginTop: '4px',
-  },
-  noData: {
-    color: '#718096',
-    fontSize: '16px',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    padding: '20px',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '12px',
-  },
-  th: {
-    backgroundColor: '#edf2f7',
-    padding: '12px 16px',
-    textAlign: 'left',
-    fontWeight: '600',
-    color: '#2d3748',
-    borderBottom: '2px solid #cbd5e0',
-  },
-  td: {
-    padding: '12px 16px',
-    borderBottom: '1px solid #e2e8f0',
-    color: '#2d3748',
-  },
-};
+// ─────────────────────────────────────────────────────────────────
+// Sub-page: Report — PDF preview + download
+// ─────────────────────────────────────────────────────────────────
+function ReportContent({
+  teacher,
+  schoolName,
+  bestWeekTestsByGrade,
+  examPatterns,
+  onDownload,
+}) {
+  return (
+    <div className="td-card td-report-card">
+      <div className="td-report-icon">📄</div>
+      <h2 className="td-report-title">Teacher Performance Report</h2>
+      <p className="td-report-desc">
+        Download a full PDF report including your allotments, best week test
+        performance by grade, and complete exam average breakdown across all
+        your assigned classes.
+      </p>
+
+      {/* Summary stats */}
+      <div className="td-report-stats">
+        <div className="td-stat-item">
+          <div className="td-stat-num">
+            {teacher.teacher_assignments.length}
+          </div>
+          <div className="td-stat-label">Allotments</div>
+        </div>
+        <div className="td-stat-item">
+          <div className="td-stat-num">{bestWeekTestsByGrade.length}</div>
+          <div className="td-stat-label">Grades Tracked</div>
+        </div>
+        <div className="td-stat-item">
+          <div className="td-stat-num">{examPatterns.length}</div>
+          <div className="td-stat-label">Exam Patterns</div>
+        </div>
+      </div>
+
+      <div className="td-report-meta">
+        <span>👩‍🏫 {teacher.name}</span>
+        <span>🆔 {teacher.teacher_id}</span>
+        <span>🏫 {schoolName}</span>
+        <span>📅 {new Date().toLocaleDateString("en-IN")}</span>
+      </div>
+
+      <button className="btn btn-primary td-report-btn" onClick={onDownload}>
+        ⬇ Download PDF Report
+      </button>
+    </div>
+  );
+}

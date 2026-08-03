@@ -75,11 +75,11 @@ export default function QueriesPage() {
   }, [selectedExamPattern]);
 
   return (
-    <div>
+    <div className="legacy-responsive-page">
       <h2 style={{ marginBottom: "16px", fontSize: "20px" }}>🔍 Query Dashboard</h2>
 
       {/* Program Selector */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
+      <div className="responsive-filter-row" style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
         <div>
           <label style={{ display: "block", marginBottom: "4px", fontWeight: "bold" }}>
             Program:
@@ -167,7 +167,7 @@ export default function QueriesPage() {
 
       {/* Stats Table */}
       {stats && !loading && (
-        <div style={{ overflowX: "auto" }}>
+        <div className="responsive-table-scroll" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
             <thead>
               <tr>

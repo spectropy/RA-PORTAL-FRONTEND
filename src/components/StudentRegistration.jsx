@@ -74,11 +74,12 @@ export default function StudentRegistration({ schools = [] }) {
     }
   };
 
-  // 👇 NEW: Fetch students for selected school + class-section
+  // 👇 Fetch students for selected school + class-section
   const fetchStudents = async () => {
     if (!selectedSchool || !selectedClassSection) return;
 
     setFetchingStudents(true);
+    setError('');
     try {
       // Split class-section to get class and section
       const lastDashIndex = selectedClassSection.lastIndexOf('-');
@@ -95,7 +96,7 @@ export default function StudentRegistration({ schools = [] }) {
       setStudents(fetchedStudents || []);
     } catch (err) {
       console.error('Error fetching students:', err);
-      setError('Failed to load student list');
+      setError(err.message || 'Failed to load student list');
     } finally {
       setFetchingStudents(false);
     }
@@ -200,19 +201,26 @@ export default function StudentRegistration({ schools = [] }) {
     setSuccess('');
 
     try {
+      const lastDashIndex = selectedClassSection.lastIndexOf('-');
+      const classValue = lastDashIndex > 0 ? selectedClassSection.substring(0, lastDashIndex).trim() : selectedClassSection;
+      const sectionValue = lastDashIndex > 0 ? selectedClassSection.substring(lastDashIndex + 1).trim() : '';
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('class_section', selectedClassSection);
+      formData.append('class', classValue);
+      formData.append('section', sectionValue);
 
       await uploadStudents(selectedSchool, formData);
       setSuccess('Students uploaded successfully!');
       
-      // 👇 NEW: Refresh student table after successful upload
+      // Refresh student table after successful upload
       await fetchStudents();
 
       // Reset file input
       setFile(null);
-      document.getElementById('file-upload').value = '';
+      const fileInput = document.getElementById('file-upload');
+      if (fileInput) fileInput.value = '';
     } catch (err) {
       setError(err.message || 'Failed to upload students');
     } finally {
@@ -221,10 +229,11 @@ export default function StudentRegistration({ schools = [] }) {
   };
 
   const downloadSample = () => {
+    const activeClass = selectedClassSection || 'GRADE-1-A';
     const sampleData = [
-      ['ROLLNO', 'CLASS', 'NAME', 'PHONENO', 'EMAILID'],
-      ['116001', 'Grade - 6', 'A GAYATHRI', '7981900487', 'parent1@email.com'],
-      ['116002', 'Grade - 6', 'A VASUDEVA REDDY', '6281571454', 'parent2@email.com']
+      ['Student ID', 'First Name', 'Last Name', 'Parent Phone', 'Parent Email'],
+      ['101', 'A', 'GAYATHRI', '7981900487', 'parent1@email.com'],
+      ['102', 'A', 'VASUDEVA REDDY', '6281571454', 'parent2@email.com']
     ];
 
     const csvContent = sampleData.map(row => `"${row.join('","')}"`).join('\n');
@@ -232,7 +241,7 @@ export default function StudentRegistration({ schools = [] }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'student_upload_template.csv');
+    link.setAttribute('download', `student_upload_template_${selectedSchool || 'school'}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -240,7 +249,7 @@ export default function StudentRegistration({ schools = [] }) {
   };
 
   return (
-    <div style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
+    <div className="legacy-responsive-page" style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
       <h3 style={{ margin: '0 0 20px 0', color: '#1e90ff' }}>🎓 Student Registration</h3>
       
       {error && (
@@ -270,7 +279,7 @@ export default function StudentRegistration({ schools = [] }) {
       )}
 
       {/* Academic Year and School Selection */}
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+      <div className="responsive-form-row" style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
         <div style={{ flex: 1 }}>
           <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
             Select Academic Year *
@@ -441,93 +450,55 @@ export default function StudentRegistration({ schools = [] }) {
             </button>
           </form>
 
-          {/* 👇 NEW: Students Table */}
+          {/* Students Table */}
           {(selectedClassSection || students.length > 0) && (
-            <div style={{ marginTop: '30px' }}>
-              <h4 style={{ color: '#1e90ff', marginBottom: '15px' }}>
-                👥 Students in {selectedClassSection || 'Selected Class'}
-              </h4>
+            <div style={{ marginTop: '16px' }}>
+              <div className="ct-section-header" style={{ marginBottom: '8px', paddingBottom: '4px' }}>
+                <div className="ct-section-title" style={{ margin: 0, border: 'none', fontSize: '13.5px' }}>
+                  👥 Students in {selectedClassSection || 'Selected Class'} ({students.length})
+                </div>
+              </div>
               
               {fetchingStudents ? (
-                <p>Loading students...</p>
+                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '8px 0' }}>Loading students...</p>
               ) : students.length === 0 ? (
-                <p style={{ fontStyle: 'italic', color: '#666' }}>
-                  No students found. Upload a file to get started.
+                <p style={{ fontSize: 12, fontStyle: 'italic', color: 'var(--color-text-muted)', margin: '8px 0' }}>
+                  No students registered for this class section yet.
                 </p>
               ) : (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-                    <button
-                      type="button"
-                      onClick={handleDeleteAllStudents}
-                      disabled={deletingAll || Boolean(deletingStudentId)}
-                      style={{
-                        padding: '8px 14px',
-                        background: deletingAll ? '#9ca3af' : '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: deletingAll || deletingStudentId ? 'not-allowed' : 'pointer',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      {deletingAll ? 'Deleting All...' : `Delete All Students (${students.length})`}
-                    </button>
-                  </div>
-                  <div style={{ 
-                  overflowX: 'auto', 
-                  border: '1px solid #ddd', 
-                  borderRadius: '8px'
-                }}>
-                  <table style={{ 
-                    width: '100%', 
-                    borderCollapse: 'collapse',
-                    fontSize: '14px',
-                    minWidth: '720px'
-                  }}>
+                <div className="ct-compact-table-outer">
+                  <table className="ct-compact-table">
                     <thead>
-                      <tr style={{ backgroundColor: '#f8f9fa' }}>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Id</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Name</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Phone</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Email</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Actions</th>
+                      <tr>
+                        <th>Student ID</th>
+                        <th>Student Name</th>
+                        <th>Parent Phone</th>
+                        <th>Parent Email</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {students.map((student, index) => (
-                        <tr key={student.id || student.student_id} style={{
-                          backgroundColor: index % 2 === 0 ? '#fafafa' : 'white',
-                          borderBottom: '1px solid #eee'
-                        }}>
-                          <td style={{ padding: '12px' }}>{student.student_id || student.roll_no}</td>
-                          <td style={{ padding: '12px' }}>{student.name}</td>
-                          <td style={{ padding: '12px' }}>{student.parent_phone || '-'}</td>
-                          <td style={{ padding: '12px' }}>{student.parent_email || '-'}</td>
-                          <td style={{ padding: '12px' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteStudent(student)}
-                              disabled={!student.id || deletingAll || Boolean(deletingStudentId)}
-                              aria-label={`Delete ${student.name}`}
-                              style={{
-                                padding: '6px 10px',
-                                background: deletingStudentId === student.id ? '#9ca3af' : '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: !student.id || deletingAll || deletingStudentId ? 'not-allowed' : 'pointer'
-                              }}
-                            >
-                              {deletingStudentId === student.id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {students.map((student, index) => {
+                        const fullName = student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || '—';
+                        const phone = student.parent_phone || student.phone || student.phoneno || student.phone_number || student.mobile || student.contact || '-';
+                        const email = student.parent_email || student.email || student.emailid || student.email_id || '-';
+                        const studentId = student.student_id || student.roll_no || student.rollno || student.id;
+
+                        return (
+                          <tr key={student.id || student.student_id || index}>
+                            <td>
+                              <span className="school-id-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
+                                {studentId}
+                              </span>
+                            </td>
+                            <td><b>{fullName}</b></td>
+                            <td>{phone}</td>
+                            <td>{email}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
-                </>
               )}
             </div>
           )}

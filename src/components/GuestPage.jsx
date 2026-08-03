@@ -3,12 +3,12 @@ import React from "react";
 
 export default function GuestPage({ onBack }) {
   return (
-    <div style={styles.container}>
+    <div className="guest-page" style={styles.container}>
       <button onClick={onBack} style={styles.backButton}>
         ← Back
       </button>
 
-      <div style={styles.companyCard}>
+      <div className="guest-card" style={styles.companyCard}>
         <h1 style={styles.title}>📘 Spectropy Education Technologies</h1>
         <p style={styles.tagline}>
           <em>Architects of a Brighter Educational Future</em>

@@ -1,11 +1,24 @@
-import React, { useState } from "react";
-import SchoolOwnerDashboard from "./SchoolOwnerDashboard";
-import TeacherDashboard from "./TeacherDashboard";
-import StudentDashboard from "./StudentDashboard";
-import ParentDashboard from "./ParentDashboard";
-import GuestPage from "./GuestPage";
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+import React, { useEffect, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+} from "recharts";
 
+// 🖼️ Import Role Specific Images from src/assets
+import adminImg from "../assets/Spectropy Admin.png";
+import ownerImg from "../assets/school owner.png";
+import teacherImg from "../assets/Teacher Portal.png";
+import studentImg from "../assets/Student Portal.png";
+import parentImg from "../assets/Parent Portal.png";
+import guestImg from "../assets/Guest Access.png";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 const ROLES = {
   ADMIN: "SPECTROPY_ADMIN",
@@ -16,13 +29,13 @@ const ROLES = {
   GUEST: "GUEST",
 };
 
-// 🔐 Dev-only credentials for non-owner roles
+// 🔐 Credentials for admin login
 const CREDENTIALS = {
   ADMIN: [
     { username: "admin", password: "spectropy@123" },
     { username: "Krishna", password: "Krishna@123" },
     { username: "Sumathi", password: "Sumathi@123" },
-    { username: "Naresh", password: "Naresh@123"},
+    { username: "Naresh", password: "Naresh@123" },
     { username: "Pooja", password: "Pooja@123" },
     { username: "Rahul", password: "Rahul@123" },
     { username: "Ramesh", password: "Ramesh@123" },
@@ -33,18 +46,21 @@ const CREDENTIALS = {
 export default function LoginPage({ onLogin }) {
   const [showAdminForm, setShowAdminForm] = useState(false);
   const [loginStep, setLoginStep] = useState(null);
-  const [username, setUsername] = useState(""); // Admin username
-  const [password, setPassword] = useState(""); // Admin password
-  const [roleUsername, setRoleUsername] = useState(""); // For Teacher/Parent/Student
-  const [rolePassword, setRolePassword] = useState("");
-  const [schoolId, setSchoolId] = useState(""); // ← New: School ID input
-  const [error, setError] = useState(""); // Admin error
-  const [roleError, setRoleError] = useState(""); // Role login error
-  const [schoolIdError, setSchoolIdError] = useState(""); // School ID error
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
 
-  // ← Back to role selection
+  // Form Fields
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [roleUsername, setRoleUsername] = useState("");
+  const [rolePassword, setRolePassword] = useState("");
+  const [schoolId, setSchoolId] = useState("");
+
+  // Errors & Loading
+  const [error, setError] = useState("");
+  const [roleError, setRoleError] = useState("");
+  const [schoolIdError, setSchoolIdError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Reset view to main role selection grid
   const handleBack = () => {
     setLoginStep(null);
     setShowAdminForm(false);
@@ -56,549 +72,820 @@ export default function LoginPage({ onLogin }) {
     setError("");
     setRoleError("");
     setSchoolIdError("");
-    setIsSubmitting(false);
+    setLoading(false);
   };
 
+  // 🛠️ Admin Submit
   const handleAdminSubmit = (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setError("");
-  const matchedAdmin = CREDENTIALS.ADMIN.find(
-    (admin) => admin.username === username && admin.password === password
-  );
-   
-  setTimeout(() => {
-  if (matchedAdmin) {
+    e.preventDefault();
+    setLoading(true);
     setError("");
-    // ✅ Save admin identity in session (optional but useful)
-    sessionStorage.setItem("sp_user", JSON.stringify({
-      role: ROLES.ADMIN,
-      username: matchedAdmin.username
-    }));
-    onLogin({ role: ROLES.ADMIN, username: matchedAdmin.username });
-  } else {
-    setError("Invalid admin credentials");
-  }
-  setIsSubmitting(false);
-   }, 300);
-};
 
-   // 🏫 School Owner Login (Backend)
+    setTimeout(() => {
+      const matchedAdmin = CREDENTIALS.ADMIN.find(
+        (admin) =>
+          admin.username.toUpperCase() === username.trim().toUpperCase() &&
+          admin.password === password,
+      );
+
+      if (matchedAdmin) {
+        setError("");
+        const userObj = {
+          role: ROLES.ADMIN,
+          username: matchedAdmin.username,
+        };
+        sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+        localStorage.setItem("sp_user", JSON.stringify(userObj));
+        if (onLogin) onLogin(userObj);
+      } else {
+        setError("Invalid admin username or password.");
+      }
+      setLoading(false);
+    }, 300);
+  };
+
+  // 🏫 School Owner Login
   const handleOwnerLogin = async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setSchoolIdError("");
+    e.preventDefault();
+    setSchoolIdError("");
+    setLoading(true);
 
-  const username = schoolId.trim().toUpperCase(); // Using schoolId state for username
-  const password = rolePassword.trim().toUpperCase(); // Use rolePassword for password field
+    const sId = schoolId.trim().toUpperCase();
+    const sPassword = rolePassword.trim().toUpperCase();
 
-  // Validate format: STATE (2 letters) + YY (2 digits) + NN (2 digits)
-  const idRegex = /^[A-Z]{2}\d{4}$/;
-  if (!idRegex.test(username)) {
-    setSchoolIdError("Invalid format. Use: AA0000 (e.g., TS2501)");
-    return;
-  }
-
-  if (username !== password) {
-    setSchoolIdError("Username and Password must be the same School ID.");
-    setIsSubmitting(false);
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/api/schools/${username}`);
-    if (!res.ok) {
-      setSchoolIdError("Invalid School ID. School not found.");
-      setIsSubmitting(false);
+    const idRegex = /^[A-Z]{2}\d{4}$/;
+    if (!idRegex.test(sId)) {
+      setSchoolIdError(
+        "Invalid format. Use 2-letter state code + 4 digits (e.g., TS2501).",
+      );
+      setLoading(false);
       return;
     }
 
-    const schoolData = await res.json();
-
-    // ✅ Save session
-    sessionStorage.setItem("sp_school_id", username);
-    sessionStorage.setItem("sp_school_name", schoolData.school_name || "Unknown School");
-    sessionStorage.setItem("sp_user", JSON.stringify({ role: ROLES.OWNER, school_id: username }));
-
-    // 🚀 Go to dashboard
-    setLoginStep("owner-dashboard");
-  } catch (err) {
-    console.error("Network error:", err);
-    setSchoolIdError("Network error. Is the server running?");
-  }
-  finally {
-    setIsSubmitting(false);
-  }
-};
-
-// 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
-const handleRoleLogin = (role) => async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setRoleError("");
-
-  const schoolId = sessionStorage.getItem("sp_school_id");
-
-  // --- Teacher Login (Direct) ---
-if (role === "TEACHER") {
-  const username = roleUsername.trim().toUpperCase();
-  const password = rolePassword.trim().toUpperCase();
-
-  if (username !== password) {
-    setRoleError("Teacher ID and password must be the same.");
-    setIsSubmitting(false);
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/api/teachers/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teacher_id: username, password })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setRoleError(data.error || "Invalid Teacher ID or password.");
-      setIsSubmitting(false);
+    if (sId !== sPassword) {
+      setSchoolIdError("School ID and Password must match.");
+      setLoading(false);
       return;
     }
 
-    // ✅ Save full teacher + school info to session
-    sessionStorage.setItem("sp_user", JSON.stringify({
-      role: ROLES.TEACHER,
-      teacher_id: data.teacher.teacher_id,
-      name: data.teacher.name,
-      contact: data.teacher.contact,
-      email: data.teacher.email,
-      school_id: data.teacher.school_id,
-      school_name: data.teacher.school_name,
-      teacher_assignments: data.teacher.teacher_assignments || []
-    }));
+    try {
+      const res = await fetch(`${API_BASE}/api/schools/${sId}`);
+      if (!res.ok) {
+        setSchoolIdError("Invalid School ID. School record not found.");
+        setLoading(false);
+        return;
+      }
 
-    setLoginStep("teacher-dashboard");
-  } catch (err) {
-    console.error("Network error during teacher login:", err);
-    setRoleError("Network error. Please try again later.");
-  }finally {
-    setIsSubmitting(false);
-  }
-  return;
-}
-  
-  // 🎓 STUDENT: Hardcoded login
-  // --- Student Login (Direct) ---
-if (role === "STUDENT") {
-  const username = roleUsername.trim();
-  const password = rolePassword.trim();
+      const schoolData = await res.json();
 
-  if (username !== password) {
-    setRoleError("Student ID and password must be the same.");
-    setIsSubmitting(false);
-    return;
-  }
+      sessionStorage.setItem("sp_school_id", sId);
+      localStorage.setItem("sp_school_id", sId);
+      sessionStorage.setItem(
+        "sp_school_name",
+        schoolData.school?.school_name ||
+          schoolData.school_name ||
+          "Unknown School",
+      );
+      localStorage.setItem(
+        "sp_school_name",
+        schoolData.school?.school_name ||
+          schoolData.school_name ||
+          "Unknown School",
+      );
+      const userObj = { role: ROLES.OWNER, school_id: sId };
+      sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+      localStorage.setItem("sp_user", JSON.stringify(userObj));
 
-  try {
-    const res = await fetch(`${API_BASE}/api/students/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ student_id: username, password })
-    });
+      if (onLogin) {
+        onLogin(userObj);
+      } else {
+        setLoginStep("owner-dashboard");
+      }
+    } catch (err) {
+      console.error("Network error during school owner login:", err);
+      setSchoolIdError(
+        "Unable to connect to portal server. Please check network connection.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const data = await res.json();
+  // 🧑‍🏫 Teacher, 🎓 Student, 👨‍👩‍👧‍👦 Parent Login
+  const handleRoleLogin = (role) => async (e) => {
+    e.preventDefault();
+    setRoleError("");
+    setLoading(true);
 
-    if (!res.ok) {
-      setRoleError(data.error || "Invalid Student ID or password.");
-      setIsSubmitting(false);
+    // --- Teacher Login ---
+    if (role === "TEACHER") {
+      const uName = roleUsername.trim().toUpperCase();
+      const pwd = rolePassword.trim().toUpperCase();
+
+      if (!uName || !pwd) {
+        setRoleError("Please enter both Teacher ID and Password.");
+        setLoading(false);
+        return;
+      }
+
+      if (uName !== pwd) {
+        setRoleError("Teacher ID and password must match.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/teachers/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teacher_id: uName, password: pwd }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setRoleError(data.error || "Invalid Teacher ID or password.");
+          setLoading(false);
+          return;
+        }
+
+        const userObj = {
+          role: ROLES.TEACHER,
+          teacher_id: data.teacher.teacher_id,
+          name: data.teacher.name,
+          contact: data.teacher.contact,
+          email: data.teacher.email,
+          school_id: data.teacher.school_id,
+          school_name: data.teacher.school_name,
+          teacher_assignments: data.teacher.teacher_assignments || [],
+        };
+        sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+        localStorage.setItem("sp_user", JSON.stringify(userObj));
+
+        if (onLogin) {
+          onLogin(userObj);
+        } else {
+          setLoginStep("teacher-dashboard");
+        }
+      } catch (err) {
+        console.error("Teacher login error:", err);
+        setRoleError("Network error. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    // ✅ Save full student + school info to session
-    sessionStorage.setItem("sp_user", JSON.stringify({
-      role: ROLES.STUDENT,
-      student_id: data.student.student_id,
-      roll_no: data.student.roll_no,
-      name: data.student.name,
-      class: data.student.class,
-      section: data.student.section,
-      gender: data.student.gender,
-      parent_phone: data.student.parent_phone,
-      parent_email: data.student.parent_email,
-      school_id: data.student.school_id,
-      school_name: data.student.school_name
-    }));
+    // --- Student Login ---
+    if (role === "STUDENT") {
+      const uName = roleUsername.trim();
+      const pwd = rolePassword.trim();
 
-    setLoginStep("student-dashboard");
-  } catch (err) {
-    console.error("Network error during student login:", err);
-    setRoleError("Network error. Please try again later.");
-  } finally {
-      setIsSubmitting(false);
-    }
-  return;
-}
+      if (!uName || !pwd) {
+        setRoleError("Please enter both Student ID and Password.");
+        setLoading(false);
+        return;
+      }
 
-  // 👨‍👩‍👧‍👦 PARENT: Hardcoded login
-if (role === "PARENT") {
-  const username = roleUsername.trim();
-  const password = rolePassword.trim();
+      if (uName !== pwd) {
+        setRoleError("Student ID and password must match.");
+        setLoading(false);
+        return;
+      }
 
-  if (username !== password) {
-    setRoleError("Parent ID and password must be the same (use Student ID).");
-    setIsSubmitting(false);
-    return;
-  }
+      try {
+        const res = await fetch(`${API_BASE}/api/students/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_id: uName, password: pwd }),
+        });
 
-  try {
-    const res = await fetch(`${API_BASE}/api/students/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ student_id: username, password })
-    });
+        const data = await res.json();
 
-    const data = await res.json();
+        if (!res.ok) {
+          setRoleError(data.error || "Invalid Student ID or password.");
+          setLoading(false);
+          return;
+        }
 
-    if (!res.ok) {
-      setRoleError(data.error || "Invalid Student ID or password.");
-      setIsSubmitting(false);
+        const userObj = {
+          role: ROLES.STUDENT,
+          student_id: data.student.student_id,
+          roll_no: data.student.roll_no,
+          name: data.student.name,
+          class: data.student.class,
+          section: data.student.section,
+          gender: data.student.gender,
+          parent_phone: data.student.parent_phone,
+          parent_email: data.student.parent_email,
+          school_id: data.student.school_id,
+          school_name: data.student.school_name,
+        };
+        sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+        localStorage.setItem("sp_user", JSON.stringify(userObj));
+
+        if (onLogin) {
+          onLogin(userObj);
+        } else {
+          setLoginStep("student-dashboard");
+        }
+      } catch (err) {
+        console.error("Student login error:", err);
+        setRoleError("Network error. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    // ✅ Save student data under PARENT role
-    sessionStorage.setItem("sp_user", JSON.stringify({
-      role: ROLES.PARENT,
-      student_id: data.student.student_id,
-      roll_no: data.student.roll_no,
-      name: data.student.name,
-      class: data.student.class,
-      section: data.student.section,
-      gender: data.student.gender,
-      parent_phone: data.student.parent_phone,
-      parent_email: data.student.parent_email,
-      school_id: data.student.school_id,
-      school_name: data.student.school_name
-    }));
+    // --- Parent Login ---
+    if (role === "PARENT") {
+      const uName = roleUsername.trim();
+      const pwd = rolePassword.trim();
 
-    setLoginStep("parent-dashboard"); // ← You’ll need to create ParentDashboard next
-  } catch (err) {
-    console.error("Network error during parent login:", err);
-    setRoleError("Network error. Please try again later.");
-  } finally {
-      setIsSubmitting(false);
+      if (!uName || !pwd) {
+        setRoleError("Please enter Student ID and Password.");
+        setLoading(false);
+        return;
+      }
+
+      if (uName !== pwd) {
+        setRoleError("Parent ID and password must match (use Student ID).");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/students/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_id: uName, password: pwd }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setRoleError(data.error || "Invalid Student ID or password.");
+          setLoading(false);
+          return;
+        }
+
+        const userObj = {
+          role: ROLES.PARENT,
+          student_id: data.student.student_id,
+          roll_no: data.student.roll_no,
+          name: data.student.name,
+          class: data.student.class,
+          section: data.student.section,
+          gender: data.student.gender,
+          parent_phone: data.student.parent_phone,
+          parent_email: data.student.parent_email,
+          school_id: data.student.school_id,
+          school_name: data.student.school_name,
+        };
+        sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+        localStorage.setItem("sp_user", JSON.stringify(userObj));
+
+        if (onLogin) {
+          onLogin(userObj);
+        } else {
+          setLoginStep("parent-dashboard");
+        }
+      } catch (err) {
+        console.error("Parent login error:", err);
+        setRoleError("Network error. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+      return;
     }
-  return;
-}
-};
+  };
 
-  // --- Dashboard Routes ---
-  if (loginStep === "owner-dashboard") {
-    return <SchoolOwnerDashboard onBack={handleBack} />;
-  }
-  if (loginStep === "teacher-dashboard") {
-    return <TeacherDashboard onBack={handleBack} />;
-  }
-  if (loginStep === "student-dashboard") {
-    return <StudentDashboard onBack={handleBack} />;
-  }
-  if (loginStep === "parent-dashboard") {
-    return <ParentDashboard onBack={handleBack} />;
-  }
-  if (loginStep === "guest-dashboard") {
-    return <GuestPage onBack={handleBack} />;
-  }
+  /**
+   * 🌟 Pure Un-shadowed Canvas Blend Layout:
+   * 1. LEFT SIDE (50%): Clean, un-shadowed hero image sitting directly on pure white canvas (no drop-shadows & no colored aura blobs)
+   * 2. RIGHT SIDE (50%): Clean Credentials Login Form
+   */
+  const renderLoginForm = (
+    title,
+    emoji,
+    roleAssetImg,
+    panelBgColor,
+    accentColor,
+    onSubmit,
+    children,
+    errorMessage,
+  ) => (
+    <div style={{ width: "100%", background: "#ffffff" }}>
+      <div className="fullscreen-split-layout">
+        {/* 👈 LEFT SIDE (50%): Hero Image sitting directly on white canvas */}
+        <div className="slide-in-left left-image-half">
+          <img
+            src={roleAssetImg}
+            alt={`${title} Full Hero Illustration`}
+            className="full-hero-image"
+          />
+        </div>
 
-  // --- Reusable Login Form Component ---
-  const renderLoginForm = (title, emoji, onSubmit, children) => (
-    <div style={styles.wrap}>
-      <div style={styles.card}>
-        <header style={styles.header}>
-          <h1 style={styles.h1}>🔐 {title} Login</h1>
-          <p style={styles.sub}>Enter your credentials to continue</p>
-        </header>
-
-        <form onSubmit={onSubmit} style={styles.form}>
-          {children}
-          {roleError && <div style={styles.error}>{roleError}</div>}
-          {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
-
-          <div style={styles.formActions}>
-            <button type="button" onClick={handleBack} style={styles.cancelBtn} disabled={isSubmitting}>
-              ← Back
-            </button>
-            <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-              {isSubmitting ? "Processing…" : "Log In"}
-            </button>
+        {/* 👉 RIGHT SIDE (50%): Clean Credentials Login Form */}
+        <div className="slide-in-right right-form-half">
+          {/* Header Title & Subtitle */}
+          <div style={customStyles.formHeaderGroup}>
+            <div style={customStyles.welcomeTitleRow}>
+              <span style={{ fontSize: "32px" }}>{emoji}</span>
+              <h2 style={customStyles.welcomeTitle}>Welcome Back</h2>
+            </div>
+            <p style={customStyles.welcomeSubtitle}>
+              Please sign in with your credentials to access the {title}{" "}
+              workspace.
+            </p>
           </div>
-        </form>
 
-        <footer style={styles.footer}>
-          <small>Contact admin for credentials</small>
-        </footer>
-      </div>
-    </div>
-  );
+          {/* Clean Credentials Form */}
+          <form onSubmit={onSubmit} style={customStyles.formStack}>
+            {children}
 
-  // --- School Owner: Enter School ID Only ---
-// --- School Owner: Username & Password = School ID ---
-if (loginStep === "owner-login") {
-  return renderLoginForm(
-    "School Owner",
-    "🏫",
-    handleOwnerLogin,
-    <>
-      {/* Username Field */}
-      <div style={styles.inputGroup}>
-        <label style={styles.label}>Username (School ID)</label>
-        <input
-          type="text"
-          value={schoolId}
-          onChange={(e) => setSchoolId(e.target.value)}
-          style={styles.input}
-          placeholder="e.g., TS2501"
-          autoFocus
-        />
-      </div>
+            {errorMessage && (
+              <div style={customStyles.alertError} role="alert">
+                <span style={{ fontSize: "16px" }}>⚠️</span>
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
-      {/* Password Field */}
-      <div style={styles.inputGroup}>
-        <label style={styles.label}>Password (Same School ID)</label>
-        <PasswordInput
-          value={rolePassword}
-          onChange={(e) => setRolePassword(e.target.value)}
-          placeholder="Enter School ID again"
-        />
-      </div>
-
-      {schoolIdError && <div style={styles.error}>{schoolIdError}</div>}
-    </>,
-    isSubmitting
-  );
-}
-  // --- Teacher Login ---
-  if (loginStep === "teacher-login") {
-    return renderLoginForm(
-      "Teacher",
-      "👩‍🏫",
-      handleRoleLogin("TEACHER"),
-      <>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Username (Teacher Name)</label>
-          <input
-            type="text"
-            value={roleUsername}
-            onChange={(e) => setRoleUsername(e.target.value)}
-            style={styles.input}
-            placeholder="e.g., teacher"
-            autoFocus
-          />
-        </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Password (Same Teacher Name)</label>
-          <PasswordInput
-            value={rolePassword}
-            onChange={(e) => setRolePassword(e.target.value)}
-            placeholder="Enter password"
-          />
-        </div>
-      </>,
-      isSubmitting
-    );
-  }
-
-  // --- Student Login ---
-  if (loginStep === "student-login") {
-    return renderLoginForm(
-      "Student",
-      "🎓",
-      handleRoleLogin("STUDENT"),
-      <>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Username</label>
-          <input
-            type="text"
-            value={roleUsername}
-            onChange={(e) => setRoleUsername(e.target.value)}
-            style={styles.input}
-            placeholder="e.g., student"
-            autoFocus
-          />
-        </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Password</label>
-          <PasswordInput
-            value={rolePassword}
-            onChange={(e) => setRolePassword(e.target.value)}
-            placeholder="Enter password"
-          />
-        </div>
-      </>,
-      isSubmitting
-    );
-  }
-
-  // --- Parent Login ---
-  if (loginStep === "parent-login") {
-    return renderLoginForm(
-      "Parent",
-      "👨‍👩‍👧‍👦",
-      handleRoleLogin("PARENT"),
-      <>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Username</label>
-          <input
-            type="text"
-            value={roleUsername}
-            onChange={(e) => setRoleUsername(e.target.value)}
-            style={styles.input}
-            placeholder="e.g., parent"
-            autoFocus
-          />
-        </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Password</label>
-          <PasswordInput
-            value={rolePassword}
-            onChange={(e) => setRolePassword(e.target.value)}
-            placeholder="Enter password"
-          />
-        </div>
-      </>,
-      isSubmitting
-    );
-  }
-
-  // --- Admin Login Form ---
-  if (showAdminForm) {
-    return (
-      <div style={styles.wrap}>
-        <div style={styles.card}>
-          <header style={styles.header}>
-            <h1 style={styles.h1}>🔐 Admin Login</h1>
-            <p style={styles.sub}>Enter your credentials to continue</p>
-          </header>
-
-          <form onSubmit={handleAdminSubmit} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={styles.input}
-                placeholder="Enter username"
-                autoFocus
-              />
-            </div>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Password</label>
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-              />
-            </div>
-            {error && <div style={styles.error}>{error}</div>}
-
-            <div style={styles.formActions}>
-              <button type="button" onClick={handleBack} style={styles.cancelBtn}>
-                ← Back
+            {/* Rounded Pill Action Buttons */}
+            <div style={customStyles.formActionsRow}>
+              <button
+                type="button"
+                onClick={handleBack}
+                className="btn-pill-secondary"
+              >
+                Back to Roles
               </button>
-              <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-                 {isSubmitting ? "Processing…" : "Log In"}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  background: accentColor,
+                }}
+                className="btn-pill-primary"
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <span>Sign In →</span>
+                )}
               </button>
             </div>
           </form>
 
-          <footer style={styles.footer}>
-            <small>Contact admin for credentials</small>
+          <footer style={customStyles.formFooter}>
+            <span
+              style={{ fontSize: "12px", color: "var(--color-text-muted)" }}
+            >
+              🔒 Protected by SPECTROPY SSO Portal Security
+            </span>
           </footer>
         </div>
       </div>
+    </div>
+  );
+
+  // --- School Owner Login Sub-View ---
+  if (loginStep === "owner-login") {
+    return renderLoginForm(
+      "School Owner",
+      "🏫",
+      ownerImg,
+      "#f0fdf4",
+      "#16a34a",
+      handleOwnerLogin,
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>School ID (Username)</label>
+          <div style={customStyles.inputWithIcon}>
+            <span style={customStyles.inputIcon}>🏫</span>
+            <input
+              type="text"
+              value={schoolId}
+              onChange={(e) => setSchoolId(e.target.value.toUpperCase())}
+              placeholder="e.g., TS2501"
+              style={customStyles.inputControl}
+              autoFocus
+              required
+            />
+            {schoolId && (
+              <button
+                type="button"
+                onClick={() => setSchoolId("")}
+                style={customStyles.clearInputBtn}
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <span style={customStyles.fieldHelp}>
+            Format: 2-letter state code + 4 digits (e.g. TS2501)
+          </span>
+        </div>
+
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value.toUpperCase())}
+            placeholder="Enter School ID again"
+          />
+        </div>
+      </>,
+      schoolIdError,
     );
   }
 
-  // --- Role Selection Screen ---
-  const handleRoleClick = (role) => {
-    if (role === ROLES.ADMIN) {
+  // --- Teacher Login Sub-View ---
+  if (loginStep === "teacher-login") {
+    return renderLoginForm(
+      "Teacher",
+      "👩‍🏫",
+      teacherImg,
+      "#eef2ff",
+      "#4f46e5",
+      handleRoleLogin("TEACHER"),
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Teacher ID / Username</label>
+          <div style={customStyles.inputWithIcon}>
+            <span style={customStyles.inputIcon}>👩‍🏫</span>
+            <input
+              type="text"
+              value={roleUsername}
+              onChange={(e) => setRoleUsername(e.target.value)}
+              placeholder="Enter Teacher ID"
+              style={customStyles.inputControl}
+              autoFocus
+              required
+            />
+            {roleUsername && (
+              <button
+                type="button"
+                onClick={() => setRoleUsername("")}
+                style={customStyles.clearInputBtn}
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>,
+      roleError,
+    );
+  }
+
+  // --- Student Login Sub-View ---
+  if (loginStep === "student-login") {
+    return renderLoginForm(
+      "Student",
+      "🎓",
+      studentImg,
+      "#fffbeb",
+      "#d97706",
+      handleRoleLogin("STUDENT"),
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Student ID</label>
+          <div style={customStyles.inputWithIcon}>
+            <span style={customStyles.inputIcon}>🎓</span>
+            <input
+              type="text"
+              value={roleUsername}
+              onChange={(e) => setRoleUsername(e.target.value)}
+              placeholder="Enter Student ID"
+              style={customStyles.inputControl}
+              autoFocus
+              required
+            />
+            {roleUsername && (
+              <button
+                type="button"
+                onClick={() => setRoleUsername("")}
+                style={customStyles.clearInputBtn}
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>,
+      roleError,
+    );
+  }
+
+  // --- Parent Login Sub-View ---
+  if (loginStep === "parent-login") {
+    return renderLoginForm(
+      "Parent",
+      "",
+      parentImg,
+      "#fff1f2",
+      "#e11d48",
+      handleRoleLogin("PARENT"),
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>
+            Student ID (Parent Access)
+          </label>
+          <div style={customStyles.inputWithIcon}>
+            <span style={customStyles.inputIcon}>👨‍👩‍👧‍👦</span>
+            <input
+              type="text"
+              value={roleUsername}
+              onChange={(e) => setRoleUsername(e.target.value)}
+              placeholder="Enter Child's Student ID"
+              style={customStyles.inputControl}
+              autoFocus
+              required
+            />
+            {roleUsername && (
+              <button
+                type="button"
+                onClick={() => setRoleUsername("")}
+                style={customStyles.clearInputBtn}
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Password</label>
+          <PasswordInput
+            value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)}
+            placeholder="Enter password"
+          />
+        </div>
+      </>,
+      roleError,
+    );
+  }
+
+  // --- Admin Login Sub-View ---
+  if (showAdminForm) {
+    return renderLoginForm(
+      "Super Admin",
+      "🛡️",
+      adminImg,
+      "#eff6ff",
+      "#2563eb",
+      handleAdminSubmit,
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Admin Username</label>
+          <div style={customStyles.inputWithIcon}>
+            <span style={customStyles.inputIcon}>👤</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter admin username"
+              style={customStyles.inputControl}
+              autoFocus
+              required
+            />
+            {username && (
+              <button
+                type="button"
+                onClick={() => setUsername("")}
+                style={customStyles.clearInputBtn}
+                title="Clear"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Admin Password</label>
+          <PasswordInput
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter admin password"
+          />
+        </div>
+      </>,
+      error,
+    );
+  }
+
+  // Role Definitions for Main Grid with Synchronized Role Colors
+  const handleRoleClick = (roleKey) => {
+    if (roleKey === ROLES.ADMIN) {
       setShowAdminForm(true);
-    } else if (role === ROLES.OWNER) {
+    } else if (roleKey === ROLES.OWNER) {
       setLoginStep("owner-login");
-    } else if (role === ROLES.TEACHER) {
+    } else if (roleKey === ROLES.TEACHER) {
       setLoginStep("teacher-login");
-    } else if (role === ROLES.STUDENT) {
+    } else if (roleKey === ROLES.STUDENT) {
       setLoginStep("student-login");
-    } else if (role === ROLES.PARENT) {
+    } else if (roleKey === ROLES.PARENT) {
       setLoginStep("parent-login");
-    } else if (role === ROLES.GUEST) {
-      setLoginStep("guest-dashboard");
+    } else if (roleKey === ROLES.GUEST) {
+      const userObj = { role: ROLES.GUEST };
+      sessionStorage.setItem("sp_user", JSON.stringify(userObj));
+      localStorage.setItem("sp_user", JSON.stringify(userObj));
+      if (onLogin) {
+        onLogin(userObj);
+      } else {
+        setLoginStep("guest-dashboard");
+      }
     }
   };
 
+  const roleOptions = [
+    {
+      key: ROLES.ADMIN,
+      title: "Spectropy Admin",
+      emoji: "🛠️",
+      blurb: "Manage portals, schools & master database.",
+      accent: "#2563eb",
+      hoverBg: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+      iconBg: "#eff6ff",
+      iconBorder: "#bfdbfe",
+    },
+    {
+      key: ROLES.OWNER,
+      title: "School Owner",
+      emoji: "🏫",
+      blurb: "View overall school performance & metrics.",
+      accent: "#16a34a",
+      hoverBg: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+      iconBg: "#f0fdf4",
+      iconBorder: "#bbf7d0",
+    },
+    {
+      key: ROLES.TEACHER,
+      title: "Teacher Portal",
+      emoji: "👩‍🏫",
+      blurb: "Upload OMR results & generate report cards.",
+      accent: "#4f46e5",
+      hoverBg: "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)",
+      iconBg: "#eef2ff",
+      iconBorder: "#c7d2fe",
+    },
+    {
+      key: ROLES.STUDENT,
+      title: "Student Portal",
+      emoji: "🎓",
+      blurb: "Check test scores, progress & rank cards.",
+      accent: "#d97706",
+      hoverBg: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+      iconBg: "#fffbeb",
+      iconBorder: "#fde68a",
+    },
+    {
+      key: ROLES.PARENT,
+      title: "Parent Portal",
+      emoji: "👨‍👩‍👧‍👦",
+      blurb: "Track child academic growth & reports.",
+      accent: "#e11d48",
+      hoverBg: "linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)",
+      iconBg: "#fff1f2",
+      iconBorder: "#fecdd3",
+    },
+    {
+      key: ROLES.GUEST,
+      title: "Guest Access",
+      emoji: "👤",
+      blurb: "Explore system features with sample data.",
+      accent: "#475569",
+      hoverBg: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+      iconBg: "#f8fafc",
+      iconBorder: "#e2e8f0",
+    },
+  ];
+
   return (
-    <div style={styles.wrap}>
-      <div style={styles.card}>
-        <header style={styles.header}>
-          <h1 style={styles.h1}>SPECTROPY — Portal Login</h1>
-          <p style={styles.sub}>Select your role to continue</p>
+    <main className="login-landing animate-fade-in">
+      <section className="login-hero" aria-labelledby="login-hero-title">
+        <div className="login-hero-copy">
+          <span className="login-eyebrow">SPECTROPY Result Analysis</span>
+          <h1 id="login-hero-title">
+            <span>Transform Results into</span>
+            <span>Academic Progress.</span>
+          </h1>
+          <p>
+            A unified result-analysis platform that helps every role understand
+            performance, make informed decisions and improve learning outcomes.
+          </p>
+          <div className="login-benefits" aria-label="Platform benefits">
+            <span>Accurate reports</span>
+            <span>Real-time insights</span>
+            <span>Secure and reliable</span>
+          </div>
+        </div>
+        <LiveAnalyticsPreview />
+      </section>
+
+      <section className="login-portals" aria-labelledby="portal-choice-title">
+        <header className="login-portals-header">
+          <span className="login-eyebrow">Portal access</span>
+          <h2 id="portal-choice-title">Choose your portal to get started</h2>
+          <p>Select the workspace that matches your role.</p>
         </header>
 
-        <div style={styles.grid} role="list">
-          {[
-            { key: ROLES.ADMIN, title: "Spectropy Admin", emoji: "🛠️", blurb: "Manage portals and schools." },
-            { key: ROLES.OWNER, title: "School Owner", emoji: "🏫", blurb: "View school analytics." },
-            { key: ROLES.TEACHER, title: "Teacher", emoji: "👩‍🏫", blurb: "Upload results & reports." },
-            { key: ROLES.STUDENT, title: "Student", emoji: "🎓", blurb: "Check your scores." },
-            { key: ROLES.PARENT, title: "Parent", emoji: "👨‍👩‍👧‍👦", blurb: "Track child performance." },
-            { key: ROLES.GUEST, title: "Guest", emoji: "👤", blurb: "Preview limited access." },
-          ].map(({ key, title, emoji, blurb }) => (
-            <button
-              key={key}
-              role="listitem"
-              onClick={() => handleRoleClick(key)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") handleRoleClick(key);
-              }}
-              style={styles.tile}
-              aria-label={`Login as ${title}`}
-            >
-              <div style={styles.emoji}>{emoji}</div>
-              <div style={styles.title}>{title}</div>
-              <div style={styles.blurb}>{blurb}</div>
-            </button>
-          ))}
+        {/* Multi-Login Cards Grid */}
+        <div className="role-card-grid login-role-grid" role="list">
+          {roleOptions.map(
+            ({
+              key,
+              title,
+              emoji,
+              blurb,
+              accent,
+              hoverBg,
+              iconBg,
+              iconBorder,
+            }) => (
+              <div
+                key={key}
+                className="role-card"
+                style={{
+                  "--card-accent": accent,
+                  "--card-hover-bg": hoverBg,
+                  "--icon-bg": iconBg,
+                  "--icon-border": iconBorder,
+                }}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleRoleClick(key)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleRoleClick(key);
+                  }
+                }}
+                aria-label={`Login as ${title}`}
+              >
+                <div className="role-icon-box">
+                  <span>{emoji}</span>
+                </div>
+                <h3 className="role-card-title">{title}</h3>
+                <p className="role-card-blurb">{blurb}</p>
+                <div className="role-action-btn">
+                  <span>Access Portal</span>
+                  <span>→</span>
+                </div>
+              </div>
+            ),
+          )}
         </div>
 
-        <footer style={styles.footer}>
-          <small>
-            Need help? Contact{" "}
-            <a href="https://spectropy.com" style={styles.link}>
-              spectropy.com
-            </a>
-          </small>
-        </footer>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
-// --- Password Input Component ---
+// 🔑 Accessible Password Input Component
 function PasswordInput({ value, onChange, placeholder }) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div style={styles.passwordContainer}>
+    <div style={customStyles.passwordWrapper}>
+      <span style={customStyles.inputIcon}>🔑</span>
       <input
         type={showPassword ? "text" : "password"}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        style={styles.input}
+        style={{ ...customStyles.inputControl, paddingRight: "44px" }}
+        required
       />
       <button
         type="button"
         onClick={() => setShowPassword(!showPassword)}
-        style={styles.eyeButton}
+        style={customStyles.eyeToggleBtn}
         aria-label={showPassword ? "Hide password" : "Show password"}
         title={showPassword ? "Hide password" : "Show password"}
       >
@@ -608,154 +895,305 @@ function PasswordInput({ value, onChange, placeholder }) {
   );
 }
 
-const styles = {
-  wrap: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#f0f8ff",
-    padding: "clamp(16px, 4vw, 32px)", // adjusts automatically
-  },
-  card: {
-    width: "min(100%, 1100px)",
-    background: "white",
-    border: "2px solid #add8e6",
-    borderRadius: 20,
-    padding: "clamp(20px, 3vw, 36px)",
-    boxShadow: "0 6px 20px rgba(173,216,230,0.5)",
-  },
-  header: { textAlign: "center", marginBottom: 16 },
-  h1: {
-    margin: 0,
-    color: "#1e90ff",
-    fontSize: "clamp(20px, 3vw, 32px)",
-    fontWeight: 700,
-  },
-  sub: {
-    marginTop: 6,
-    color: "#4682b4",
-    fontSize: "clamp(13px, 1.4vw, 16px)",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-    gap: 16,
-    marginTop: 20,
-  },
-  tile: {
-    display: "grid",
-    gridTemplateRows: "auto auto 1fr",
-    gap: 6,
-    padding: "clamp(12px, 2vw, 18px)",
-    textAlign: "center",
-    background: "#f0f8ff",
-    border: "1px solid #87ceeb",
-    borderRadius: 14,
-    color: "#1e3d59",
-    cursor: "pointer",
-    transition: "transform 140ms ease, box-shadow 140ms ease, background 140ms ease",
-  },
-  emoji: { fontSize: "clamp(22px, 2.5vw, 28px)", lineHeight: 1 },
-  title: {
-    fontSize: "clamp(15px, 2vw, 18px)",
-    fontWeight: 700,
-    marginTop: 2,
-    color: "#1e90ff",
-  },
-  blurb: {
-    fontSize: "clamp(12px, 1.5vw, 14px)",
-    color: "#4682b4",
-  },
-  footer: { marginTop: 18, textAlign: "center", color: "#4682b4" },
-  link: { color: "#1e90ff", textDecoration: "underline" },
+// 🎨 Clean Styles (No drop shadow, no background aura blob)
+function LiveAnalyticsPreview() {
+  const [pulse, setPulse] = useState(0);
 
-  // Form Styles
-  form: {
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setPulse((value) => (value + 1) % 12);
+    }, 2200);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const lineData = [56, 61, 59, 68, 65, 74, 78, 84].map(
+    (value, index) => ({
+      name: `T${index + 1}`,
+      value: Math.min(96, value + ((pulse + index) % 3) * 2),
+    }),
+  );
+  const barData = [48, 65, 57, 76, 69, 88].map((value, index) => ({
+    name: `S${index + 1}`,
+    value: Math.min(96, value + ((pulse + index) % 4)),
+  }));
+  const achieved = 72 + (pulse % 4);
+  const mathematicsShare = 28 + (pulse % 3);
+  const donutData = [
+    { name: "Mathematics", value: mathematicsShare, color: "#2454a6" },
+    { name: "Science", value: 26, color: "#6f67d8" },
+    { name: "English", value: 24, color: "#63b6cc" },
+    {
+      name: "Other subjects",
+      value: 100 - mathematicsShare - 26 - 24,
+      color: "#d8e4f4",
+    },
+  ];
+
+  return (
+    <div className="login-analytics" aria-label="Live performance analytics preview">
+      <div className="login-analytics-glow" aria-hidden="true" />
+
+      <section className="login-preview-card login-preview-line">
+        <header>
+          <div>
+            <strong>Performance Overview</strong>
+            <span>Academic progress</span>
+          </div>
+          <span className="login-preview-live"><i /> Live</span>
+        </header>
+        <div className="login-preview-line-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={lineData} margin={{ top: 8, right: 8, bottom: 3, left: 3 }}>
+              <defs>
+                <linearGradient id="performanceShade" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4b78c8" stopOpacity={0.32} />
+                  <stop offset="100%" stopColor="#dbe8f8" stopOpacity={0.04} />
+                </linearGradient>
+              </defs>
+              <Area
+                type="natural"
+                dataKey="value"
+                stroke="#2454a6"
+                strokeWidth={3}
+                fill="url(#performanceShade)"
+                dot={false}
+                isAnimationActive
+                animationDuration={700}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="login-preview-card login-preview-combined">
+        <div className="login-preview-donut">
+          <span>Average score</span>
+          <div className="login-preview-donut-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={donutData}
+                  dataKey="value"
+                  innerRadius="58%"
+                  outerRadius="88%"
+                  startAngle={90}
+                  endAngle={-270}
+                  paddingAngle={2}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  isAnimationActive
+                  animationDuration={700}
+                >
+                  {donutData.map((segment) => (
+                    <Cell key={segment.name} fill={segment.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <strong>{achieved}%</strong>
+          </div>
+        </div>
+        <div className="login-preview-bars">
+          <span>Subject performance</span>
+          <div>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} margin={{ top: 6, right: 2, bottom: 0, left: 2 }}>
+                <Bar
+                  dataKey="value"
+                  fill="#356bd2"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive
+                  animationDuration={700}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      <section className="login-preview-card login-preview-profile">
+        <div className="login-preview-profile-icon" aria-hidden="true">
+          <span />
+        </div>
+        <strong>Student Report</strong>
+        <span>Performance summary</span>
+        <div className="login-preview-profile-lines">
+          <i /><i /><i />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const customStyles = {
+  whitePageWrap: {
+    minHeight: "calc(100vh - 65px)",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#ffffff",
+    boxSizing: "border-box",
+    flex: 1,
+  },
+  portalCard: {
+    width: "100%",
+    maxWidth: "940px",
+    minHeight: "clamp(480px, 75vh, 640px)",
     display: "flex",
     flexDirection: "column",
-    gap: 18,
-    marginTop: 12,
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  label: {
-    fontSize: "clamp(13px, 1.3vw, 15px)",
-    fontWeight: 600,
-    color: "#1e3d59",
-  },
-  input: {
-    padding: "clamp(10px, 2vw, 14px) 12px",
-    fontSize: "clamp(13px, 1.5vw, 15px)",
-    border: "1px solid #87ceeb",
-    borderRadius: 8,
-    outline: "none",
-    background: "#f8faff",
-  },
-  error: {
-    color: "#e3342f",
-    fontSize: "clamp(12px, 1.3vw, 14px)",
-    textAlign: "center",
-    padding: "8px",
-    background: "#fff5f5",
-    border: "1px solid #e3342f",
-    borderRadius: 8,
-  },
-  formActions: {
-    display: "flex",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
-    marginTop: 10,
+    background: "#ffffff",
+    border: "1px solid var(--color-border)",
+    borderRadius: "18px",
+    padding: "clamp(16px, 3vw, 28px)",
+    boxShadow:
+      "0 12px 30px -6px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04)",
   },
-  cancelBtn: {
-    flex: 1,
-    minWidth: 100,
-    padding: "clamp(8px, 2vw, 10px) 16px",
-    fontSize: "clamp(13px, 1.5vw, 15px)",
-    border: "1px solid #4682b4",
-    background: "white",
-    color: "#4682b4",
-    borderRadius: 8,
-    cursor: "pointer",
+
+  formHeaderGroup: {
+    marginBottom: "28px",
   },
-  submitBtn: {
-    flex: 1,
-    minWidth: 100,
-    padding: "clamp(8px, 2vw, 10px) 20px",
-    fontSize: "clamp(13px, 1.5vw, 15px)",
-    border: "none",
-    background: "#1e90ff",
-    color: "white",
-    borderRadius: 8,
-    cursor: "pointer",
+  welcomeTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
   },
-  passwordContainer: {
+  welcomeTitle: {
+    margin: 0,
+    fontSize: "clamp(28px, 3.5vw, 38px)",
+    fontWeight: 800,
+    color: "#0f172a",
+    letterSpacing: "-0.6px",
+  },
+  welcomeSubtitle: {
+    margin: "8px 0 0",
+    fontSize: "14px",
+    color: "var(--color-text-muted)",
+    lineHeight: 1.5,
+  },
+
+  headerSection: {
+    textAlign: "center",
+    marginBottom: "clamp(18px, 2.5vw, 28px)",
+    paddingBottom: "14px",
+    borderBottom: "1px solid var(--color-border)",
+  },
+  mainHeading: {
+    margin: 0,
+    fontSize: "clamp(18px, 2.5vw, 24px)",
+    fontWeight: 800,
+    color: "var(--color-text-main)",
+    letterSpacing: "0.3px",
+  },
+  mainSubheading: {
+    marginTop: "6px",
+    fontSize: "clamp(12px, 1.5vw, 13.5px)",
+    color: "var(--color-text-muted)",
+  },
+  inputFieldGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  fieldLabel: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "var(--color-text-main)",
+  },
+  inputWithIcon: {
     position: "relative",
+    display: "flex",
+    alignItems: "center",
   },
-  eyeButton: {
+  inputIcon: {
     position: "absolute",
-    right: "10px",
-    top: "50%",
-    transform: "translateY(-50%)",
+    left: "14px",
+    fontSize: "16px",
+    pointerEvents: "none",
+  },
+  inputControl: {
+    paddingLeft: "42px",
+    minHeight: "46px",
+    fontSize: "14.5px",
+  },
+  clearInputBtn: {
+    position: "absolute",
+    right: "12px",
     background: "none",
     border: "none",
-    fontSize: "18px",
+    fontSize: "14px",
+    color: "var(--color-text-subtle)",
     cursor: "pointer",
-    color: "#555",
     padding: "4px",
   },
+  fieldHelp: {
+    fontSize: "11.5px",
+    color: "var(--color-text-muted)",
+  },
+  passwordWrapper: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+  },
+  eyeToggleBtn: {
+    position: "absolute",
+    right: "8px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "transparent",
+    border: "none",
+    fontSize: "16px",
+    cursor: "pointer",
+    padding: "6px",
+    minWidth: "36px",
+    minHeight: "36px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "6px",
+  },
+  alertError: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "10px 14px",
+    background: "var(--danger-bg)",
+    border: "1px solid var(--danger-border)",
+    borderRadius: "10px",
+    color: "var(--danger-text)",
+    fontSize: "13px",
+    lineHeight: 1.4,
+  },
+  formStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "20px",
+  },
+  formActionsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    marginTop: "8px",
+  },
+  formFooter: {
+    marginTop: "24px",
+    textAlign: "left",
+  },
+  mainFooter: {
+    marginTop: "18px",
+    paddingTop: "14px",
+    borderTop: "1px solid var(--color-border)",
+    textAlign: "center",
+  },
+  footerLinkText: {
+    margin: 0,
+    fontSize: "12px",
+    color: "var(--color-text-muted)",
+  },
+  link: {
+    color: "var(--primary-600)",
+    textDecoration: "underline",
+    fontWeight: 500,
+  },
 };
-
-// Extra media queries for fine-tuning (optional)
-styles.card["@media (max-width: 480px)"] = {
-  borderRadius: 12,
-  padding: "18px 16px",
-};
-styles.formActions["@media (max-width: 480px)"] = {
-  flexDirection: "column",
-  alignItems: "stretch",
-};
-styles.h1["@media (max-width: 360px)"] = { fontSize: "20px" };
