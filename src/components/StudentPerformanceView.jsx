@@ -1055,7 +1055,7 @@ export default function StudentPerformanceView({
                 icon="#"
                 label="School rank"
                 value={
-                  latestExam?.school_rank ? `#${latestExam.school_rank}` : "â€”"
+                  latestExam?.school_rank ? `#${latestExam.school_rank}` : "—"
                 }
                 helper="Current exam"
                 tone="primary"
@@ -1066,7 +1066,7 @@ export default function StudentPerformanceView({
                 value={
                   latestExam?.all_schools_rank
                     ? `#${latestExam.all_schools_rank}`
-                    : "â€”"
+                    : "—"
                 }
                 helper="Current exam"
                 tone="primary"
