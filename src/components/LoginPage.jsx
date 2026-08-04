@@ -539,7 +539,7 @@ if (loginStep === "owner-login") {
     <div style={styles.wrap}>
       <div style={styles.card}>
         <header style={styles.header}>
-          <h1 style={styles.h1}>SPECTROPY — Portal Login</h1>
+          <h1 style={styles.h1}>SPECTROPY — RA-Portal Login</h1>
           <p style={styles.sub}>Select your role to continue</p>
         </header>
 

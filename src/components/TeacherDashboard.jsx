@@ -26,17 +26,17 @@ function computeExamAnalytics(exams, teacherAssignments) {
     }
 
     const g = patternClassSectionMap[pattern][classSection];
-    if (exam.physics_percentage != null && exam.physics_percentage !== '') {
-      g.physics.push(parseFloat(exam.physics_percentage));
+    if (exam.phy_exam_per_average != null && exam.phy_exam_per_average !== '') {
+      g.physics.push(parseFloat(exam.phy_exam_per_average));
     }
-    if (exam.chemistry_percentage != null && exam.chemistry_percentage !== '') {
-      g.chemistry.push(parseFloat(exam.chemistry_percentage));
+    if (exam.chem_exam_per_average != null && exam.chem_exam_per_average !== '') {
+      g.chemistry.push(parseFloat(exam.chem_exam_per_average));
     }
-    if (exam.maths_percentage != null && exam.maths_percentage !== '') {
-      g.maths.push(parseFloat(exam.maths_percentage));
+    if (exam.math_exam_per_average != null && exam.math_exam_per_average !== '') {
+      g.maths.push(parseFloat(exam.math_exam_per_average));
     }
-    if (exam.biology_percentage != null && exam.biology_percentage !== '') {
-      g.biology.push(parseFloat(exam.biology_percentage));
+    if (exam.bioexam_per_average != null && exam.bioexam_per_average !== '') {
+      g.biology.push(parseFloat(exam.bioexam_per_average));
     }
   });
 

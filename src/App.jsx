@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 
 import LoginPage from './components/LoginPage.jsx';
 import Dashboard from './Dashboard.jsx'; // Your main page (SchoolForm + Table + Upload)
+import spectropyLogoUrl from './assets/logo.png';
 
 // ===== Auth Context Wrapper =====
 function Protected({ children, allowedRoles = ['SPECTROPY_ADMIN'] }) {
@@ -59,13 +60,6 @@ function AppRoutes() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('sp_user');
-    navigate('/login', { replace: true });
-  };
-
-  // For now, you can add a Logout button inside Dashboard conditionally
-
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header (shown on all pages) */}
@@ -75,7 +69,7 @@ function AppRoutes() {
         color: "white",
         display: "flex",
         flexWrap: "wrap",
-        justifyContent: "space-between",
+        justifyContent: "flex-start",
         alignItems: "center",
         gap: "10px",
         fontSize: "clamp(16px, 2vw, 20px)",
@@ -84,36 +78,19 @@ function AppRoutes() {
         textAlign: "center",
         boxShadow: "0 3px 12px rgba(26,86,219,0.3)",
       }}>
-        <span>SPECTROPY School Portal</span>
-      
-        {sessionStorage.getItem('sp_user') && (
-          <button
-            onClick={handleLogout}
-            style={{
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            🔐 Logout
-          </button>
-        )}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <img
-           src="https://spectropy.com/wp-content/uploads/2023/02/final-blue-white-bg.png" // 👈 replace this path with your actual logo file (e.g., './assets/logo.png')
-           alt="SPECTROPY Logo"
-           style={{
-           height: "40px",
-           width: "auto",
-           borderRadius: "6px",
-           objectFit: "contain",
-        }}
-       />
-       </div>
+          <img
+            src={spectropyLogoUrl}
+            alt="SPECTROPY Logo"
+            style={{
+              height: "40px",
+              width: "auto",
+              borderRadius: "6px",
+              objectFit: "contain",
+            }}
+          />
+          <span>SPECTROPY RA-Portal</span>
+        </div>
       </header>
 
       {/* Page Content */}
