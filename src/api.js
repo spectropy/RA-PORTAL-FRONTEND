@@ -128,6 +128,25 @@ export const getStudentsByClassSection = async (schoolId, classValue, sectionVal
   }
 };
 
+export const deleteStudent = async (schoolId, studentRowId) => {
+  const res = await fetch(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students/${encodeURIComponent(studentRowId)}`, {
+    method: 'DELETE'
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete student');
+  return data;
+};
+
+export const deleteStudentsByClassSection = async (schoolId, classValue, sectionValue) => {
+  const url = new URL(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students`);
+  url.searchParams.set('class', classValue);
+  url.searchParams.set('section', sectionValue);
+  const res = await fetch(url, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete students');
+  return data;
+};
+
 // ========================
 // 📝 EXAM REGISTRATION
 // ========================
@@ -210,6 +229,55 @@ export async function getExams() {
   }
   const j = await r.json();
   return j;
+}
+
+const appendExamDatasetContext = (url, dataset) => {
+  url.searchParams.set('program', dataset.program);
+  url.searchParams.set('exam_pattern', dataset.exam_pattern);
+  url.searchParams.set('class', dataset.class);
+  url.searchParams.set('section', dataset.section);
+  url.searchParams.set('exam_date', dataset.exam_date);
+  return url;
+};
+
+export async function getExamDatasets(schoolId) {
+  const r = await fetch(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/exam-datasets`);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Failed to load existing exams');
+  return data;
+}
+
+export async function getExamDatasetResults(schoolId, dataset) {
+  const url = appendExamDatasetContext(
+    new URL(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/exam-datasets/results`),
+    dataset
+  );
+  const r = await fetch(url);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Failed to load exam results');
+  return data;
+}
+
+export async function deleteExamDataset(schoolId, dataset) {
+  const url = appendExamDatasetContext(
+    new URL(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/exam-datasets`),
+    dataset
+  );
+  const r = await fetch(url, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Failed to delete exam data');
+  return data;
+}
+
+export async function getTeacherRanks(teacherId, payload = {}) {
+  const r = await fetch(`${API_BASE}/api/teachers/${encodeURIComponent(teacherId)}/ranks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Failed to load teacher rankings');
+  return data;
 }
 
 // Delete class by ID

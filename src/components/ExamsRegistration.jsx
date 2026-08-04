@@ -1,122 +1,35 @@
 // src/ExamRegistration.jsx
 import React, { useState, useEffect } from 'react';
 import OMRUploadView from './OMRUploadView'; // 👈 Adjust path as needed
+import { deleteExamDataset, getExamDatasetResults, getExamDatasets } from '../api';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
-// Exam patterns by program
-const getExamPatternsByProgram = (program) => {
-  switch (program) {
-    case 'CAT':
-    case 'FF':
-      return [
-        { id: 'PART_TEST_1', name: 'Part Test 1', type: 'PART_TEST' },
-        { id: 'PART_TEST_2', name: 'Part Test 2', type: 'PART_TEST' },
-        { id: 'PART_TEST_3', name: 'Part Test 3', type: 'PART_TEST' },
-        { id: 'PART_TEST_4', name: 'Part Test 4', type: 'PART_TEST' },
-        { id: 'PART_TEST_5', name: 'Part Test 5', type: 'PART_TEST' },
-        { id: 'PART_TEST_6', name: 'Part Test 6', type: 'PART_TEST' },
-        { id: 'PART_TEST_7', name: 'Part Test 7', type: 'PART_TEST' },
-        { id: 'PART_TEST_8', name: 'Part Test 8', type: 'PART_TEST' },
-        { id: 'UNIT_TEST_1', name: 'Unit Test 1', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_2', name: 'Unit Test 2', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_3', name: 'Unit Test 3', type: 'UNIT_TEST' },
-        { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
-      ];
-    case 'MAE':
-    case 'PIO':
-      return [
-        { id: 'WEEK_TEST_1', name: 'Week Test 1', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_2', name: 'Week Test 2', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_3', name: 'Week Test 3', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_4', name: 'Week Test 4', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_5', name: 'Week Test 5', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_6', name: 'Week Test 6', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_7', name: 'Week Test 7', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_8', name: 'Week Test 8', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_9', name: 'Week Test 9', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_10', name: 'Week Test 10', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_11', name: 'Week Test 11', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_12', name: 'Week Test 12', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_13', name: 'Week Test 13', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_14', name: 'Week Test 14', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_15', name: 'Week Test 15', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_16', name: 'Week Test 16', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_17', name: 'Week Test 17', type: 'WEEK_TEST' },
-        { id: 'WEEK_TEST_18', name: 'Week Test 18', type: 'WEEK_TEST' },
-        { id: 'UNIT_TEST_1', name: 'Unit Test 1', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_2', name: 'Unit Test 2', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_3', name: 'Unit Test 3', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_4', name: 'Unit Test 4', type: 'UNIT_TEST' },
-        { id: 'UNIT_TEST_5', name: 'Unit Test 5', type: 'UNIT_TEST' },
-        { id: 'GRAND_TEST_1', name: 'Grand Test 1', type: 'GRAND_TEST' },
-        { id: 'GRAND_TEST_2', name: 'Grand Test 2', type: 'GRAND_TEST' }
-      ];
-    case 'NGHS_MAE':
-        return [
-        { id: 'CDF_1', name: 'CDF 1', type: 'CDF' },
-        { id: 'CDF_2', name: 'CDF 2', type: 'CDF' },
-        { id: 'CDF_3', name: 'CDF 3', type: 'CDF' },
-        { id: 'CDF_4', name: 'CDF 4', type: 'CDF' },
-        { id: 'CDF_5', name: 'CDF 5', type: 'CDF' },
-        { id: 'CDF_6', name: 'CDF 6', type: 'CDF' },
-        { id: 'CDF_7', name: 'CDF 7', type: 'CDF' },
-        { id: 'CDF_8', name: 'CDF 8', type: 'CDF' },
-        { id: 'CDF_9', name: 'CDF 9', type: 'CDF' },
-        { id: 'CDF_10', name: 'CDF 10', type: 'CDF' },
-        { id: 'CDF_11', name: 'CDF 11', type: 'CDF' },
-        { id: 'CDF_12', name: 'CDF 12', type: 'CDF' },
-        { id: 'CDF_13', name: 'CDF 13', type: 'CDF' },
-        { id: 'CDF_14', name: 'CDF 14', type: 'CDF' },
-        { id: 'CDF_15', name: 'CDF 15', type: 'CDF' },
-        { id: 'CDF_16', name: 'CDF 16', type: 'CDF' },
-        { id: 'CDF_17', name: 'CDF 17', type: 'CDF' },
-        { id: 'CDF_18', name: 'CDF 18', type: 'CDF' },
-        { id: 'JEE_1_L1', name: 'JEE 1_L1', type: 'JEE_L1' },
-        { id: 'JEE_2_L1', name: 'JEE 2_L1', type: 'JEE_L1' },
-        { id: 'JEE_3_L1', name: 'JEE 3_L1', type: 'JEE_L1' },
-        { id: 'JEE_4_L1', name: 'JEE 4_L1', type: 'JEE_L1' },
-        { id: 'JEE_5_L1', name: 'JEE 5_L1', type: 'JEE_L1' },
-        { id: 'JEE_6_L1', name: 'JEE 6_L1', type: 'JEE_L1' },
-        { id: 'JEE_7_L1', name: 'JEE 7_L1', type: 'JEE_L1' },
-        { id: 'JEE_8_L1', name: 'JEE 8_L1', type: 'JEE_L1' },
-        { id: 'JEE_9_L1', name: 'JEE 9_L1', type: 'JEE_L1' },
-        { id: 'JEE_10_L1', name: 'JEE 10_L1', type: 'JEE_L1' },
-        { id: 'JEE_11_L1', name: 'JEE 11_L1', type: 'JEE_L1' },
-        { id: 'JEE_12_L1', name: 'JEE 12_L1', type: 'JEE_L1' },
-        { id: 'JEE_13_L1', name: 'JEE 13_L1', type: 'JEE_L1' },
-        { id: 'JEE_14_L1', name: 'JEE 14_L1', type: 'JEE_L1' },
-        { id: 'JEE_15_L1', name: 'JEE 15_L1', type: 'JEE_L1' },
-        { id: 'JEE_16_L1', name: 'JEE 16_L1', type: 'JEE_L1' },
-        { id: 'JEE_17_L1', name: 'JEE 17_L1', type: 'JEE_L1' },
-        { id: 'JEE_18_L1', name: 'JEE 18_L1', type: 'JEE_L1' },
-        { id: 'JEE_1_L2', name: 'JEE 1_L2', type: 'JEE_L2' },
-        { id: 'JEE_2_L2', name: 'JEE 2_L2', type: 'JEE_L2' },
-        { id: 'JEE_3_L2', name: 'JEE 3_L2', type: 'JEE_L2' },
-        { id: 'JEE_4_L2', name: 'JEE 4_L2', type: 'JEE_L2' },
-        { id: 'JEE_5_L2', name: 'JEE 5_L2', type: 'JEE_L2' },
-        { id: 'JEE_6_L2', name: 'JEE 6_L2', type: 'JEE_L2' },
-        { id: 'JEE_7_L2', name: 'JEE 7_L2', type: 'JEE_L2' },
-        { id: 'JEE_8_L2', name: 'JEE 8_L2', type: 'JEE_L2' },
-        { id: 'JEE_9_L2', name: 'JEE 9_L2', type: 'JEE_L2' },
-        { id: 'JEE_10_L2', name: 'JEE 10_L2', type: 'JEE_L2' },
-        { id: 'JEE_11_L2', name: 'JEE 11_L2', type: 'JEE_L2' },
-        { id: 'JEE_12_L2', name: 'JEE 12_L2', type: 'JEE_L2' },
-        { id: 'JEE_13_L2', name: 'JEE 13_L2', type: 'JEE_L2' },
-        { id: 'JEE_14_L2', name: 'JEE 14_L2', type: 'JEE_L2' },
-        { id: 'JEE_15_L2', name: 'JEE 15_L2', type: 'JEE_L2' },
-        { id: 'JEE_16_L2', name: 'JEE 16_L2', type: 'JEE_L2' },
-        { id: 'JEE_17_L2', name: 'JEE 17_L2', type: 'JEE_L2' },
-        { id: 'JEE_18_L2', name: 'JEE 18_L2', type: 'JEE_L2' },
+const SUPPORTED_PROGRAMS = new Set([
+  'SPHS', 'MAESTRO', 'GHS', 'SFS', 'KTS', 'VIJAYA', 'PHS',
+  'KPS', 'SPR', 'FF', 'CAT', 'SPARK', 'MANAIR_MAESTRO'
+]);
 
-      ];
-    default:
-      return [];
-  }
-};
+const COMMON_EXAM_PATTERNS = [
+  ...Array.from({ length: 15 }, (_, index) => ({
+    id: `PART_TEST_${index + 1}`,
+    name: `Part Test ${index + 1}`,
+    type: 'PART_TEST'
+  })),
+  ...Array.from({ length: 3 }, (_, index) => ({
+    id: `UNIT_TEST_${index + 1}`,
+    name: `Unit Test ${index + 1}`,
+    type: 'UNIT_TEST'
+  })),
+  ...Array.from({ length: 2 }, (_, index) => ({
+    id: `GRAND_TEST_${index + 1}`,
+    name: `Grand Test ${index + 1}`,
+    type: 'GRAND_TEST'
+  }))
+];
 
-// Helper to generate exam label
-const getExamLabel = (exam) => `${exam.type} ${exam.index}`;
+const getExamPatternsByProgram = (program) =>
+  SUPPORTED_PROGRAMS.has(program) ? COMMON_EXAM_PATTERNS : [];
 
 export default function ExamRegistration({ schools = [] }) {
   const [selectedSchool, setSelectedSchool] = useState('');
@@ -142,6 +55,10 @@ export default function ExamRegistration({ schools = [] }) {
   const [uploadError, setUploadError] = useState({});
   const [examResults, setExamResults] = useState({});
   const [currentOMRExam, setCurrentOMRExam] = useState(null);
+  const [examDatasets, setExamDatasets] = useState([]);
+  const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState(null);
+  const [activeTab, setActiveTab] = useState('registration');
 
   // Fetch school data when selected
   useEffect(() => {
@@ -170,6 +87,30 @@ export default function ExamRegistration({ schools = [] }) {
     fetchSchool();
   }, [selectedSchool]);
 
+  useEffect(() => {
+    if (!selectedSchool) {
+      setExamDatasets([]);
+      setSelectedDataset(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadDatasets = async () => {
+      setDatasetsLoading(true);
+      try {
+        const datasets = await getExamDatasets(selectedSchool);
+        if (!cancelled) setExamDatasets(datasets);
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load existing exams');
+      } finally {
+        if (!cancelled) setDatasetsLoading(false);
+      }
+    };
+
+    loadDatasets();
+    return () => { cancelled = true; };
+  }, [selectedSchool, examResults]);
+
   // Reset form when school changes
   useEffect(() => {
     setExamForm({
@@ -178,6 +119,7 @@ export default function ExamRegistration({ schools = [] }) {
       classSection: ''
     });
     setCurrentOMRExam(null);
+    setSelectedDataset(null);
   }, [selectedSchool]);
 
   // Handle form change
@@ -189,11 +131,10 @@ export default function ExamRegistration({ schools = [] }) {
 const getExamOptions = () => {
   if (!schoolData?.classes?.length) return [];
 
-  // Get unique, valid program codes from classes (e.g., 'MAE', 'CAT', 'PIO')
   const availablePrograms = [...new Set(
     schoolData.classes
-      .map(cls => cls.program?.toUpperCase()) // e.g., 'MAE', 'CAT'
-      .filter(Boolean)
+      .map(cls => cls.program?.toUpperCase())
+      .filter(program => program && SUPPORTED_PROGRAMS.has(program))
   )];
 
   if (availablePrograms.length === 0) return [];
@@ -201,25 +142,14 @@ const getExamOptions = () => {
   // Generate exams for all available programs
   let allExams = [];
   availablePrograms.forEach(programCode => {
-    const exams = getExamPatternsByProgram(programCode); // 👈 uses your new function
-
-    exams.forEach((exam, idx) => {
-      // Map program code to display name for user-friendliness
-      const programDisplayName = {
-        'MAE': 'MAESTRO',
-        'PIO': 'PIONEER',
-        'CAT': 'CATALYST',
-        'FF' : 'FUTUER FOUNDATION',
-        'NGHS_MAE' : 'NGHS_MAESTRO'
-      }[programCode] || programCode;
-
+    getExamPatternsByProgram(programCode).forEach(exam => {
       allExams.push({
-        id: `${schoolData.school_id}_${programCode}_${exam.id}`, // unique ID
-        exam_pattern: exam.id, // e.g., 'WEEK_TEST_1'
-        display_name: `${programDisplayName} - ${exam.name}`, // e.g., "MAESTRO - Week Test 1"
-        program: programCode, // e.g., 'MAE'
-        school_id: schoolData.school_id,
-        type: exam.type // optional: if you need type later
+        id: `${selectedSchool}_${programCode}_${exam.id}`,
+        exam_pattern: exam.id,
+        display_name: `${programCode} - ${exam.name}`,
+        program: programCode,
+        school_id: selectedSchool,
+        type: exam.type
       });
     });
   });
@@ -285,6 +215,39 @@ const handleSubmit = (e) => {
   // Optional: Show success message
   alert('Exam configured successfully! Proceeding to OMR upload.');
 };
+
+  const handleViewDataset = async dataset => {
+    setError('');
+    try {
+      const results = await getExamDatasetResults(selectedSchool, dataset);
+      setExamResults(previous => ({ ...previous, [dataset.key]: results }));
+      setSelectedDataset(dataset);
+    } catch (err) {
+      setError(err.message || 'Failed to load exam results');
+    }
+  };
+
+  const handleDeleteDataset = async dataset => {
+    const label = `${dataset.program} ${dataset.exam_pattern}, ${dataset.class}-${dataset.section}, ${dataset.exam_date}`;
+    if (!window.confirm(`Delete the complete exam dataset for ${label}? This cannot be undone.`)) return;
+
+    setError('');
+    try {
+      const result = await deleteExamDataset(selectedSchool, dataset);
+      if (!result.analyticsRecalculated) {
+        setError('Exam deleted, but one or more analytics recalculations need attention.');
+      }
+      setExamDatasets(previous => previous.filter(item => item.key !== dataset.key));
+      setExamResults(previous => {
+        const next = { ...previous };
+        delete next[dataset.key];
+        return next;
+      });
+      if (selectedDataset?.key === dataset.key) setSelectedDataset(null);
+    } catch (err) {
+      setError(err.message || 'Failed to delete exam data');
+    }
+  };
   // PDF download handler (dummy — replace with your logic)
    const downloadPDF = async (exam) => {
     const examId = exam.id;
@@ -366,6 +329,37 @@ const handleSubmit = (e) => {
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: 1000, margin: '0 auto' }}>
       <h2 style={{ color: '#1e90ff', marginBottom: '30px' }}>📝 Exam Registration</h2>
 
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '26px' }}>
+        {[
+          { id: 'registration', label: 'Registration' },
+          { id: 'view', label: 'View Exams' }
+        ].map(tab => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (tab.id === 'view') setSelectedDataset(null);
+              }}
+              style={{
+                padding: '11px 18px',
+                background: isActive ? '#1e90ff' : '#fff',
+                color: isActive ? '#fff' : '#1e90ff',
+                border: '1px solid #1e90ff',
+                borderRadius: '5px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       {error && (
         <div style={{
           padding: '10px',
@@ -430,7 +424,7 @@ const handleSubmit = (e) => {
 
       {loading && <p>Loading school data...</p>}
 
-      {schoolData && (
+      {schoolData && activeTab === 'registration' && (
   <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '25px', borderRadius: '8px', border: '1px solid #ddd' }}>
     <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>📋 Register New Exam</h3>
 
@@ -563,7 +557,7 @@ const handleSubmit = (e) => {
   </form>
 )}
       {/* OMR Upload View (shown after submit) */}
-      {currentOMRExam && (
+      {activeTab === 'registration' && currentOMRExam && (
         <OMRUploadView
           currentOMRExam={currentOMRExam}
           file={file}
@@ -577,6 +571,130 @@ const handleSubmit = (e) => {
           setCurrentOMRExam={setCurrentOMRExam}
           downloadPDF={downloadPDF}
         />
+      )}
+
+      {activeTab === 'view' && selectedSchool && (
+        <div style={{ marginTop: '30px', background: '#fff', padding: '20px', border: '1px solid #ddd', borderRadius: '8px' }}>
+          {!selectedDataset && (
+            <>
+              <h3 style={{ marginTop: 0 }}>Existing Exams</h3>
+              {datasetsLoading ? (
+                <p>Loading existing exams...</p>
+              ) : examDatasets.length === 0 ? (
+                <p style={{ color: '#666' }}>No uploaded exams found for this school.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        {['Exam', 'Program', 'Class-Section', 'Exam Date', 'Students', 'Actions'].map(header => (
+                          <th key={header} style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {examDatasets.map(dataset => (
+                        <tr key={dataset.key}>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{dataset.exam_pattern.replaceAll('_', ' ')}</td>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{dataset.program}</td>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{dataset.class}-{dataset.section}</td>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{dataset.exam_date}</td>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{dataset.student_count}</td>
+                          <td style={{ padding: '10px', borderBottom: '1px solid #eee', whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewDataset(dataset)}
+                              style={{ marginRight: '8px', padding: '7px 12px', color: '#fff', background: '#1e90ff', border: 0, borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDataset(dataset)}
+                              style={{ padding: '7px 12px', color: '#fff', background: '#dc3545', border: 0, borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {selectedDataset && examResults[selectedDataset.key] && (
+            <div style={{ marginTop: '24px', overflowX: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <h4 style={{ margin: 0 }}>{selectedDataset.program} — {selectedDataset.exam_pattern} Results</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDataset(null)}
+                    style={{ padding: '7px 12px', color: '#fff', background: '#1e90ff', border: 0, borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    ← Back to Existing Exams
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadPDF({ ...selectedDataset, id: selectedDataset.key })}
+                    style={{ padding: '7px 12px', color: '#fff', background: '#1e90ff', border: 0, borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    Download PDF
+                  </button>
+                </div>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa' }}>
+                    {[
+                      'Student ID',
+                      'Student Name',
+                      'Total Max Marks',
+                      'Correct',
+                      'Wrong',
+                      'Unattempted',
+                      'Physics',
+                      'Chemistry',
+                      'Maths',
+                      'Biology',
+                      'Total Marks',
+                      'Percentage',
+                      'Class Rank',
+                      'School Rank',
+                      'All India Rank'
+                    ].map(header => (
+                      <th key={header} style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {examResults[selectedDataset.key].map(result => (
+                    <tr key={result.id || result.student_id}>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.student_id}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{`${result.first_name || ''} ${result.last_name || ''}`.trim() || '-'}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.total_questions ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.correct_answers ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.wrong_answers ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.unattempted ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.physics_marks ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.chemistry_marks ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.maths_marks ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.biology_marks ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.total_marks ?? 0}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.percentage ?? 0}%</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.class_rank || '-'}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.school_rank || '-'}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{result.all_schools_rank || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

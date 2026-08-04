@@ -311,14 +311,7 @@ const gap = 8;
 
 // --- Map program code to name ---
 const programCode = examResults[0]?.program || "—";
-let programName = "—";
-switch (programCode) {
-  case "MAE": programName = "Maestro"; break;
-  case "CAT": programName = "Catalyst"; break;
-  case "PIO": programName = "Pioneer"; break;
-  case "FF": programName = "Future Foundation"; break;
-  default: programName = programCode;
-}
+const programName = programCode;
 
 // --- Determine stream (IIT, MED, IIT-MED) based on subjects ---
 let hasPhysics = false, hasChemistry = false, hasMaths = false, hasBiology = false;

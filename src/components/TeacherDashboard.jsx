@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // 👈 Import autotable
 import spectropyLogoUrl from '../assets/logo.png';
+import { getTeacherRanks } from '../api';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
@@ -127,6 +128,8 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
   const [schoolLogoUrl, setSchoolLogoUrl] = useState(null);
+  const [teacherRankRows, setTeacherRankRows] = useState([]);
+  const [teacherRankError, setTeacherRankError] = useState('');
 
   const isViewingAsSchoolOwner = !!externalTeacherId && externalTeacherId.trim() !== '';
   console.log("✅ isViewingAsSchoolOwner =", isViewingAsSchoolOwner);
@@ -217,6 +220,19 @@ export default function TeacherDashboard({ onBack, teacherId: externalTeacherId 
       );
       setExamPatterns(examPatterns);
       setBestWeekTestsByGrade(bestWeekTestsByGrade);
+
+      try {
+        const rankData = await getTeacherRanks(teacherData.teacher_id, {
+          school_id: schoolId,
+          assignments: teacherData.teacher_assignments
+        });
+        setTeacherRankRows(Array.isArray(rankData.rows) ? rankData.rows : []);
+        setTeacherRankError('');
+      } catch (rankError) {
+        console.error('Error loading teacher rankings:', rankError);
+        setTeacherRankRows([]);
+        setTeacherRankError(rankError.message || 'Failed to load teacher rankings');
+      }
     } catch (err) {
       console.error("Error loading teacher dashboard:", err);
       alert(err.message || "Failed to load dashboard.");
@@ -578,6 +594,44 @@ const downloadPDF = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {(teacherRankRows.length > 0 || teacherRankError) && (
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>Teacher Performance Rankings</h2>
+          {teacherRankError ? (
+            <p style={styles.noData}>{teacherRankError}</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Program</th>
+                    <th style={styles.th}>Exam</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Class-Section</th>
+                    <th style={styles.th}>Subject</th>
+                    <th style={styles.th}>Average</th>
+                    <th style={styles.th}>All India Rank</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teacherRankRows.map(row => (
+                    <tr key={`${row.program}-${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}`}>
+                      <td style={styles.td}>{row.program}</td>
+                      <td style={styles.td}>{row.exam_pattern}</td>
+                      <td style={styles.td}>{row.exam_date || '-'}</td>
+                      <td style={styles.td}>{row.class_section}</td>
+                      <td style={styles.td}>{row.subject}</td>
+                      <td style={styles.td}>{row.average}%</td>
+                      <td style={styles.td}>{row.all_india_rank}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears,  deleteClassById, deleteAssignmentById  } from '../api';
+import { getSchoolById, createClass, createTeacher, assignTeacherToClass, getAcademicYears, deleteClassById, deleteAssignmentById } from '../api';
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
-const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS MPC_A MPC_B MPC_C MPC BIPC"
+const SECTION_OPTIONS = "ABCDEF Elite Prime"
   .split(" ")               // → ['ABCDEF', 'TULIPS', 'IRIS', 'DAFFODILS']
   .flatMap(part => 
     part === "ABCDEF" ? part.split("") : [part]
   );
 //const SECTION_OPTIONS = "ABCDEF TULIPS IRIS DAFFODILS".split("");
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED"];
-const PROGRAM_OPTIONS = ["CAT", "MAE", "PIO", "NGHS_MAE", "FF"];
+const PROGRAM_OPTIONS = [
+  "SPHS", "MAESTRO", "GHS", "SFS", "KTS", "VIJAYA", "PHS",
+  "KPS", "SPR", "FF", "CAT", "SPARK", "MANAIR_MAESTRO"
+];
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
 
 const forcedGroupForFoundation = (foundation) => {
@@ -656,8 +659,8 @@ const handleDeleteAssignment = async (assignmentId, subject, className, section)
                     }}
                   >
                     <option value="">-- Select Program --</option>
-                    {PROGRAM_OPTIONS.map(p => (
-                      <option key={p} value={p}>{p}</option>
+                    {PROGRAM_OPTIONS.map(program => (
+                      <option key={program} value={program}>{program}</option>
                     ))}
                   </select>
                 </div>

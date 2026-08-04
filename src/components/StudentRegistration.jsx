@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { getSchoolById, uploadStudents, getAcademicYears } from '../api';
-
-// 👇 NEW: Import getStudentsByClassSection (you'll need to create this API function)
-import { getStudentsByClassSection } from '../api';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  deleteStudent,
+  deleteStudentsByClassSection,
+  getAcademicYears,
+  getSchoolById,
+  getStudentsByClassSection,
+  uploadStudents
+} from '../api';
 
 export default function StudentRegistration({ schools = [] }) {
   const [academicYears, setAcademicYears] = useState([]);
@@ -18,6 +22,8 @@ export default function StudentRegistration({ schools = [] }) {
   // 👇 NEW: State for students table
   const [students, setStudents] = useState([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
+  const [deletingStudents, setDeletingStudents] = useState(false);
+  const studentRequestId = useRef(0);
 
   useEffect(() => {
     const fetchAcademicYearsData = async () => {
@@ -75,31 +81,91 @@ export default function StudentRegistration({ schools = [] }) {
   const fetchStudents = async () => {
     if (!selectedSchool || !selectedClassSection) return;
 
+    const requestId = ++studentRequestId.current;
+    const schoolId = selectedSchool;
+    const classSection = selectedClassSection;
     setFetchingStudents(true);
     try {
       // Split class-section to get class and section
-      const lastDashIndex = selectedClassSection.lastIndexOf('-');
+      const lastDashIndex = classSection.lastIndexOf('-');
       if (lastDashIndex <= 0) return;
 
-      const classValue = selectedClassSection.substring(0, lastDashIndex).trim();
-      const sectionValue = selectedClassSection.substring(lastDashIndex + 1).trim();
+      const classValue = classSection.substring(0, lastDashIndex).trim();
+      const sectionValue = classSection.substring(lastDashIndex + 1).trim();
 
       const fetchedStudents = await getStudentsByClassSection(
-        selectedSchool,
+        schoolId,
         classValue,
         sectionValue
       );
-      setStudents(fetchedStudents || []);
+      if (requestId === studentRequestId.current) {
+        setStudents(fetchedStudents || []);
+      }
     } catch (err) {
-      console.error('Error fetching students:', err);
-      setError('Failed to load student list');
+      if (requestId === studentRequestId.current) {
+        console.error('Error fetching students:', err);
+        setError('Failed to load student list');
+      }
     } finally {
-      setFetchingStudents(false);
+      if (requestId === studentRequestId.current) {
+        setFetchingStudents(false);
+      }
     }
   };
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+  };
+
+  const getSelectedClassSection = () => {
+    const lastDashIndex = selectedClassSection.lastIndexOf('-');
+    if (lastDashIndex <= 0) return null;
+    return {
+      classValue: selectedClassSection.substring(0, lastDashIndex).trim(),
+      sectionValue: selectedClassSection.substring(lastDashIndex + 1).trim()
+    };
+  };
+
+  const handleDeleteStudent = async student => {
+    if (!student.id || !window.confirm(`Delete ${student.name || student.student_id}?`)) return;
+    setDeletingStudents(true);
+    setError('');
+    setSuccess('');
+    try {
+      await deleteStudent(selectedSchool, student.id);
+      setSuccess('Student deleted successfully.');
+      await fetchStudents();
+    } catch (err) {
+      setError(err.message || 'Failed to delete student');
+    } finally {
+      setDeletingStudents(false);
+    }
+  };
+
+  const handleDeleteClassSection = async () => {
+    const context = getSelectedClassSection();
+    if (!context || !students.length) return;
+    const confirmed = window.confirm(
+      `Delete all ${students.length} students in ${selectedClassSection}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingStudents(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await deleteStudentsByClassSection(
+        selectedSchool,
+        context.classValue,
+        context.sectionValue
+      );
+      setStudents([]);
+      setSuccess(result.message || 'Students deleted successfully.');
+    } catch (err) {
+      setError(err.message || 'Failed to delete students');
+    } finally {
+      setDeletingStudents(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -224,7 +290,15 @@ export default function StudentRegistration({ schools = [] }) {
           </label>
           <select
             value={selectedSchool}
-            onChange={(e) => setSelectedSchool(e.target.value)}
+            onChange={(e) => {
+              studentRequestId.current += 1;
+              setSelectedSchool(e.target.value);
+              setSelectedClassSection('');
+              setStudents([]);
+              setFetchingStudents(false);
+              setError('');
+              setSuccess('');
+            }}
             style={{
               width: '100%',
               padding: '8px',
@@ -255,9 +329,12 @@ export default function StudentRegistration({ schools = [] }) {
             <select
               value={selectedClassSection}
               onChange={(e) => {
+                studentRequestId.current += 1;
                 setSelectedClassSection(e.target.value);
-                // 👇 Auto-fetch students when selection changes
-                if (e.target.value) fetchStudents();
+                setStudents([]);
+                setFetchingStudents(false);
+                setError('');
+                setSuccess('');
               }}
               style={{
                 width: '100%',
@@ -360,6 +437,24 @@ export default function StudentRegistration({ schools = [] }) {
               <h4 style={{ color: '#1e90ff', marginBottom: '15px' }}>
                 👥 Students in {selectedClassSection || 'Selected Class'}
               </h4>
+              {students.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteClassSection}
+                  disabled={deletingStudents}
+                  style={{
+                    padding: '8px 12px',
+                    marginBottom: '12px',
+                    background: '#dc3545',
+                    color: 'white',
+                    border: 0,
+                    borderRadius: '4px',
+                    cursor: deletingStudents ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {deletingStudents ? 'Deleting...' : 'Delete All Students in Class-Section'}
+                </button>
+              )}
               
               {fetchingStudents ? (
                 <p>Loading students...</p>
@@ -385,6 +480,7 @@ export default function StudentRegistration({ schools = [] }) {
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Student Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Phone</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Email</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -397,6 +493,23 @@ export default function StudentRegistration({ schools = [] }) {
                           <td style={{ padding: '12px' }}>{student.name}</td>
                           <td style={{ padding: '12px' }}>{student.parent_phone || '-'}</td>
                           <td style={{ padding: '12px' }}>{student.parent_email || '-'}</td>
+                          <td style={{ padding: '12px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStudent(student)}
+                              disabled={deletingStudents}
+                              style={{
+                                padding: '6px 10px',
+                                background: '#dc3545',
+                                color: 'white',
+                                border: 0,
+                                borderRadius: '4px',
+                                cursor: deletingStudents ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

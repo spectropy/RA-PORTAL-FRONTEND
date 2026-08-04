@@ -77,10 +77,14 @@ const handleUpload = async (exam) => {
 
     const data = await response.json();
 
-    if (response.ok) {
+if (response.ok) {
   setExamResults(prev => ({ ...prev, [examId]: data.results || [] }));
   setFile(prev => ({ ...prev, [examId]: null }));
-  setUploadError(prev => ({ ...prev, [examId]: '' }));
+  const warnings = Array.isArray(data.analytics_warnings) ? data.analytics_warnings : [];
+  setUploadError(prev => ({
+    ...prev,
+    [examId]: warnings.length ? `Upload completed with analytics warnings: ${warnings.join('; ')}` : ''
+  }));
   alert(`✅ Results uploaded successfully for ${exam.exam_pattern.replace('_', ' ')}`);
 } else if (response.status === 409) {
   // Handle duplicate exam registration
