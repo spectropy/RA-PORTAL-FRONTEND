@@ -407,7 +407,9 @@ export default function SchoolTable({
         className={`table-toolbar${mobileDetailSchoolId ? " table-toolbar--mobile-hidden" : ""}`}
       >
         <div className="table-search-wrap">
-          <span className="table-search-icon">{"\ud83d\udd0d"}</span>
+          <span className="table-search-icon">
+            <Search size={16} strokeWidth={2} />
+          </span>
           <input
             className="table-search-input"
             type="text"

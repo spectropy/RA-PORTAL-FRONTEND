@@ -159,7 +159,7 @@ const TopStudentsSchool = () => {
 
   // Render
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{ margin: "0 auto" }}>
       <h2 style={{ marginBottom: "20px", color: "#1e293b" }}>
         Top 5 Students by Class & Section
       </h2>

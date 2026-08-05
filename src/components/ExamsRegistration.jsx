@@ -1,4 +1,4 @@
-﻿// src/ExamRegistration.jsx
+// src/ExamRegistration.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import spectropyLogo from "../assets/logo.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -166,7 +167,6 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [examResults, setExamResults] = useState([]);
   const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -225,7 +225,6 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     });
     setSelectedFile(null);
     setUploadError("");
-    setExamResults([]);
   }, [selectedSchool]);
 
   useEffect(() => {
@@ -387,7 +386,8 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploadError("");
-    setExamResults([]);
+    setDatasetResults([]);
+    setDatasetResultsError("");
 
     if (
       !selectedSchool ||
@@ -452,7 +452,26 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
         );
       }
 
-      setExamResults(data.results || []);
+      const uploadedDataset = {
+        key: [
+          selectedSchool,
+          selectedExam.program,
+          selectedExam.exam_pattern,
+          classSectionParts.examClass,
+          classSectionParts.examSection,
+          examForm.examDate,
+        ].join("|"),
+        school_id: selectedSchool,
+        program: selectedExam.program,
+        exam_pattern: selectedExam.exam_pattern,
+        class: classSectionParts.examClass,
+        section: classSectionParts.examSection,
+        exam_date: examForm.examDate,
+        student_count: data.results?.length || 0,
+      };
+
+      setDatasetResults(data.results || []);
+      setActiveDataset(uploadedDataset);
       setSelectedFile(null);
     } catch (err) {
       setUploadError(err.message || "Upload failed.");
@@ -514,194 +533,1538 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
   };
 
   const closeDataset = () => {
+    if (mode === "new") {
+      navigate("/admin/exams");
+      return;
+    }
+
     setActiveDataset(null);
     setDatasetResults([]);
     setDatasetResultsError("");
   };
 
-  const downloadPDF = async () => {
-    if (!examResults.length) return alert("No data to download");
-
-    import("jspdf").then((jsPDF) => {
-      import("jspdf-autotable").then(() => {
-        const doc = new jsPDF.default("landscape");
-        const selectedExam = examOptions.find(
-          (exam) => exam.id === examForm.examPattern,
-        );
-        const classSectionParts = getClassSectionParts();
-
-        doc.setFontSize(18);
-        doc.text(
-          `Exam Results - ${selectedExam?.display_name || "OMR Exam"}`,
-          14,
-          22,
-        );
-        doc.setFontSize(12);
-        doc.text(
-          `School: ${selectedSchool} | Class: ${classSectionParts?.examClass || "-"} | Section: ${classSectionParts?.examSection || "-"}`,
-          14,
-          30,
-        );
-
-        const headers = [
-          "Student ID",
-          "Student Name",
-          "Total Max Marks",
-          "Correct",
-          "Wrong",
-          "Unattempted",
-          "Physics",
-          "Chemistry",
-          "Maths",
-          "Biology",
-          "Total Marks",
-          "Percentage",
-          "Class Rank",
-          "School Rank",
-          "All India Rank",
-        ];
-
-        const body = examResults.map((r) => [
-          r.student_id || "-",
-          `${r.first_name || ""} ${r.last_name || ""}`.trim() || "-",
-          r.total_questions || 0,
-          r.correct_answers || 0,
-          r.wrong_answers || 0,
-          r.unattempted || 0,
-          r.physics_marks || 0,
-          r.chemistry_marks || 0,
-          r.maths_marks || 0,
-          r.biology_marks || 0,
-          r.total_marks || 0,
-          `${r.percentage || 0}%`,
-          r.class_rank || "-",
-          r.school_rank || "-",
-          r.all_schools_rank || "-",
-        ]);
-
-        doc.autoTable({
-          startY: 40,
-          head: [headers],
-          body,
-          theme: "grid",
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [30, 144, 255], fontSize: 9 },
-          alternateRowStyles: { fillColor: [245, 245, 245] },
-          didDrawPage: (data) => {
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(
-              `Generated on: ${new Date().toLocaleString()}`,
-              data.settings.margin.left,
-              doc.internal.pageSize.height - 10,
-            );
-          },
-        });
-
-        doc.save(
-          `Exam_Results_${selectedSchool}_${new Date().toISOString().split("T")[0]}.pdf`,
-        );
-      });
-    });
-  };
-
   const downloadDatasetPDF = async () => {
-    if (!datasetResults.length || !activeDataset) {
+    if (
+      !Array.isArray(datasetResults) ||
+      datasetResults.length === 0 ||
+      !activeDataset
+    ) {
       alert("No data available to export.");
       return;
     }
 
-    import("jspdf").then((jsPDF) => {
-      import("jspdf-autotable").then(() => {
-        const doc = new jsPDF.default({
-          unit: "pt",
-          format: "a4",
-          orientation: "landscape",
+    try {
+      const [jsPDFModule, autoTableModule] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
+      const JsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
+      const autoTable = autoTableModule.autoTable || autoTableModule.default;
+
+      if (!JsPDF || typeof autoTable !== "function") {
+        throw new Error("jsPDF or jspdf-autotable could not be loaded.");
+      }
+
+      const doc = new JsPDF({
+        unit: "pt",
+        format: "a4",
+        orientation: "landscape",
+        compress: true,
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      /*
+       * Small side margins allow the table to use almost
+       * the complete A4 landscape width.
+       */
+      const marginX = 18;
+      const contentWidth = pageWidth - marginX * 2;
+
+      const COLORS = {
+        navy: [23, 54, 93],
+        royalBlue: [31, 94, 184],
+        paleBlue: [243, 247, 253],
+        softBlue: [232, 240, 250],
+        border: [204, 216, 230],
+        text: [31, 41, 55],
+        muted: [100, 116, 139],
+        white: [255, 255, 255],
+        green: [21, 128, 61],
+        amber: [180, 105, 0],
+        red: [185, 28, 28],
+        lightGrey: [220, 228, 238],
+      };
+
+      const HEADER_LAYOUT = {
+        titleBandY: 80,
+        titleBandHeight: 38,
+
+        metadataY: 128,
+        metadataHeight: 44,
+
+        summaryY: 182,
+        summaryHeight: 42,
+
+        tableStartY: 236,
+      };
+
+      /* ============================================================
+       VALUE HELPERS
+    ============================================================ */
+
+      const safeText = (value, fallback = "-") => {
+        if (
+          value === null ||
+          value === undefined ||
+          String(value).trim() === ""
+        ) {
+          return fallback;
+        }
+
+        return String(value).trim();
+      };
+
+      const toNumber = (value, fallback = 0) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+      };
+
+      const hasNumericValue = (value) =>
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        Number.isFinite(Number(value));
+
+      const formatNumber = (value, maximumDecimals = 2) =>
+        toNumber(value).toLocaleString("en-IN", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: maximumDecimals,
         });
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const title = "OMR EXAM RESULT REPORT";
+
+      const formatPercentage = (value) => `${formatNumber(value, 2)}%`;
+
+      const sanitizeFilename = (value, fallback = "REPORT") => {
+        const cleaned = safeText(value, fallback)
+          .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_")
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+
+        return cleaned || fallback;
+      };
+
+      const uniqueParts = (values) => [
+        ...new Set(values.map((value) => safeText(value, "")).filter(Boolean)),
+      ];
+
+      const formatDate = (value) => {
+        if (!value || value === "-") return "-";
+
+        let date;
+
+        if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          const [year, month, day] = value.split("-").map(Number);
+
+          date = new Date(year, month - 1, day);
+        } else {
+          date = new Date(value);
+        }
+
+        if (Number.isNaN(date.getTime())) {
+          return safeText(value);
+        }
+
+        return date.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+      };
+
+      const fitFontSize = ({
+        text,
+        maxWidth,
+        startSize,
+        minSize = 6,
+        fontStyle = "normal",
+      }) => {
+        let fontSize = startSize;
+
+        doc.setFont("helvetica", fontStyle);
+        doc.setFontSize(fontSize);
+
+        while (
+          fontSize > minSize &&
+          doc.getTextWidth(String(text)) > maxWidth
+        ) {
+          fontSize -= 0.5;
+          doc.setFontSize(fontSize);
+        }
+
+        return fontSize;
+      };
+
+      /* ============================================================
+       IMAGE HELPERS
+    ============================================================ */
+
+      const convertImageToDataUrl = async (source) => {
+        if (!source) return null;
+
+        if (typeof source !== "string") {
+          return source;
+        }
+
+        if (source.startsWith("data:image/")) {
+          return source;
+        }
+
+        try {
+          const response = await fetch(source, {
+            mode: "cors",
+            credentials: "omit",
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Image request failed with status ${response.status}`,
+            );
+          }
+
+          const blob = await response.blob();
+
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.warn("PDF image could not be loaded:", source, error);
+
+          return null;
+        }
+      };
+
+      const getImageFormat = (source) => {
+        if (typeof source === "string" && /^data:image\/jpe?g/i.test(source)) {
+          return "JPEG";
+        }
+
+        if (typeof source === "string" && /^data:image\/webp/i.test(source)) {
+          return "WEBP";
+        }
+
+        return "PNG";
+      };
+
+      const addPdfImage = (source, x, y, width, height) => {
+        if (!source) return false;
+
+        try {
+          doc.addImage(
+            source,
+            getImageFormat(source),
+            x,
+            y,
+            width,
+            height,
+            undefined,
+            "FAST",
+          );
+
+          return true;
+        } catch (error) {
+          console.warn("Failed to add PDF image:", error);
+          return false;
+        }
+      };
+
+      /* ============================================================
+       SCHOOL AND EXAM INFORMATION
+    ============================================================ */
+
+      const datasetSchool = schoolData?.school || schoolData || {};
+
+      const datasetSchoolName =
+        datasetSchool.school_name ||
+        datasetSchool.schoolName ||
+        datasetSchool.name ||
+        activeDataset.school_name ||
+        activeDataset.schoolName ||
+        activeDataset.school_id ||
+        "School";
+
+      const datasetSchoolId =
+        datasetSchool.school_id ||
+        datasetSchool.schoolId ||
+        datasetSchool.id ||
+        activeDataset.school_id ||
+        "SCHOOL";
+
+      const datasetSchoolLogo =
+        datasetSchool.logo_url ||
+        datasetSchool.logoUrl ||
+        datasetSchool.logo ||
+        null;
+
+      const affiliation =
+        datasetSchool.affiliation ||
+        datasetSchool.affiliation_number ||
+        datasetSchool.affiliationNumber ||
+        "";
+
+      const academicYear =
+        datasetSchool.academic_year ||
+        datasetSchool.academicYear ||
+        activeDataset.academic_year ||
+        activeDataset.academicYear ||
+        "-";
+
+      const schoolAddress = uniqueParts([
+        datasetSchool.address,
+        datasetSchool.area,
+        datasetSchool.city,
+        datasetSchool.district,
+        datasetSchool.state,
+        datasetSchool.pincode,
+      ]).join(", ");
+
+      const examName =
+        typeof formatExamName === "function"
+          ? formatExamName(activeDataset.exam_pattern)
+          : safeText(
+              activeDataset.exam_name || activeDataset.exam_pattern,
+              "OMR Examination",
+            );
+
+      const programName =
+        PROGRAM_NAMES?.[activeDataset.program] ||
+        activeDataset.program_name ||
+        activeDataset.program ||
+        "-";
+
+      const examClass = activeDataset.class || activeDataset.exam_class || "-";
+
+      const examSection =
+        activeDataset.section || activeDataset.exam_section || "-";
+
+      const examDate = formatDate(activeDataset.exam_date);
+
+      const currentDate = new Date();
+
+      const fileDate = [
+        currentDate.getFullYear(),
+        String(currentDate.getMonth() + 1).padStart(2, "0"),
+        String(currentDate.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      const generatedOn = currentDate.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      const safeSchoolId = sanitizeFilename(datasetSchoolId, "SCHOOL");
+
+      const safeExamPattern = sanitizeFilename(
+        activeDataset.exam_pattern,
+        "OMR",
+      );
+
+      const safeClass = sanitizeFilename(examClass, "CLASS");
+
+      const reportId = sanitizeFilename(
+        `OMR-${safeSchoolId}-${safeExamPattern}-${fileDate}`,
+      );
+
+      const [schoolLogoData, spectropyLogoData] = await Promise.all([
+        convertImageToDataUrl(datasetSchoolLogo),
+        convertImageToDataUrl(spectropyLogo),
+      ]);
+
+      const uppercaseSchoolName = safeText(
+        datasetSchoolName,
+        "SCHOOL",
+      ).toUpperCase();
+
+      /* ============================================================
+       RESULT CALCULATIONS
+    ============================================================ */
+
+      const calculateAverage = (key) => {
+        if (!datasetResults.length) return 0;
+
+        return (
+          datasetResults.reduce(
+            (sum, result) => sum + toNumber(result[key]),
+            0,
+          ) / datasetResults.length
+        );
+      };
+
+      const percentages = datasetResults.map((result) =>
+        toNumber(result.percentage),
+      );
+
+      const totalMarksValues = datasetResults.map((result) =>
+        toNumber(result.total_marks),
+      );
+
+      const averagePercentage =
+        percentages.length > 0
+          ? percentages.reduce((sum, value) => sum + value, 0) /
+            percentages.length
+          : 0;
+
+      const highestPercentage =
+        percentages.length > 0 ? Math.max(...percentages) : 0;
+
+      const averageTotalMarks =
+        totalMarksValues.length > 0
+          ? totalMarksValues.reduce((sum, value) => sum + value, 0) /
+            totalMarksValues.length
+          : 0;
+
+      const highestTotalMarks =
+        totalMarksValues.length > 0 ? Math.max(...totalMarksValues) : 0;
+
+      const averageCorrect = calculateAverage("correct_answers");
+
+      const averageWrong = calculateAverage("wrong_answers");
+
+      const averageUnattempted = calculateAverage("unattempted");
+
+      const resolveMaximumMarks = (result) => {
+        const directMaximum =
+          result.total_max_marks ??
+          result.maximum_marks ??
+          result.max_marks ??
+          activeDataset.total_max_marks ??
+          activeDataset.maximum_marks ??
+          activeDataset.max_marks;
+
+        if (hasNumericValue(directMaximum)) {
+          return toNumber(directMaximum);
+        }
+
+        const totalQuestions =
+          result.total_questions ?? activeDataset.total_questions;
+
+        const marksPerQuestion =
+          result.marks_per_question ??
+          result.positive_marks ??
+          activeDataset.marks_per_question ??
+          activeDataset.positive_marks;
+
+        if (
+          hasNumericValue(totalQuestions) &&
+          hasNumericValue(marksPerQuestion)
+        ) {
+          return toNumber(totalQuestions) * toNumber(marksPerQuestion);
+        }
+
+        /*
+         * Compatibility fallback for your current dataset.
+         * Ideally the backend should provide total_max_marks.
+         */
+        return toNumber(totalQuestions);
+      };
+
+      const maximumMarksValues = datasetResults.map(resolveMaximumMarks);
+
+      const reportMaximumMarks =
+        maximumMarksValues.length > 0 ? Math.max(...maximumMarksValues) : 0;
+
+      const getBestRank = (key) => {
+        const ranks = datasetResults
+          .map((result) => Number(result[key]))
+          .filter((rank) => Number.isFinite(rank) && rank > 0);
+
+        return ranks.length ? Math.min(...ranks) : null;
+      };
+
+      const bestClassRank = getBestRank("class_rank");
+
+      const bestSchoolRank = getBestRank("school_rank");
+
+      const bestAllIndiaRank = getBestRank("all_schools_rank");
+
+      const displayBestRank = (rank) => (Number.isFinite(rank) ? rank : "-");
+
+      doc.setProperties({
+        title: `OMR Exam Result Report - ${datasetSchoolName}`,
+        subject: `${examName} result report`,
+        author: "SPECTROPY",
+        creator: "SPECTROPY Academic Reporting",
+        keywords: "school, examination, OMR, results, academic report",
+      });
+
+      /* ============================================================
+       HEADER HELPERS
+    ============================================================ */
+
+      const drawLogoPlaceholder = (x, y, size, label) => {
+        doc.setFillColor(...COLORS.paleBlue);
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.7);
+
+        doc.roundedRect(x, y, size, size, 6, 6, "FD");
+
+        const initials = safeText(label, "S")
+          .split(/\s+/)
+          .map((word) => word.charAt(0))
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
 
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(20);
-        doc.text(title, (pageWidth - doc.getTextWidth(title)) / 2, 40);
+        doc.setFontSize(initials.length > 1 ? 12 : 16);
+        doc.setTextColor(...COLORS.navy);
+
+        doc.text(initials || "S", x + size / 2, y + size / 2 + 5, {
+          align: "center",
+        });
+      };
+
+      const drawSummaryCard = (
+        x,
+        y,
+        width,
+        label,
+        value,
+        valueColor = COLORS.navy,
+      ) => {
+        doc.setFillColor(...COLORS.white);
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.6);
+
+        doc.roundedRect(x, y, width, HEADER_LAYOUT.summaryHeight, 5, 5, "FD");
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        [
-          `School: ${activeDataset.school_id}`,
-          `Exam: ${formatExamName(activeDataset.exam_pattern)}`,
-          `Program: ${PROGRAM_NAMES[activeDataset.program] || activeDataset.program}`,
-          `Class: ${activeDataset.class} | Section: ${activeDataset.section}`,
-          `Exam Date: ${activeDataset.exam_date || "-"}`,
-          `Students: ${datasetResults.length}`,
-        ].forEach((line, index) => doc.text(line, 40, 75 + index * 14));
+        doc.setFontSize(6.8);
+        doc.setTextColor(...COLORS.muted);
 
-        const headers = [
-          "Student ID",
-          "Student Name",
-          "Total Max Marks",
-          "Correct",
-          "Wrong",
-          "Unattempted",
-          "Physics",
-          "Chemistry",
-          "Maths",
-          "Biology",
-          "Total Marks",
-          "Percentage",
-          "Class Rank",
-          "School Rank",
-          "All India Rank",
-        ];
+        doc.text(label, x + 10, y + 13);
 
-        const body = datasetResults.map((r) => [
-          r.student_id || "-",
-          `${r.first_name || ""} ${r.last_name || ""}`.trim() || "-",
-          r.total_questions || 0,
-          r.correct_answers || 0,
-          r.wrong_answers || 0,
-          r.unattempted || 0,
-          r.physics_marks || 0,
-          r.chemistry_marks || 0,
-          r.maths_marks || 0,
-          r.biology_marks || 0,
-          r.total_marks || 0,
-          `${r.percentage || 0}%`,
-          r.class_rank || "-",
-          r.school_rank || "-",
-          r.all_schools_rank || "-",
-        ]);
+        const valueText = safeText(value, "0");
 
-        doc.autoTable({
-          startY: 175,
-          head: [headers],
-          body,
-          theme: "striped",
-          styles: {
-            fontSize: 8,
-            cellPadding: 5,
-            lineColor: [200, 200, 200],
-            lineWidth: 0.1,
-          },
-          headStyles: {
-            fillColor: [30, 70, 140],
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-          },
-          alternateRowStyles: {
-            fillColor: [245, 248, 255],
-          },
-          margin: { left: 40, right: 40 },
+        const valueFontSize = fitFontSize({
+          text: valueText,
+          maxWidth: width - 20,
+          startSize: 13,
+          minSize: 7,
+          fontStyle: "bold",
         });
 
-        doc.save(
-          `OMR_EXAM_${activeDataset.school_id}_${activeDataset.exam_pattern}_${new Date().toISOString().split("T")[0]}.pdf`,
-        );
-      });
-    });
-  };
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(valueFontSize);
+        doc.setTextColor(...valueColor);
 
+        doc.text(valueText, x + 10, y + 31);
+      };
+
+      /* ============================================================
+       POWERED BY SPECTROPY BRANDING
+    ============================================================ */
+
+      const drawPoweredBySpectropy = ({ compact = false } = {}) => {
+        if (compact) {
+          const blockWidth = 108;
+          const blockRight = pageWidth - marginX;
+          const blockLeft = blockRight - blockWidth;
+          const logoSize = 17;
+
+          const logoAdded = addPdfImage(
+            spectropyLogoData,
+            blockLeft,
+            16,
+            logoSize,
+            logoSize,
+          );
+
+          if (!logoAdded) {
+            doc.setFillColor(...COLORS.navy);
+
+            doc.circle(
+              blockLeft + logoSize / 2,
+              16 + logoSize / 2,
+              logoSize / 2,
+              "F",
+            );
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6);
+            doc.setTextColor(...COLORS.white);
+
+            doc.text("S", blockLeft + logoSize / 2, 27, {
+              align: "center",
+            });
+          }
+
+          const textX = blockLeft + logoSize + 7;
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(5.4);
+          doc.setTextColor(...COLORS.muted);
+
+          doc.text("POWERED BY", textX, 21);
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.2);
+          doc.setTextColor(...COLORS.navy);
+
+          doc.text("SPECTROPY", textX, 32);
+
+          return;
+        }
+
+        const blockWidth = 122;
+        const blockHeight = 44;
+        const blockRight = pageWidth - marginX;
+        const blockLeft = blockRight - blockWidth;
+        const blockTop = 17;
+
+        /*
+         * Visual separator between school identity
+         * and Spectropy branding.
+         */
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.6);
+
+        doc.line(
+          blockLeft - 12,
+          blockTop + 2,
+          blockLeft - 12,
+          blockTop + blockHeight - 2,
+        );
+
+        const logoSize = 27;
+
+        const logoAdded = addPdfImage(
+          spectropyLogoData,
+          blockLeft,
+          blockTop + 8,
+          logoSize,
+          logoSize,
+        );
+
+        if (!logoAdded) {
+          doc.setFillColor(...COLORS.navy);
+
+          doc.circle(
+            blockLeft + logoSize / 2,
+            blockTop + 8 + logoSize / 2,
+            logoSize / 2,
+            "F",
+          );
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(...COLORS.white);
+
+          doc.text("S", blockLeft + logoSize / 2, blockTop + 25, {
+            align: "center",
+          });
+        }
+
+        const textX = blockLeft + logoSize + 9;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.2);
+        doc.setTextColor(...COLORS.muted);
+
+        doc.text("POWERED BY", textX, blockTop + 15);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(...COLORS.navy);
+
+        doc.text("SPECTROPY", textX, blockTop + 31);
+      };
+
+      /* ============================================================
+       FIRST PAGE HEADER
+    ============================================================ */
+
+      const drawFirstPageHeader = () => {
+        /*
+         * Top navy accent
+         */
+        doc.setFillColor(...COLORS.navy);
+        doc.rect(0, 0, pageWidth, 6, "F");
+
+        /*
+         * School logo container
+         */
+        const logoX = marginX;
+        const logoY = 14;
+        const logoContainerSize = 50;
+        const logoImageSize = 40;
+
+        doc.setFillColor(...COLORS.white);
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.7);
+
+        doc.roundedRect(
+          logoX,
+          logoY,
+          logoContainerSize,
+          logoContainerSize,
+          6,
+          6,
+          "FD",
+        );
+
+        const schoolLogoAdded = addPdfImage(
+          schoolLogoData,
+          logoX + 5,
+          logoY + 5,
+          logoImageSize,
+          logoImageSize,
+        );
+
+        if (!schoolLogoAdded) {
+          drawLogoPlaceholder(
+            logoX,
+            logoY,
+            logoContainerSize,
+            datasetSchoolName,
+          );
+        }
+
+        /*
+         * Equal space is reserved on both sides,
+         * keeping the school heading centred on the page.
+         */
+        const sideReservedWidth = 138;
+
+        const schoolHeadingWidth =
+          pageWidth - (marginX + sideReservedWidth) * 2;
+
+        let schoolNameFontSize = 16.5;
+        let schoolNameLines = [];
+
+        do {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(schoolNameFontSize);
+
+          schoolNameLines = doc.splitTextToSize(
+            uppercaseSchoolName,
+            schoolHeadingWidth,
+          );
+
+          if (schoolNameLines.length > 2) {
+            schoolNameFontSize -= 0.5;
+          }
+        } while (schoolNameLines.length > 2 && schoolNameFontSize > 9);
+
+        const schoolNameY = schoolNameLines.length === 1 ? 31 : 23;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(schoolNameFontSize);
+        doc.setTextColor(...COLORS.navy);
+
+        doc.text(schoolNameLines, pageWidth / 2, schoolNameY, {
+          align: "center",
+          lineHeightFactor: 1.05,
+        });
+
+        const addressY = schoolNameLines.length === 1 ? 47 : 51;
+
+        if (schoolAddress) {
+          const addressFontSize = fitFontSize({
+            text: schoolAddress,
+            maxWidth: schoolHeadingWidth,
+            startSize: 7.6,
+            minSize: 5.8,
+            fontStyle: "normal",
+          });
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(addressFontSize);
+          doc.setTextColor(...COLORS.muted);
+
+          doc.text(schoolAddress, pageWidth / 2, addressY, {
+            align: "center",
+          });
+        }
+
+        const institutionDetails = [
+          affiliation ? `Affiliation: ${affiliation}` : "",
+
+          academicYear !== "-" ? `Academic Year: ${academicYear}` : "",
+        ]
+          .filter(Boolean)
+          .join("   |   ");
+
+        if (institutionDetails) {
+          const institutionY = schoolAddress
+            ? addressY + 13
+            : schoolNameLines.length === 1
+              ? 51
+              : 58;
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.7);
+          doc.setTextColor(...COLORS.muted);
+
+          doc.text(institutionDetails, pageWidth / 2, institutionY, {
+            align: "center",
+          });
+        }
+
+        /*
+         * Platform branding block
+         */
+        drawPoweredBySpectropy();
+
+        /*
+         * Report title band
+         */
+        doc.setFillColor(...COLORS.navy);
+
+        doc.rect(
+          0,
+          HEADER_LAYOUT.titleBandY,
+          pageWidth,
+          HEADER_LAYOUT.titleBandHeight,
+          "F",
+        );
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14.5);
+        doc.setTextColor(...COLORS.white);
+
+        doc.text(
+          "OMR EXAM RESULT REPORT",
+          pageWidth / 2,
+          HEADER_LAYOUT.titleBandY + 17,
+          {
+            align: "center",
+          },
+        );
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.8);
+        doc.setTextColor(220, 230, 244);
+
+        doc.text(examName, pageWidth / 2, HEADER_LAYOUT.titleBandY + 31, {
+          align: "center",
+        });
+
+        /*
+         * Examination metadata
+         */
+        const metaY = HEADER_LAYOUT.metadataY;
+        const metaHeight = HEADER_LAYOUT.metadataHeight;
+
+        doc.setFillColor(...COLORS.paleBlue);
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.6);
+
+        doc.roundedRect(marginX, metaY, contentWidth, metaHeight, 5, 5, "FD");
+
+        const metadata = [
+          {
+            label: "EXAMINATION",
+            value: examName,
+          },
+          {
+            label: "PROGRAM",
+            value: programName,
+          },
+          {
+            label: "CLASS / SECTION",
+            value: `${examClass} / ${examSection}`,
+          },
+          {
+            label: "EXAM DATE",
+            value: examDate,
+          },
+          {
+            label: "MAXIMUM MARKS",
+            value:
+              reportMaximumMarks > 0 ? formatNumber(reportMaximumMarks) : "-",
+          },
+        ];
+
+        const metaWidth = contentWidth / metadata.length;
+
+        metadata.forEach((item, index) => {
+          const x = marginX + index * metaWidth;
+
+          if (index > 0) {
+            doc.setDrawColor(...COLORS.border);
+
+            doc.line(x, metaY + 7, x, metaY + metaHeight - 7);
+          }
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.1);
+          doc.setTextColor(...COLORS.muted);
+
+          doc.text(item.label, x + 10, metaY + 14);
+
+          const value = safeText(item.value);
+
+          const valueFontSize = fitFontSize({
+            text: value,
+            maxWidth: metaWidth - 20,
+            startSize: 8.8,
+            minSize: 6,
+            fontStyle: "bold",
+          });
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(valueFontSize);
+          doc.setTextColor(...COLORS.navy);
+
+          doc.text(value, x + 10, metaY + 32);
+        });
+
+        /*
+         * Performance summary cards
+         */
+        const summaryY = HEADER_LAYOUT.summaryY;
+        const cardGap = 8;
+
+        const cardWidth = (contentWidth - cardGap * 3) / 4;
+
+        drawSummaryCard(
+          marginX,
+          summaryY,
+          cardWidth,
+          "TOTAL STUDENTS",
+          datasetResults.length,
+        );
+
+        drawSummaryCard(
+          marginX + cardWidth + cardGap,
+          summaryY,
+          cardWidth,
+          "AVERAGE PERCENTAGE",
+          formatPercentage(averagePercentage),
+        );
+
+        drawSummaryCard(
+          marginX + (cardWidth + cardGap) * 2,
+          summaryY,
+          cardWidth,
+          "HIGHEST PERCENTAGE",
+          formatPercentage(highestPercentage),
+          COLORS.green,
+        );
+
+        drawSummaryCard(
+          marginX + (cardWidth + cardGap) * 3,
+          summaryY,
+          cardWidth,
+          "HIGHEST TOTAL MARKS",
+          formatNumber(highestTotalMarks),
+        );
+      };
+
+      /* ============================================================
+       CONTINUATION PAGE HEADER
+    ============================================================ */
+
+      const drawAdditionalPageHeader = () => {
+        doc.setFillColor(...COLORS.navy);
+        doc.rect(0, 0, pageWidth, 5, "F");
+
+        /*
+         * School identity on the left
+         */
+        const schoolNameWidth = 250;
+
+        const schoolNameFontSize = fitFontSize({
+          text: uppercaseSchoolName,
+          maxWidth: schoolNameWidth,
+          startSize: 9.5,
+          minSize: 6.5,
+          fontStyle: "bold",
+        });
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(schoolNameFontSize);
+        doc.setTextColor(...COLORS.navy);
+
+        doc.text(uppercaseSchoolName, marginX, 23);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...COLORS.muted);
+
+        doc.text(
+          `${examName}  |  Class ${examClass} / ${examSection}`,
+          marginX,
+          37,
+        );
+
+        /*
+         * Report title remains in the true page centre
+         */
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        doc.setTextColor(...COLORS.navy);
+
+        doc.text("OMR EXAM RESULT REPORT", pageWidth / 2, 27, {
+          align: "center",
+        });
+
+        /*
+         * Compact platform branding
+         */
+        drawPoweredBySpectropy({
+          compact: true,
+        });
+
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.5);
+
+        doc.line(marginX, 49, pageWidth - marginX, 49);
+      };
+
+      /* ============================================================
+       TABLE HEADERS AND DATA
+    ============================================================ */
+
+      const headers = [
+        "Student ID",
+        "Student Name",
+        "Max Marks",
+        "Correct",
+        "Wrong",
+        "Unattempted",
+        "Physics",
+        "Chemistry",
+        "Maths",
+        "Biology",
+        "Total",
+        "Percentage",
+        "Class Rank",
+        "School Rank",
+        "All India Rank",
+      ];
+
+      const groupedHeaders = [
+        [
+          {
+            content: "STUDENT DETAILS",
+            colSpan: 2,
+            styles: {
+              fillColor: COLORS.royalBlue,
+              textColor: COLORS.white,
+              halign: "center",
+              fontStyle: "bold",
+            },
+          },
+          {
+            content: "QUESTION ANALYSIS",
+            colSpan: 4,
+            styles: {
+              fillColor: COLORS.royalBlue,
+              textColor: COLORS.white,
+              halign: "center",
+              fontStyle: "bold",
+            },
+          },
+          {
+            content: "SUBJECT-WISE MARKS",
+            colSpan: 4,
+            styles: {
+              fillColor: COLORS.royalBlue,
+              textColor: COLORS.white,
+              halign: "center",
+              fontStyle: "bold",
+            },
+          },
+          {
+            content: "OVERALL PERFORMANCE",
+            colSpan: 2,
+            styles: {
+              fillColor: COLORS.royalBlue,
+              textColor: COLORS.white,
+              halign: "center",
+              fontStyle: "bold",
+            },
+          },
+          {
+            content: "RANKINGS",
+            colSpan: 3,
+            styles: {
+              fillColor: COLORS.royalBlue,
+              textColor: COLORS.white,
+              halign: "center",
+              fontStyle: "bold",
+            },
+          },
+        ],
+        headers,
+      ];
+
+      const body = datasetResults.map((result) => {
+        const studentName = [result.first_name, result.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+        return [
+          safeText(result.student_id),
+          safeText(studentName),
+          formatNumber(resolveMaximumMarks(result)),
+          formatNumber(result.correct_answers),
+          formatNumber(result.wrong_answers),
+          formatNumber(result.unattempted),
+          formatNumber(result.physics_marks),
+          formatNumber(result.chemistry_marks),
+          formatNumber(result.maths_marks),
+          formatNumber(result.biology_marks),
+          formatNumber(result.total_marks),
+          formatPercentage(result.percentage),
+          safeText(result.class_rank),
+          safeText(result.school_rank),
+          safeText(result.all_schools_rank),
+        ];
+      });
+
+      /* ============================================================
+       TABLE SUMMARY FOOTER
+    ============================================================ */
+
+      const summaryFooter = [
+        [
+          {
+            content: `STUDENTS\n${datasetResults.length}`,
+            colSpan: 2,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content: `AVG. CORRECT\n${formatNumber(averageCorrect, 1)}`,
+            colSpan: 2,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content:
+              `AVG. WRONG / UNATTEMPTED\n` +
+              `${formatNumber(averageWrong, 1)} / ` +
+              `${formatNumber(averageUnattempted, 1)}`,
+            colSpan: 2,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content:
+              `AVERAGE TOTAL MARKS\n` + `${formatNumber(averageTotalMarks, 2)}`,
+            colSpan: 4,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content: `HIGHEST\n${formatNumber(highestTotalMarks)}`,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content: `AVG. %\n${formatPercentage(averagePercentage)}`,
+            styles: {
+              halign: "center",
+            },
+          },
+          {
+            content:
+              `BEST RANKS\n` +
+              `C: ${displayBestRank(bestClassRank)} | ` +
+              `S: ${displayBestRank(bestSchoolRank)} | ` +
+              `AIR: ${displayBestRank(bestAllIndiaRank)}`,
+            colSpan: 3,
+            styles: {
+              halign: "center",
+            },
+          },
+        ],
+      ];
+
+      /* ============================================================
+       FULL-WIDTH COLUMN CALCULATION
+    ============================================================ */
+
+      /*
+       * Relative weights are converted into exact widths.
+       * Their total always equals contentWidth.
+       */
+      const columnWeights = [
+        1.05, // Student ID
+        2.25, // Student Name
+        1.15, // Max Marks
+        0.9, // Correct
+        0.9, // Wrong
+        1.15, // Unattempted
+        1, // Physics
+        1.2, // Chemistry
+        1, // Maths
+        1, // Biology
+        1.15, // Total
+        1.25, // Percentage
+        1, // Class Rank
+        1, // School Rank
+        1.1, // AIR
+      ];
+
+      const totalColumnWeight = columnWeights.reduce(
+        (sum, weight) => sum + weight,
+        0,
+      );
+
+      const fullWidthColumnStyles = Object.fromEntries(
+        columnWeights.map((weight, index) => [
+          index,
+          {
+            cellWidth: (weight / totalColumnWeight) * contentWidth,
+
+            halign: index === 1 ? "left" : "center",
+          },
+        ]),
+      );
+
+      /* ============================================================
+       FULL-WIDTH RESULTS TABLE
+    ============================================================ */
+
+      autoTable(doc, {
+        startY: HEADER_LAYOUT.tableStartY,
+
+        head: groupedHeaders,
+        body,
+        foot: summaryFooter,
+
+        theme: "grid",
+        tableWidth: contentWidth,
+
+        margin: {
+          top: 62,
+          right: marginX,
+          bottom: 42,
+          left: marginX,
+        },
+
+        styles: {
+          font: "helvetica",
+          fontSize: 7.1,
+          textColor: COLORS.text,
+
+          cellPadding: {
+            top: 4.5,
+            right: 3,
+            bottom: 4.5,
+            left: 3,
+          },
+
+          lineColor: COLORS.border,
+          lineWidth: 0.35,
+
+          valign: "middle",
+          halign: "center",
+
+          overflow: "linebreak",
+          minCellHeight: 25,
+        },
+
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.8,
+          halign: "center",
+          valign: "middle",
+          minCellHeight: 27,
+          lineColor: COLORS.white,
+          lineWidth: 0.2,
+        },
+
+        footStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.5,
+          valign: "middle",
+          minCellHeight: 34,
+          lineColor: COLORS.white,
+          lineWidth: 0.2,
+        },
+
+        alternateRowStyles: {
+          fillColor: COLORS.paleBlue,
+        },
+
+        columnStyles: fullWidthColumnStyles,
+
+        showHead: "everyPage",
+        showFoot: "lastPage",
+        rowPageBreak: "avoid",
+        horizontalPageBreak: false,
+
+        didParseCell: (data) => {
+          if (data.section !== "body") return;
+
+          const columnIndex = data.column.index;
+
+          /*
+           * Student name
+           */
+          if (columnIndex === 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.textColor = COLORS.navy;
+            data.cell.styles.halign = "left";
+          }
+
+          /*
+           * Correct answers
+           */
+          if (columnIndex === 3) {
+            data.cell.styles.textColor = COLORS.green;
+            data.cell.styles.fontStyle = "bold";
+          }
+
+          /*
+           * Wrong answers
+           */
+          if (columnIndex === 4) {
+            const wrongAnswers = Number(data.cell.raw);
+
+            if (Number.isFinite(wrongAnswers) && wrongAnswers > 0) {
+              data.cell.styles.textColor = COLORS.red;
+            }
+          }
+
+          /*
+           * Unattempted questions
+           */
+          if (columnIndex === 5) {
+            const unattempted = Number(data.cell.raw);
+
+            if (Number.isFinite(unattempted) && unattempted > 0) {
+              data.cell.styles.textColor = COLORS.amber;
+            }
+          }
+
+          /*
+           * Subject marks
+           */
+          if ([6, 7, 8, 9].includes(columnIndex)) {
+            data.cell.styles.fontStyle = "bold";
+          }
+
+          /*
+           * Total marks
+           */
+          if (columnIndex === 10) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = COLORS.softBlue;
+            data.cell.styles.textColor = COLORS.navy;
+          }
+
+          /*
+           * Percentage
+           */
+          if (columnIndex === 11) {
+            const percentage = Number(
+              String(data.cell.raw || "")
+                .replace("%", "")
+                .trim(),
+            );
+
+            data.cell.styles.fontStyle = "bold";
+
+            /*
+             * Extra bottom padding makes room
+             * for the percentage progress bar.
+             */
+            data.cell.styles.cellPadding = {
+              top: 4,
+              right: 3,
+              bottom: 9,
+              left: 3,
+            };
+
+            if (Number.isFinite(percentage)) {
+              if (percentage >= 75) {
+                data.cell.styles.textColor = COLORS.green;
+              } else if (percentage >= 40) {
+                data.cell.styles.textColor = COLORS.amber;
+              } else {
+                data.cell.styles.textColor = COLORS.red;
+              }
+            }
+          }
+
+          /*
+           * Rank columns
+           */
+          if ([12, 13, 14].includes(columnIndex)) {
+            data.cell.styles.fontStyle = "bold";
+
+            const rank = Number(data.cell.raw);
+
+            if (Number.isFinite(rank) && rank >= 1 && rank <= 3) {
+              data.cell.styles.fillColor = COLORS.softBlue;
+
+              data.cell.styles.textColor = COLORS.royalBlue;
+            }
+          }
+        },
+
+        didDrawCell: (data) => {
+          /*
+           * Percentage progress bar
+           */
+          if (data.section === "body" && data.column.index === 11) {
+            const percentage = Number(
+              String(data.cell.raw || "")
+                .replace("%", "")
+                .trim(),
+            );
+
+            if (!Number.isFinite(percentage)) return;
+
+            const normalizedPercentage = Math.max(0, Math.min(100, percentage));
+
+            const trackX = data.cell.x + 4;
+
+            const trackY = data.cell.y + data.cell.height - 6;
+
+            const trackWidth = data.cell.width - 8;
+
+            const trackHeight = 2.5;
+
+            doc.setFillColor(...COLORS.lightGrey);
+
+            doc.roundedRect(trackX, trackY, trackWidth, trackHeight, 1, 1, "F");
+
+            if (percentage >= 75) {
+              doc.setFillColor(...COLORS.green);
+            } else if (percentage >= 40) {
+              doc.setFillColor(...COLORS.amber);
+            } else {
+              doc.setFillColor(...COLORS.red);
+            }
+
+            const progressWidth = trackWidth * (normalizedPercentage / 100);
+
+            if (progressWidth > 0) {
+              doc.roundedRect(
+                trackX,
+                trackY,
+                progressWidth,
+                trackHeight,
+                1,
+                1,
+                "F",
+              );
+            }
+          }
+
+          /*
+           * Top-three rank badge
+           */
+          if (
+            data.section === "body" &&
+            [12, 13, 14].includes(data.column.index)
+          ) {
+            const rank = Number(data.cell.raw);
+
+            if (Number.isFinite(rank) && rank >= 1 && rank <= 3) {
+              const badgeX = data.cell.x + data.cell.width - 8;
+
+              const badgeY = data.cell.y + 8;
+
+              doc.setFillColor(...COLORS.royalBlue);
+
+              doc.circle(badgeX, badgeY, 5, "F");
+
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(5.5);
+              doc.setTextColor(...COLORS.white);
+
+              doc.text(String(rank), badgeX, badgeY + 2, {
+                align: "center",
+              });
+            }
+          }
+        },
+
+        willDrawPage: (data) => {
+          if (data.pageNumber === 1) {
+            drawFirstPageHeader();
+          } else {
+            drawAdditionalPageHeader();
+          }
+        },
+      });
+
+      /* ============================================================
+       FOOTER ON EVERY PAGE
+    ============================================================ */
+
+      const totalPages = doc.getNumberOfPages();
+
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+        doc.setPage(pageNumber);
+
+        const footerY = pageHeight - 18;
+
+        doc.setDrawColor(...COLORS.border);
+        doc.setLineWidth(0.5);
+
+        doc.line(marginX, footerY - 10, pageWidth - marginX, footerY - 10);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.7);
+        doc.setTextColor(...COLORS.muted);
+
+        doc.text(`Report ID: ${reportId}`, marginX, footerY);
+
+        doc.text(`Generated on ${generatedOn}`, pageWidth / 2, footerY, {
+          align: "center",
+        });
+
+        doc.text(
+          `Page ${pageNumber} of ${totalPages}`,
+          pageWidth - marginX,
+          footerY,
+          {
+            align: "right",
+          },
+        );
+      }
+
+      /* ============================================================
+       SAVE PDF
+    ============================================================ */
+
+      doc.save(
+        `OMR_RESULT_${safeSchoolId}_${safeClass}_${safeExamPattern}_${fileDate}.pdf`,
+      );
+    } catch (error) {
+      console.error("Dataset PDF generation error:", error);
+
+      alert("Failed to generate the examination report. Please try again.");
+    }
+  };
   const renderSchoolSearch = () => (
     <div className="omr-school-select">
       <div className="omr-search-input-wrap">
@@ -749,7 +2112,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     </div>
   );
 
-  if (mode === "new") {
+  if (mode === "new" && !activeDataset) {
     return (
       <div className="omr-page omr-page--upload">
         <div className="page-header omr-page-header">
@@ -759,16 +2122,8 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
               Submit exam details and the OMR result file in one step.
             </p>
           </div>
-          <button
-            className="omr-secondary-btn"
-            onClick={() => navigate("/admin/exams")}
-          >
-            <ArrowLeft size={16} />
-            Back
-          </button>
+          <div className="omr-upload-header-search">{renderSchoolSearch()}</div>
         </div>
-
-        <div className="table-toolbar omr-toolbar">{renderSchoolSearch()}</div>
 
         <div className="page-content">
           {error && (
@@ -992,10 +2347,13 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
               )}
 
               <section className="omr-upload-panel omr-upload-actions">
-                <p>
-                  Review the details above and upload the OMR result file to
-                  register the exam.
-                </p>
+                <button
+                  className="omr-secondary-btn"
+                  type="button"
+                  onClick={() => navigate("/admin/exams")}
+                >
+                  Cancel
+                </button>
                 <button
                   className="btn-link-primary"
                   type="submit"
@@ -1004,16 +2362,8 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                   <UploadCloud size={18} />
                   {uploading ? "Uploading..." : "Register & Upload"}
                 </button>
-                <small>
-                  <Lock size={13} />
-                  Your data is secure and encrypted.
-                </small>
               </section>
             </form>
-          )}
-
-          {examResults.length > 0 && (
-            <ResultsTable results={examResults} onDownload={downloadPDF} />
           )}
         </div>
       </div>
@@ -1045,28 +2395,6 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
           </div>
         </div>
 
-        <div className="table-toolbar">
-          <span className="results-count-label" style={{ marginLeft: 0 }}>
-            {datasetResultsLoading
-              ? "Loading student results..."
-              : `Showing ${datasetResults.length} student${datasetResults.length === 1 ? "" : "s"}`}
-          </span>
-          <div className="toolbar-export-slot">
-            <div className="report-buttons-wrap">
-              <div className="report-buttons-row">
-                <button
-                  className={`btn-report btn-report--pdf ${!datasetResults.length ? "disabled" : ""}`}
-                  onClick={downloadDatasetPDF}
-                  disabled={!datasetResults.length}
-                  title="Download exam results as PDF"
-                >
-                  PDF Report
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {datasetResultsError && (
           <div
             className="alert-banner alert-banner--error"
@@ -1076,7 +2404,18 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
           </div>
         )}
 
-        {datasetResults.length > 0 && <ResultsTable results={datasetResults} />}
+        {datasetResultsLoading && (
+          <div className="alert-banner alert-banner--info">
+            Loading student results...
+          </div>
+        )}
+
+        {datasetResults.length > 0 && (
+          <ResultsTable
+            results={datasetResults}
+            onDownload={downloadDatasetPDF}
+          />
+        )}
       </div>
     );
   }
@@ -1111,22 +2450,11 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
             ? `Showing ${datasets.length} uploaded exam${datasets.length === 1 ? "" : "s"}`
             : "Select a school"}
         </span>
-      </div>
-
-      <div className="omr-section-header">
-        <div>
-          <h3>Existing Exams</h3>
-          <span>
-            {selectedSchool
-              ? `${datasets.length} exam${datasets.length === 1 ? "" : "s"} found`
-              : "Select a school"}
-          </span>
-        </div>
         <button
-          className="btn-link-primary"
+          className="btn-link-primary omr-toolbar-register-btn"
           onClick={() => navigate("/admin/exams/new")}
         >
-          <Plus size={18} />
+          <Plus size={16} />
           Register & Upload Exam
         </button>
       </div>
@@ -1154,48 +2482,109 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
         )}
 
       {datasets.length > 0 && (
-        <div className="data-table-outer omr-data-table-outer">
-          <table className="data-table omr-data-table omr-exams-table">
-            <thead>
-              <tr>
-                <th>Exam</th>
-                <th>Program</th>
-                <th>Class</th>
-                <th>Section</th>
-                <th>Date</th>
-                <th>Students</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datasets.map((exam) => (
-                <tr key={exam.key} onClick={() => openDataset(exam)}>
-                  <td data-label="Exam">{formatExamName(exam.exam_pattern)}</td>
-                  <td data-label="Program">
-                    {PROGRAM_NAMES[exam.program] || exam.program}
-                  </td>
-                  <td data-label="Class">{exam.class}</td>
-                  <td data-label="Section">{exam.section}</td>
-                  <td data-label="Date">{exam.exam_date || "-"}</td>
-                  <td data-label="Students">{exam.student_count || 0}</td>
-                  <td data-label="Actions" className="text-center">
-                    <button
-                      className="btn-icon-delete"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteTarget(exam);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      Delete
-                    </button>
-                  </td>
+        <>
+          <div className="data-table-outer omr-data-table-outer">
+            <table className="data-table omr-data-table omr-exams-table">
+              <thead>
+                <tr>
+                  <th>Exam</th>
+                  <th>Program</th>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Date</th>
+                  <th>Students</th>
+                  <th className="text-center">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {datasets.map((exam) => (
+                  <tr key={exam.key} onClick={() => openDataset(exam)}>
+                    <td data-label="Exam">
+                      {formatExamName(exam.exam_pattern)}
+                    </td>
+                    <td data-label="Program">
+                      {PROGRAM_NAMES[exam.program] || exam.program}
+                    </td>
+                    <td data-label="Class">{exam.class}</td>
+                    <td data-label="Section">{exam.section}</td>
+                    <td data-label="Date">{exam.exam_date || "-"}</td>
+                    <td data-label="Students">{exam.student_count || 0}</td>
+                    <td data-label="Actions" className="text-center">
+                      <button
+                        className="btn-icon-delete"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget(exam);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="omr-exam-cards-mobile">
+            {datasets.map((exam) => (
+              <article
+                className="omr-exam-card-mobile"
+                key={exam.key}
+                onClick={() => openDataset(exam)}
+              >
+                <div className="omr-exam-card-mobile__top">
+                  <div>
+                    <h3>{formatExamName(exam.exam_pattern)}</h3>
+                    <p>{PROGRAM_NAMES[exam.program] || exam.program}</p>
+                  </div>
+                  <span>{exam.student_count || 0} Students</span>
+                </div>
+
+                <div className="omr-exam-card-mobile__meta">
+                  <span>
+                    <strong>Class</strong>
+                    {exam.class || "-"}
+                  </span>
+                  <span>
+                    <strong>Section</strong>
+                    {exam.section || "-"}
+                  </span>
+                  <span>
+                    <strong>Date</strong>
+                    {exam.exam_date || "-"}
+                  </span>
+                </div>
+
+                <div className="omr-exam-card-mobile__actions">
+                  <button
+                    className="btn-link-primary"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openDataset(exam);
+                    }}
+                  >
+                    View Results
+                  </button>
+                  <button
+                    className="btn-icon-delete"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(exam);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       )}
 
       {deleteTarget && (
@@ -1236,26 +2625,63 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
 }
 
 function ResultsTable({ results, onDownload }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visibleResults = [...results]
+    .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+    .filter((row) => {
+      if (!normalizedSearch) return true;
+      return [
+        row.student_id,
+        row.first_name,
+        row.last_name,
+        row.total_marks,
+        row.percentage,
+        row.class_rank,
+        row.school_rank,
+        row.all_schools_rank,
+      ]
+        .filter((value) => value != null)
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch);
+    });
+
   return (
     <div className="omr-results">
-      <div className="omr-section-header">
-        <div>
-          <h3>Uploaded Results</h3>
-          <span>{results.length} student rows processed</span>
+      <div className="table-toolbar omr-results-toolbar">
+        <div className="table-search-wrap omr-results-search">
+          <Search size={16} />
+          <input
+            className="table-search-input"
+            type="text"
+            placeholder="Search student ID, name, rank..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+          {searchTerm && (
+            <button
+              className="table-search-clear"
+              type="button"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear result search"
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
+        <span className="omr-results-count">
+          Showing {visibleResults.length} of {results.length} students
+        </span>
         {onDownload && (
-          <div className="report-buttons-wrap">
-            <div className="report-buttons-row">
-              <button
-                className={`btn-report btn-report--pdf ${!results.length ? "disabled" : ""}`}
-                onClick={onDownload}
-                disabled={!results.length}
-                title="Download exam results as PDF"
-              >
-                PDF Report
-              </button>
-            </div>
-          </div>
+          <button
+            className={`btn-report btn-report--pdf omr-results-pdf ${!results.length ? "disabled" : ""}`}
+            onClick={onDownload}
+            disabled={!results.length}
+            title="Download exam results as PDF"
+          >
+            PDF Report
+          </button>
         )}
       </div>
 
@@ -1281,34 +2707,42 @@ function ResultsTable({ results, onDownload }) {
             </tr>
           </thead>
           <tbody>
-            {[...results]
-              .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
-              .map((row, index) => (
-                <tr key={`${row.student_id || "row"}-${index}`}>
-                  <td data-label="Student ID">{row.student_id || "-"}</td>
-                  <td data-label="Name">
-                    {`${row.first_name || ""} ${row.last_name || ""}`.trim() ||
-                      "-"}
-                  </td>
-                  <td data-label="Total Max Marks">
-                    {row.total_questions || 0}
-                  </td>
-                  <td data-label="Correct">{row.correct_answers || 0}</td>
-                  <td data-label="Wrong">{row.wrong_answers || 0}</td>
-                  <td data-label="Unattempted">{row.unattempted || 0}</td>
-                  <td data-label="Physics">{row.physics_marks || 0}</td>
-                  <td data-label="Chemistry">{row.chemistry_marks || 0}</td>
-                  <td data-label="Maths">{row.maths_marks || 0}</td>
-                  <td data-label="Biology">{row.biology_marks || 0}</td>
-                  <td data-label="Total">{row.total_marks || 0}</td>
-                  <td data-label="%">
-                    {row.percentage != null ? `${row.percentage}%` : "0%"}
-                  </td>
-                  <td data-label="Class Rank">{row.class_rank || "-"}</td>
-                  <td data-label="School Rank">{row.school_rank || "-"}</td>
-                  <td data-label="All India">{row.all_schools_rank || "-"}</td>
-                </tr>
-              ))}
+            {visibleResults.map((row, index) => (
+              <tr key={`${row.student_id || "row"}-${index}`}>
+                <td data-label="Student ID">{row.student_id || "-"}</td>
+                <td data-label="Name">
+                  {`${row.first_name || ""} ${row.last_name || ""}`.trim() ||
+                    "-"}
+                </td>
+                <td data-label="Total Max Marks">{row.total_questions || 0}</td>
+                <td data-label="Correct">{row.correct_answers || 0}</td>
+                <td data-label="Wrong">{row.wrong_answers || 0}</td>
+                <td data-label="Unattempted">{row.unattempted || 0}</td>
+                <td data-label="Physics">{row.physics_marks || 0}</td>
+                <td data-label="Chemistry">{row.chemistry_marks || 0}</td>
+                <td data-label="Maths">{row.maths_marks || 0}</td>
+                <td data-label="Biology">{row.biology_marks || 0}</td>
+                <td data-label="Total">{row.total_marks || 0}</td>
+                <td data-label="%">
+                  {row.percentage != null ? `${row.percentage}%` : "0%"}
+                </td>
+                <td data-label="Class Rank">{row.class_rank || "-"}</td>
+                <td data-label="School Rank">{row.school_rank || "-"}</td>
+                <td data-label="All India">{row.all_schools_rank || "-"}</td>
+              </tr>
+            ))}
+            {visibleResults.length === 0 && (
+              <tr>
+                <td colSpan={15}>
+                  <div className="table-empty-state">
+                    <h3 className="table-empty-title">No results found</h3>
+                    <p className="table-empty-body">
+                      Try adjusting your search query.
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -106,6 +106,7 @@ export default function Dashboard({ user, onLogout }) {
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [schoolMobileDetailOpen, setSchoolMobileDetailOpen] = useState(false);
 
   //  Data
   const refresh = useCallback(async () => {
@@ -123,6 +124,10 @@ export default function Dashboard({ user, onLogout }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setSchoolMobileDetailOpen(false);
+  }, [location.pathname]);
 
   //  Mobile sidebar toggle event
   useEffect(() => {
@@ -232,7 +237,9 @@ export default function Dashboard({ user, onLogout }) {
             path="schools"
             element={
               <div className="animate-fade-in">
-                <div className="page-header">
+                <div
+                  className={`page-header${schoolMobileDetailOpen ? " schools-header--mobile-hidden" : ""}`}
+                >
                   <div className="page-header-left">
                     <h1 className="page-header-title page-header-title--school">
                       School Registration
@@ -273,6 +280,7 @@ export default function Dashboard({ user, onLogout }) {
                     rows={schools}
                     onSchoolDeleted={refresh}
                     exportButtons={<ReportButtons rows={schools} />}
+                    onMobileDetailChange={setSchoolMobileDetailOpen}
                   />
                 )}
               </div>
@@ -410,7 +418,7 @@ export default function Dashboard({ user, onLogout }) {
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">ðŸ” Queries</h1>
+                    <h1 className="page-header-title">Queries</h1>
                     <p className="page-header-subtitle">
                       View and respond to support queries.
                     </p>

@@ -801,13 +801,6 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                 >
                   Add New Class
                 </div>
-                <button
-                  type="button"
-                  onClick={() => goSubTab("overview")}
-                  className="btn btn-outline btn-sm"
-                >
-                  ← Back to Overview
-                </button>
               </div>
 
               <form onSubmit={handleAddClass}>
@@ -945,13 +938,6 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                 >
                   Add New Teacher
                 </div>
-                <button
-                  type="button"
-                  onClick={() => goSubTab("overview")}
-                  className="btn btn-outline btn-sm"
-                >
-                  ← Back to Overview
-                </button>
               </div>
 
               <form onSubmit={handleAddTeacher}>
@@ -1041,13 +1027,6 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                 >
                   Assign Teacher to Class
                 </div>
-                <button
-                  type="button"
-                  onClick={() => goSubTab("overview")}
-                  className="btn btn-outline btn-sm"
-                >
-                  ← Back to Overview
-                </button>
               </div>
 
               <form onSubmit={handleAssignTeacher}>

@@ -148,12 +148,23 @@ body {
 
 .omr-toolbar {
   align-items: center;
+  gap: 12px;
 }
 
 .omr-page--upload .omr-toolbar {
   padding: 12px 18px 0;
   border: 0;
   background: #f6f8fc;
+}
+
+.omr-upload-header-search {
+  flex: 0 1 380px;
+  min-width: 260px;
+}
+
+.omr-upload-header-search .omr-school-select {
+  max-width: none;
+  width: 100%;
 }
 
 .omr-school-select {
@@ -178,13 +189,13 @@ body {
 
 .omr-search-input-wrap input {
   width: 100%;
-  min-height: 42px;
+  min-height: 36px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  padding: 9px 40px 9px 38px;
+  padding: 7px 36px 7px 34px;
   color: var(--color-text-main);
   background: #ffffff;
-  font-size: 13.5px;
+  font-size: 12px;
   font: inherit;
   outline: 0;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
@@ -234,14 +245,14 @@ body {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  min-height: 40px;
-  padding: 9px 12px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 0;
   border-bottom: 1px solid var(--color-border);
   background: #ffffff;
   color: var(--color-text-main);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -257,17 +268,29 @@ body {
 
 .omr-school-dropdown span {
   color: var(--color-text-muted);
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .omr-school-dropdown-empty {
-  min-height: 40px;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 8px 10px;
   color: var(--color-text-muted);
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 500;
+}
+
+.omr-toolbar-register-btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.omr-toolbar .results-count-label {
+  margin-left: 0;
 }
 
 .omr-upload-layout {
@@ -839,6 +862,83 @@ body {
   min-width: 1180px;
 }
 
+.omr-results-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--color-border);
+  background: #ffffff;
+}
+
+.omr-results-search {
+  width: 100%;
+  max-width: 360px;
+  flex: 0 1 360px;
+}
+
+.omr-results-search > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.omr-results-search .table-search-input {
+  min-height: 38px;
+  padding-left: 36px;
+  padding-right: 36px;
+  font-size: 13px;
+}
+
+.omr-results-search .table-search-clear {
+  right: 8px;
+  width: 24px;
+  height: 24px;
+}
+
+.omr-results-search .table-search-clear svg {
+  position: static;
+  transform: none;
+  pointer-events: auto;
+}
+
+.omr-results-count {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.omr-results-pdf {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+@media (min-width: 901px) {
+  .omr-results .omr-data-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .omr-results .omr-data-table th {
+    padding: 10px 8px;
+    font-size: 11.5px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .omr-results .omr-data-table td {
+    padding: 10px 8px;
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+}
+
 .omr-data-table .btn-icon-delete {
   display: inline-flex;
   align-items: center;
@@ -847,6 +947,10 @@ body {
 
 .omr-exams-table tbody tr {
   cursor: pointer;
+}
+
+.omr-exam-cards-mobile {
+  display: none;
 }
 
 @media (max-width: 1180px) {
@@ -969,6 +1073,15 @@ body {
     flex-basis: auto;
   }
 
+  .omr-toolbar-register-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .omr-toolbar .results-count-label {
+    margin-left: 0;
+  }
+
   .omr-upload-actions .btn-link-primary {
     width: 100%;
   }
@@ -977,57 +1090,153 @@ body {
     margin: 14px 16px;
   }
 
-  .omr-data-table-outer {
-    border: 0;
-    background: transparent;
-    overflow: visible;
-  }
-
-  .omr-data-table {
-    display: block;
-    min-width: 0;
-  }
-
-  .omr-data-table thead {
+  .omr-page > .omr-data-table-outer {
     display: none;
   }
 
-  .omr-data-table tbody,
-  .omr-data-table tr,
-  .omr-data-table td {
-    display: block;
-    width: 100%;
+  .omr-results-toolbar {
+    padding: 12px 16px;
   }
 
-  .omr-data-table tr {
+  .omr-results-search {
+    max-width: none;
+    flex: 1 1 260px;
+  }
+
+  .omr-results .omr-data-table-outer {
+    display: block;
+    margin: 0 16px 18px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .omr-results .omr-data-table {
+    display: table;
+    min-width: 1180px;
+  }
+
+  .omr-results .omr-data-table thead {
+    display: table-header-group;
+  }
+
+  .omr-results .omr-data-table tbody {
+    display: table-row-group;
+  }
+
+  .omr-results .omr-data-table tr {
+    display: table-row;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: inherit;
+    overflow: visible;
+  }
+
+  .omr-results .omr-data-table td {
+    display: table-cell;
+    width: auto;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .omr-results .omr-data-table td::before {
+    content: none;
+  }
+
+  .omr-exam-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 16px 18px;
+  }
+
+  .omr-exam-card-mobile {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: var(--shadow-sm);
+    padding: 14px;
+    cursor: pointer;
+  }
+
+  .omr-exam-card-mobile__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 12px;
+  }
+
+  .omr-exam-card-mobile__top h3 {
+    margin: 0;
+    color: var(--color-text-main);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .omr-exam-card-mobile__top p {
+    margin: 3px 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .omr-exam-card-mobile__top > span {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    padding: 4px 9px;
+    font-size: 11.5px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .omr-exam-card-mobile__meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .omr-exam-card-mobile__meta span {
+    min-width: 0;
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    background: var(--color-surface);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-  }
-
-  .omr-data-table td {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    border-bottom: 1px solid var(--color-border);
-    padding: 10px 12px;
-    text-align: right;
+    padding: 8px;
+    color: var(--color-text-main);
+    font-size: 12px;
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
 
-  .omr-data-table td::before {
-    content: attr(data-label);
+  .omr-exam-card-mobile__meta strong {
+    display: block;
+    margin-bottom: 2px;
     color: var(--color-text-muted);
+    font-size: 10.5px;
     font-weight: 800;
-    text-align: left;
-    flex: 0 0 42%;
+    text-transform: uppercase;
   }
 
-  .omr-data-table td.text-center {
-    text-align: right;
+  .omr-exam-card-mobile__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .omr-exam-card-mobile__actions .btn-link-primary,
+  .omr-exam-card-mobile__actions .btn-icon-delete {
+    justify-content: center;
+    width: 100%;
+    min-height: 36px;
+    font-size: 12.5px;
   }
 }
 
@@ -1083,13 +1292,12 @@ body {
   flex-wrap: wrap;
   gap: 22px;
   min-height: auto;
-  padding: 16px 0 20px;
-  border: 0;
-  border-bottom: 1px solid #e2e8f0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-  box-shadow: none;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .omr-page--upload .omr-selected-school-card::before,
@@ -1312,7 +1520,8 @@ body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: 10px;
+  justify-content: flex-start;
 }
 
 .omr-page--upload .omr-upload-actions p {
@@ -1325,10 +1534,22 @@ body {
   margin-top: 0;
 }
 
+.omr-page--upload .omr-upload-actions .omr-secondary-btn,
+.omr-page--upload .omr-upload-actions .btn-link-primary {
+  width: auto;
+}
+
 @media (max-width: 640px) {
   .omr-page--upload .omr-page-header {
     align-items: flex-start;
+    margin-bottom: 12px;
     padding: 12px 14px;
+  }
+
+  .omr-upload-header-search {
+    flex-basis: 100%;
+    min-width: 0;
+    width: 100%;
   }
 
   .omr-page--upload .omr-toolbar,
@@ -1350,6 +1571,35 @@ body {
   .omr-page--upload .omr-file-clear {
     grid-column: 1 / -1;
     justify-self: stretch;
+  }
+
+  .omr-page--upload .omr-upload-actions .omr-secondary-btn,
+  .omr-page--upload .omr-upload-actions .btn-link-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .omr-page--upload .omr-upload-actions .btn-link-primary {
+    order: 1;
+  }
+
+  .omr-page--upload .omr-upload-actions .omr-secondary-btn {
+    order: 2;
+  }
+
+  .omr-results-toolbar {
+    align-items: stretch;
+  }
+
+  .omr-results-search,
+  .omr-results-pdf {
+    width: 100%;
+  }
+
+  .omr-results-count {
+    margin-left: 0;
+    width: 100%;
+    white-space: normal;
   }
 }
 
@@ -1794,7 +2044,137 @@ body {
 ───────────────────────────────────────────────────────────── */
 .form-page-wrap {
   width: 100%;
-  max-width: 900px;
+  max-width: none;
+}
+
+.school-form {
+  width: 100%;
+}
+
+.school-form-alert {
+  margin-bottom: 18px;
+}
+
+.school-form-section {
+  padding: 18px 0 22px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.school-form-section:first-of-type {
+  padding-top: 0;
+}
+
+.school-form-section-title {
+  margin: 0 0 16px;
+  color: var(--primary-700);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.school-form-grid {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.school-form-grid--main {
+  grid-template-columns: minmax(280px, 1.1fr) minmax(320px, 0.9fr);
+  margin-bottom: 18px;
+}
+
+.school-form-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.school-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.school-form .form-label {
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.school-form .form-input {
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.school-id-preview-input {
+  background-color: #f1f5f9;
+  font-weight: 700;
+}
+
+.school-logo-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.school-logo-upload-btn {
+  min-height: 40px;
+  padding: 9px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.school-logo-file-input {
+  display: none;
+}
+
+.school-logo-preview-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.school-logo-preview {
+  display: block;
+  height: 40px;
+  width: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 3px;
+}
+
+.school-logo-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #ffffff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
+}
+
+.school-form-actions {
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+
+.school-form-help {
+  margin-top: 12px;
+  padding-top: 18px;
 }
 
 .form-section-card {
@@ -3297,6 +3677,10 @@ textarea:focus {
     display: flex;
   }
 
+  .schools-header--mobile-hidden {
+    display: none !important;
+  }
+
   .admin-layout {
     flex-direction: column;
   }
@@ -3346,6 +3730,56 @@ textarea:focus {
   .data-table-outer {
     display: none;
   }
+
+  .omr-results .data-table-outer.omr-data-table-outer {
+    display: block;
+    margin: 0 16px 18px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .omr-results .data-table.omr-data-table {
+    display: table;
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: collapse;
+  }
+
+  .omr-results .data-table.omr-data-table thead {
+    display: table-header-group;
+  }
+
+  .omr-results .data-table.omr-data-table tbody {
+    display: table-row-group;
+  }
+
+  .omr-results .data-table.omr-data-table tr {
+    display: table-row;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: inherit;
+    overflow: visible;
+  }
+
+  .omr-results .data-table.omr-data-table th,
+  .omr-results .data-table.omr-data-table td {
+    display: table-cell;
+    width: auto;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .omr-results .data-table.omr-data-table td::before {
+    content: none;
+  }
+
   .school-cards-mobile {
     display: flex;
   }
@@ -3406,6 +3840,20 @@ textarea:focus {
 
   .form-actions .btn {
     width: 100%;
+  }
+
+  .school-form-grid--main,
+  .school-form-grid--three {
+    grid-template-columns: 1fr;
+  }
+
+  .school-logo-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .school-logo-upload-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .school-id-preview-wrap {
@@ -3548,6 +3996,21 @@ textarea:focus {
   width: 100%;
 
   margin: 10px auto;
+}
+
+.ct-reg-wrap .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ct-reg-wrap .form-label {
+  display: block;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
 }
 
 .ct-section {

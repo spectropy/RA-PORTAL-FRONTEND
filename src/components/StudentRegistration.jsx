@@ -272,7 +272,7 @@ export default function StudentRegistration({ schools = [] }) {
   return (
     <div style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
       <h3 style={{ margin: "0 0 20px 0", color: "#1e90ff" }}>
-        🎓 Student Registration
+        Student Registration
       </h3>
 
       {error && (
@@ -476,7 +476,7 @@ export default function StudentRegistration({ schools = [] }) {
                   marginRight: "10px",
                 }}
               >
-                📥 Download Sample Template
+                Download Sample Template
               </button>
               <span style={{ fontSize: "12px", color: "#666" }}>
                 Use this template to format your Excel file correctly
@@ -512,7 +512,7 @@ export default function StudentRegistration({ schools = [] }) {
                   className="ct-section-title"
                   style={{ margin: 0, border: "none", fontSize: "13.5px" }}
                 >
-                  👥 Students in {selectedClassSection || "Selected Class"} (
+                  Students in {selectedClassSection || "Selected Class"} (
                   {students.length})
                 </div>
                 {students.length > 0 && (
@@ -678,7 +678,7 @@ export default function StudentRegistration({ schools = [] }) {
             }}
           >
             <h4 style={{ margin: "0 0 10px 0", color: "#1e90ff" }}>
-              📋 Upload Instructions
+              Upload Instructions
             </h4>
             <ul
               style={{ margin: "0", padding: "0 0 0 20px", fontSize: "14px" }}
