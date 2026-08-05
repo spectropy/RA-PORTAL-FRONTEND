@@ -85,6 +85,1274 @@ body {
   line-height: 1.5;
 }
 
+/* OMR Exams */
+.omr-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.omr-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.omr-section-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-main);
+  letter-spacing: 0;
+}
+
+.omr-section-header span {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.omr-page-header {
+  margin: 0;
+}
+
+.omr-page--upload {
+  min-height: 100%;
+  background: #f6f8fc;
+}
+
+.omr-page--upload .omr-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: #ffffff;
+}
+
+.omr-page .page-content {
+  background: linear-gradient(180deg, #f6f8fc 0%, var(--color-bg) 100%);
+  padding: 20px 24px 28px;
+}
+
+.omr-page--upload .page-content {
+  padding: 12px 18px 20px;
+  background: #f6f8fc;
+}
+
+.omr-toolbar {
+  align-items: center;
+}
+
+.omr-page--upload .omr-toolbar {
+  padding: 12px 18px 0;
+  border: 0;
+  background: #f6f8fc;
+}
+
+.omr-school-select {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  max-width: 348px;
+}
+
+.omr-search-input-wrap {
+  position: relative;
+}
+
+.omr-search-input-wrap > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.omr-search-input-wrap input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 9px 40px 9px 38px;
+  color: var(--color-text-main);
+  background: #ffffff;
+  font-size: 13.5px;
+  font: inherit;
+  outline: 0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.omr-search-input-wrap input:focus {
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.omr-search-input-wrap .table-search-clear {
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.omr-search-input-wrap .table-search-clear svg {
+  position: static;
+  transform: none;
+  pointer-events: auto;
+}
+
+.omr-school-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  box-shadow: var(--shadow-md);
+}
+
+.omr-school-dropdown button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: #ffffff;
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.omr-school-dropdown button:hover {
+  background: var(--color-surface-hover);
+}
+
+.omr-school-dropdown button:last-child {
+  border-bottom: 0;
+}
+
+.omr-school-dropdown span {
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.omr-school-dropdown-empty {
+  min-height: 40px;
+  padding: 10px 12px;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.omr-upload-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr);
+  grid-template-areas:
+    "school school"
+    "exam marks"
+    "file actions";
+  gap: 14px;
+  width: 100%;
+  max-width: none;
+}
+
+.omr-upload-layout > .alert-banner {
+  grid-column: 1 / -1;
+}
+
+.omr-selected-school-card {
+  position: relative;
+  grid-area: school;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 165px 250px;
+  align-items: center;
+  gap: 24px;
+  min-height: 132px;
+  padding: 18px 34px 18px 22px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.omr-selected-school-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 168px;
+  background: linear-gradient(135deg, #eef5ff 0%, #f6f9ff 100%);
+  z-index: 0;
+}
+
+.omr-selected-school-card::after {
+  content: "";
+  position: absolute;
+  top: -36px;
+  bottom: -36px;
+  left: 128px;
+  width: 82px;
+  border-radius: 50%;
+  background: #ffffff;
+  z-index: 0;
+}
+
+.omr-selected-school-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.omr-school-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.omr-school-icon,
+.omr-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-600);
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+}
+
+.omr-school-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #eaf2ff;
+  border-color: #dbeafe;
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 99, 235, 0.04),
+    0 10px 24px rgba(37, 99, 235, 0.08);
+}
+
+.omr-school-main {
+  min-width: 0;
+  padding-right: 36px;
+  border-right: 1px dashed #cbd5e1;
+}
+
+.omr-kicker {
+  display: block;
+  color: var(--primary-600);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.omr-school-main h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 5px;
+  color: var(--color-text-main);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.omr-school-main h2 svg {
+  color: var(--primary-600);
+  flex-shrink: 0;
+}
+
+.omr-school-main p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.omr-program-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.omr-program-pills span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.omr-program-pills strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  min-width: 42px;
+  justify-content: center;
+  padding: 3px 12px;
+  border: 1px solid var(--primary-100);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eff6ff 0%, #eaf2ff 100%);
+  color: var(--primary-600);
+  font-size: 12px;
+  box-shadow: inset 0 -1px 0 rgba(37, 99, 235, 0.05);
+}
+
+.omr-school-stat {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 10px;
+  justify-self: center;
+  min-width: 136px;
+}
+
+.omr-stat-icon {
+  grid-row: span 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.omr-school-stat span,
+.omr-school-meta span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.omr-school-stat strong {
+  color: var(--primary-600);
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.omr-school-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.omr-school-meta div {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.omr-meta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--primary-100);
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+.omr-meta-copy {
+  min-width: 0;
+}
+
+.omr-school-meta strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-main);
+  font-size: 11.5px;
+}
+
+.omr-upload-panel {
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.omr-upload-exam-card {
+  grid-area: exam;
+  min-height: 150px;
+  max-width: none;
+}
+
+.omr-upload-marks-card {
+  grid-area: marks;
+  min-height: 150px;
+  max-width: 100%;
+}
+
+.omr-upload-file-card {
+  grid-area: file;
+  min-height: 150px;
+}
+
+.omr-upload-actions {
+  grid-area: actions;
+  min-height: 150px;
+}
+
+.omr-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e8edf5;
+  color: var(--primary-600);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.omr-panel-title svg {
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+.omr-upload-panel .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.omr-upload-panel .form-label {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.omr-upload-panel .form-input {
+  min-height: 38px;
+  border-radius: 9px;
+  border-color: #dbe3ef;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.omr-upload-panel .form-input:focus {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.omr-upload-exam-card .form-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.omr-upload-marks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+  row-gap: 12px;
+  align-items: stretch;
+}
+
+.omr-subject-field {
+  display: grid;
+  grid-template-columns: 34px minmax(100px, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon input";
+  align-items: start;
+  column-gap: 9px;
+  row-gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.omr-subject-field .form-label {
+  grid-area: label;
+  margin-bottom: 0;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.omr-subject-field .form-input {
+  grid-area: input;
+  width: 100%;
+  min-width: 100px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 9px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.omr-subject-label {
+  display: contents;
+}
+
+.omr-subject-label .form-label {
+  grid-area: label;
+}
+
+.omr-subject-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  flex-shrink: 0;
+}
+
+.omr-subject-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.omr-file-drop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 122px;
+  align-items: center;
+  gap: 10px;
+  min-height: 94px;
+  padding: 14px;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #fbfdff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.omr-file-drop:hover {
+  border-color: var(--primary-400);
+  background: #f8fbff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.04);
+}
+
+.omr-file-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.omr-file-drop > svg {
+  grid-row: span 2;
+  color: var(--primary-600);
+  justify-self: center;
+}
+
+.omr-file-copy {
+  min-width: 0;
+}
+
+.omr-file-copy strong {
+  display: block;
+  color: var(--color-text-main);
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.omr-file-copy span {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.omr-file-drop small {
+  grid-column: 1 / 3;
+  align-self: end;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.omr-file-drop label {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-border-hover);
+  border-radius: 7px;
+  color: var(--color-text-main);
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+.omr-file-drop label:hover {
+  border-color: var(--primary-400);
+  color: var(--primary-600);
+  background: var(--primary-50);
+}
+
+.omr-file-drop--active {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.omr-file-drop--selected {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.omr-file-clear {
+  grid-column: 3;
+  justify-self: end;
+  border: 0;
+  background: transparent;
+  color: var(--danger-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+.omr-upload-actions p {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.omr-upload-actions small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.omr-upload-actions .btn-link-primary {
+  min-height: 38px;
+  padding-inline: 14px;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+.omr-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.omr-secondary-btn {
+  background: #ffffff;
+  color: var(--color-text-main);
+  border-color: var(--color-border);
+}
+
+.omr-alert,
+.omr-empty-state {
+  border: 1px solid var(--info-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-weight: 600;
+}
+
+.omr-alert-error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.omr-empty-state {
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  margin: 16px 32px;
+}
+
+.omr-data-table {
+  min-width: 1180px;
+}
+
+.omr-data-table .btn-icon-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.omr-exams-table tbody tr {
+  cursor: pointer;
+}
+
+@media (max-width: 1180px) {
+  .omr-upload-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.95fr);
+  }
+
+  .omr-selected-school-card {
+    grid-template-columns: 110px minmax(0, 1fr) 150px;
+  }
+
+  .omr-school-meta {
+    grid-column: 2 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .omr-upload-marks-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1050px) {
+  .omr-upload-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "school"
+      "exam"
+      "marks"
+      "file"
+      "actions";
+  }
+
+  .omr-upload-marks-card {
+    width: 100%;
+  }
+
+  .omr-upload-marks-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .omr-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px;
+  }
+
+  .omr-secondary-btn {
+    width: 100%;
+  }
+
+  .omr-page--upload .page-content {
+    padding: 12px 14px 18px;
+  }
+
+  .omr-selected-school-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px;
+    min-height: 0;
+    background: #ffffff;
+  }
+
+  .omr-selected-school-card::before,
+  .omr-selected-school-card::after {
+    display: none;
+  }
+
+  .omr-school-visual {
+    justify-content: flex-start;
+  }
+
+  .omr-school-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .omr-school-main {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  .omr-school-main h2 {
+    font-size: 18px;
+  }
+
+  .omr-school-meta {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .omr-upload-exam-card .form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .omr-upload-exam-card,
+  .omr-upload-marks-card,
+  .omr-upload-file-card {
+    min-height: 0;
+  }
+
+  .omr-file-drop {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .omr-file-drop label,
+  .omr-file-clear {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-self: stretch;
+  }
+
+  .omr-toolbar {
+    align-items: stretch;
+  }
+
+  .omr-school-select {
+    max-width: none;
+    flex-basis: auto;
+  }
+
+  .omr-upload-actions .btn-link-primary {
+    width: 100%;
+  }
+
+  .omr-empty-state {
+    margin: 14px 16px;
+  }
+
+  .omr-data-table-outer {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .omr-data-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .omr-data-table thead {
+    display: none;
+  }
+
+  .omr-data-table tbody,
+  .omr-data-table tr,
+  .omr-data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .omr-data-table tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .omr-data-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--color-border);
+    padding: 10px 12px;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .omr-data-table td::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-weight: 800;
+    text-align: left;
+    flex: 0 0 42%;
+  }
+
+  .omr-data-table td.text-center {
+    text-align: right;
+  }
+}
+
+@media (max-width: 640px) {
+  .omr-upload-panel {
+    padding: 16px;
+  }
+
+  .omr-upload-marks-grid {
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  .omr-subject-field .form-input {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Simple OMR upload form */
+.omr-page--upload .omr-toolbar,
+.omr-page--upload .page-content {
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+}
+
+.omr-page--upload .page-content {
+  padding: 20px 28px 28px;
+}
+
+.omr-page--upload .omr-toolbar {
+  padding: 16px 28px 0;
+}
+
+.omr-page--upload .omr-upload-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "school"
+    "exam"
+    "marks"
+    "file"
+    "actions";
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+}
+
+.omr-page--upload .omr-selected-school-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 22px;
+  min-height: auto;
+  padding: 16px 0 20px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
+}
+
+.omr-page--upload .omr-selected-school-card::before,
+.omr-page--upload .omr-selected-school-card::after {
+  display: none;
+}
+
+.omr-page--upload .omr-school-visual {
+  flex: 0 0 auto;
+}
+
+.omr-page--upload .omr-school-icon {
+  width: 52px;
+  height: 52px;
+  box-shadow: none;
+}
+
+.omr-page--upload .omr-school-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.omr-page--upload .omr-school-main {
+  flex: 1 1 360px;
+  min-width: 0;
+  padding: 0;
+  border-right: 0;
+}
+
+.omr-page--upload .omr-kicker {
+  font-size: 9.5px;
+}
+
+.omr-page--upload .omr-school-main h2 {
+  margin: 4px 0;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.omr-page--upload .omr-school-main p,
+.omr-page--upload .omr-program-pills span,
+.omr-page--upload .omr-school-stat span,
+.omr-page--upload .omr-school-meta span {
+  font-size: 11px;
+}
+
+.omr-page--upload .omr-program-pills {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.omr-page--upload .omr-program-pills strong {
+  min-height: 22px;
+  min-width: 36px;
+  padding: 2px 9px;
+  font-size: 11px;
+}
+
+.omr-page--upload .omr-school-stat {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.omr-page--upload .omr-stat-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.omr-page--upload .omr-school-stat strong {
+  font-size: 21px;
+}
+
+.omr-page--upload .omr-school-meta {
+  flex: 0 1 320px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.omr-page--upload .omr-school-meta div {
+  min-height: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.omr-page--upload .omr-meta-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.omr-page--upload .omr-school-meta strong {
+  font-size: 11.5px;
+}
+
+.omr-page--upload .omr-upload-panel {
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: auto;
+}
+
+.omr-page--upload .omr-panel-title {
+  gap: 9px;
+  margin-bottom: 18px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.omr-page--upload .omr-panel-title svg {
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: var(--primary-600);
+  flex-shrink: 0;
+}
+
+.omr-page--upload .omr-panel-title span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+}
+
+.omr-page--upload .omr-upload-exam-card .form-grid-3,
+.omr-page--upload .omr-upload-marks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.omr-page--upload .omr-subject-field {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon input";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
+}
+
+.omr-page--upload .omr-subject-icon {
+  grid-area: icon;
+  align-self: center;
+  width: 36px;
+  height: 36px;
+}
+
+.omr-page--upload .omr-subject-label {
+  display: contents;
+}
+
+.omr-page--upload .omr-subject-label .form-label {
+  grid-area: label;
+  align-self: end;
+  line-height: 1.2;
+}
+
+.omr-page--upload .omr-upload-panel .form-label,
+.omr-page--upload .omr-subject-field .form-label {
+  font-size: 12.5px;
+}
+
+.omr-page--upload .omr-upload-panel .form-input,
+.omr-page--upload .omr-subject-field .form-input {
+  width: 100%;
+  min-width: 0;
+  grid-area: input;
+  height: 40px;
+  min-height: 40px;
+  font-size: 13px;
+}
+
+.omr-page--upload .omr-file-drop {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  min-height: 96px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.omr-page--upload .omr-file-drop > svg {
+  width: 30px;
+  height: 30px;
+}
+
+.omr-page--upload .omr-file-copy strong {
+  font-size: 13px;
+}
+
+.omr-page--upload .omr-file-copy span,
+.omr-page--upload .omr-file-drop small,
+.omr-page--upload .omr-upload-actions p,
+.omr-page--upload .omr-upload-actions small {
+  font-size: 12px;
+}
+
+.omr-page--upload .omr-file-drop label,
+.omr-page--upload .omr-upload-actions .btn-link-primary {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.omr-page--upload .omr-upload-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.omr-page--upload .omr-upload-actions p {
+  flex: 1 1 360px;
+  margin: 0;
+}
+
+.omr-page--upload .omr-upload-actions small {
+  flex: 1 0 100%;
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .omr-page--upload .omr-page-header {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+
+  .omr-page--upload .omr-toolbar,
+  .omr-page--upload .page-content {
+    padding-inline: 12px;
+  }
+
+  .omr-page--upload .omr-school-meta,
+  .omr-page--upload .omr-upload-exam-card .form-grid-3,
+  .omr-page--upload .omr-upload-marks-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .omr-page--upload .omr-file-drop {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .omr-page--upload .omr-file-drop label,
+  .omr-page--upload .omr-file-clear {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--primary-600);
   outline-offset: 2px;
@@ -565,13 +1833,13 @@ body {
 
 .form-field {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 5px;
 }
 
 .form-label {
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-main);
 }
 

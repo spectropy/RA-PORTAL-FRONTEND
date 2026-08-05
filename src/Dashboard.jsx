@@ -366,20 +366,19 @@ export default function Dashboard({ user, onLogout }) {
 
           {/*  OMR Exams  */}
           <Route
+            path="exams/new"
+            element={
+              <div className="animate-fade-in">
+                <ExamsRegistration schools={schools} mode="new" />
+              </div>
+            }
+          />
+
+          <Route
             path="exams"
             element={
               <div className="animate-fade-in">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <h1 className="page-header-title">OMR Exam Registration</h1>
-                    <p className="page-header-subtitle">
-                      Create exam records and upload OMR score sheets.
-                    </p>
-                  </div>
-                </div>
-                <div className="page-content">
-                  <ExamsRegistration schools={schools} />
-                </div>
+                <ExamsRegistration schools={schools} />
               </div>
             }
           />
