@@ -7,6 +7,7 @@ import {
   assignTeacherToClass,
   getAcademicYears,
   deleteClassById,
+  deleteTeacherById,
   deleteAssignmentById,
 } from "../api";
 
@@ -432,6 +433,32 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     }
   };
 
+  const handleDeleteTeacher = async (teacherId, teacherCode, teacherName) => {
+    if (
+      !confirm(
+        `Delete teacher ${teacherName || teacherCode}? All allotments for this teacher will also be removed.`,
+      )
+    ) {
+      return;
+    }
+    setError("");
+    setSuccess("");
+
+    setSchoolData((prev) => ({
+      ...prev,
+      teachers: (prev?.teachers || []).filter((t) => t.id !== teacherId),
+    }));
+
+    try {
+      await deleteTeacherById(teacherId);
+      setSuccess("Teacher deleted successfully!");
+      fetchSchoolData(true);
+    } catch (err) {
+      setError(err.message || "Failed to delete teacher");
+      fetchSchoolData(false);
+    }
+  };
+
   const handleDeleteAssignment = async (
     assignmentId,
     subject,
@@ -698,6 +725,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                             <th>Contact</th>
                             <th>Email</th>
                             <th>Subject Allotments</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -771,6 +799,22 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                                     -
                                   </span>
                                 )}
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn-icon-delete"
+                                  onClick={() =>
+                                    handleDeleteTeacher(
+                                      teacher.id,
+                                      teacher.teacher_id,
+                                      teacher.name,
+                                    )
+                                  }
+                                  style={{ fontSize: 11, padding: "3px 8px" }}
+                                >
+                                  Delete
+                                </button>
                               </td>
                             </tr>
                           ))}

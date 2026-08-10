@@ -1621,8 +1621,8 @@ const DASHBOARD_CSS = `
     --sp-slate-100: #f1f5f9;
     --sp-slate-50: #f8fafc;
     --sp-blue: #2563eb;
-    width: 100%;
-    max-width: 1180px;
+    width: 90%;
+   
     margin: 0 auto;
     padding: 18px 20px 24px;
     box-sizing: border-box;

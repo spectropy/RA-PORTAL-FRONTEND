@@ -13,16 +13,38 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
+import {
+  Award,
+  BarChart3,
+  Download,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
+  Mail,
+  Phone,
+  UserRoundCog,
+  X,
+} from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import spectropyLogoUrl from "../assets/logo.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 // ─── Tab Definitions ────────────────────────────────────────────
 const TEACHER_TABS = [
-  { id: "overview", path: "overview", icon: "👩‍🏫", label: "Overview" },
-  { id: "performance", path: "performance", icon: "📊", label: "Performance" },
-  { id: "report", path: "report", icon: "📄", label: "PDF Report" },
+  {
+    id: "overview",
+    path: "overview",
+    icon: LayoutDashboard,
+    label: "Overview",
+  },
+  {
+    id: "performance",
+    path: "performance",
+    icon: BarChart3,
+    label: "Performance",
+  },
 ];
 
 // ─── Analytics Helper ────────────────────────────────────────────
@@ -61,8 +83,36 @@ function computeExamAnalytics(exams, teacherAssignments) {
       ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)
       : null;
 
+  const stats = (arr) => {
+    const values = arr
+      .map((value) => parseFloat(value))
+      .filter((value) => Number.isFinite(value));
+
+    if (!values.length) return null;
+
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const highest = Math.max(...values);
+    const lowest = Math.min(...values);
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    const median =
+      sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+
+    return {
+      average: average.toFixed(1),
+      count: values.length,
+      highest: highest.toFixed(1),
+      lowest: lowest.toFixed(1),
+      median: median.toFixed(1),
+      spread: (highest - lowest).toFixed(1),
+    };
+  };
+
   const examPatterns = Object.entries(patternMap).map(([pattern, csData]) => {
     const averagesByClassSection = {};
+    const detailsByClassSection = {};
     for (const [cs, s] of Object.entries(csData)) {
       averagesByClassSection[cs] = {
         Physics: avg(s.physics),
@@ -70,8 +120,14 @@ function computeExamAnalytics(exams, teacherAssignments) {
         Biology: avg(s.biology),
         Maths: avg(s.maths),
       };
+      detailsByClassSection[cs] = {
+        Physics: stats(s.physics),
+        Chemistry: stats(s.chemistry),
+        Biology: stats(s.biology),
+        Maths: stats(s.maths),
+      };
     }
-    return { exam_pattern: pattern, averagesByClassSection };
+    return { exam_pattern: pattern, averagesByClassSection, detailsByClassSection };
   });
   examPatterns.sort((a, b) => a.exam_pattern.localeCompare(b.exam_pattern));
 
@@ -131,6 +187,7 @@ export default function TeacherDashboard({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [teacher, setTeacher] = useState(null);
   const [schoolName, setSchoolName] = useState("");
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [examPatterns, setExamPatterns] = useState([]);
@@ -158,10 +215,12 @@ export default function TeacherDashboard({
           localStorage.getItem("sp_user") || sessionStorage.getItem("sp_user");
         if (!raw) throw new Error("User session not found. Please log in.");
         const user = JSON.parse(raw);
-        const schoolId = user.school_id;
+        const sessionUser = user?.teacher || user?.user || user;
+        const schoolId = sessionUser?.school_id || user?.school_id;
 
         let teacherData = null;
         let sName = "Unknown School";
+        let sLogo = "";
 
         if (isProxyView) {
           // ── School Owner viewing a teacher by ID ──
@@ -169,6 +228,7 @@ export default function TeacherDashboard({
           if (!schoolRes.ok) throw new Error("Failed to load school data.");
           const schoolData = await schoolRes.json();
           sName = schoolData.school?.school_name || "Unknown School";
+          sLogo = schoolData.school?.logo_url || "";
 
           const targetId = externalTeacherId.trim().toUpperCase();
           const found = schoolData.teachers?.find(
@@ -184,19 +244,58 @@ export default function TeacherDashboard({
           };
         } else {
           // ── Teacher self-view ──
-          if (user.role !== "TEACHER")
+          if (sessionUser.role && sessionUser.role !== "TEACHER")
             throw new Error("Access denied. Teachers only.");
+          const teacherId = sessionUser.teacher_id || user.teacher_id;
+          if (!teacherId) {
+            throw new Error("Teacher ID not found. Please log in again.");
+          }
+
+          const teacherRes = await fetch(`${API_BASE}/api/teachers/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teacher_id: teacherId.trim().toUpperCase(),
+              password: teacherId.trim().toUpperCase(),
+            }),
+          });
+
+          if (!teacherRes.ok) {
+            throw new Error("Failed to refresh teacher assignments.");
+          }
+
+          const teacherPayload = await teacherRes.json();
           teacherData = {
-            ...user,
-            teacher_assignments: Array.isArray(user.teacher_assignments)
-              ? user.teacher_assignments
+            role: "TEACHER",
+            ...teacherPayload.teacher,
+            teacher_assignments: Array.isArray(
+              teacherPayload.teacher?.teacher_assignments,
+            )
+              ? teacherPayload.teacher.teacher_assignments
               : [],
           };
-          sName = user.school_name || "Unknown School";
+
+          const refreshedSession = JSON.stringify(teacherData);
+          localStorage.setItem("sp_user", refreshedSession);
+          sessionStorage.setItem("sp_user", refreshedSession);
+          sName =
+            teacherData.school_name ||
+            sessionUser.school_name ||
+            user.school_name ||
+            "Unknown School";
+          sLogo =
+            teacherData.school_logo_url ||
+            teacherData.logo_url ||
+            sessionUser.school_logo_url ||
+            sessionUser.logo_url ||
+            user.school_logo_url ||
+            user.logo_url ||
+            "";
         }
 
         setTeacher(teacherData);
         setSchoolName(sName);
+        setSchoolLogoUrl(sLogo);
 
         const examsRes = await fetch(
           `${API_BASE}/api/exams?school_id=${schoolId}`,
@@ -224,128 +323,981 @@ export default function TeacherDashboard({
   // ── PDF Generator ─────────────────────────────────────────────
   const downloadPDF = () => {
     if (!teacher) return;
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.width;
-    const margin = 14;
-    let y = 20;
 
-    // Blue header banner
-    doc.setFillColor(30, 85, 160);
-    doc.rect(0, 0, pageWidth, 20, "F");
-    doc.setFontSize(14);
-    doc.setTextColor(255, 255, 255);
-    doc.text(schoolName || "Unknown School", 14, 12);
-    doc.setFontSize(10);
-    doc.text("Powered BY SPECTROPY", pageWidth - 20, 15, { align: "right" });
-    y += 10;
-
-    doc.setFontSize(20);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("IIT Foundation Teacher Report", pageWidth / 2, y, {
-      align: "center",
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
     });
-    y += 10;
 
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Teacher: ${teacher.name}`, margin, y);
-    y += 6;
-    doc.text(`ID: ${teacher.teacher_id}`, margin, y);
-    y += 6;
-    doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 150, y - 10);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Allotments
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Your ALLOTMENTS", margin, y);
-    doc.setFont("helvetica", "italic");
-    y += 8;
-    if (teacher.teacher_assignments.length > 0) {
-      teacher.teacher_assignments.forEach((a) => {
-        if (y > 280) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(`${a.class}-${a.section} | ${a.subject}`, margin, y);
-        y += 6;
+    const margin = 10;
+    const printableWidth = pageWidth - margin * 2;
+    const generatedDate = new Date().toLocaleString();
+
+    const safeAssignments = Array.isArray(teacher.teacher_assignments)
+      ? teacher.teacher_assignments
+      : [];
+
+    const safeBestWeekTests = Array.isArray(bestWeekTestsByGrade)
+      ? bestWeekTestsByGrade
+      : [];
+
+    const safeExamPatterns = Array.isArray(examPatterns) ? examPatterns : [];
+
+    // =========================================================
+    // DESIGN SYSTEM
+    // =========================================================
+    const COLORS = {
+      navy: [18, 45, 85],
+      navyLight: [43, 73, 118],
+      blue: [37, 99, 235],
+
+      dark: [15, 23, 42],
+      gray: [100, 116, 139],
+
+      white: [255, 255, 255],
+      background: [248, 250, 252],
+      lightGray: [241, 245, 249],
+      border: [226, 232, 240],
+
+      lightBlue: [239, 246, 255],
+      blueBorder: [191, 219, 254],
+
+      green: [22, 163, 74],
+      lightGreen: [240, 253, 244],
+
+      amber: [217, 119, 6],
+      lightAmber: [255, 251, 235],
+
+      red: [220, 38, 38],
+      lightRed: [254, 242, 242],
+
+      purple: [126, 34, 206],
+      lightPurple: [250, 245, 255],
+    };
+
+    // =========================================================
+    // HELPERS
+    // =========================================================
+    const setFill = (color) => {
+      doc.setFillColor(color[0], color[1], color[2]);
+    };
+
+    const setDraw = (color) => {
+      doc.setDrawColor(color[0], color[1], color[2]);
+    };
+
+    const setText = (color) => {
+      doc.setTextColor(color[0], color[1], color[2]);
+    };
+
+    const safeText = (value, fallback = "-") => {
+      if (value === null || value === undefined || value === "") {
+        return fallback;
+      }
+
+      return String(value);
+    };
+
+    const isNumericValue = (value) => {
+      return (
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        !Number.isNaN(parseFloat(value))
+      );
+    };
+
+    const formatPercentage = (value) => {
+      if (!isNumericValue(value)) {
+        return "N/A";
+      }
+
+      return `${parseFloat(value).toFixed(2)}%`;
+    };
+
+    const getPerformanceColor = (value) => {
+      const numericValue = parseFloat(value);
+
+      if (Number.isNaN(numericValue)) {
+        return COLORS.gray;
+      }
+
+      if (numericValue >= 75) {
+        return COLORS.green;
+      }
+
+      if (numericValue >= 50) {
+        return COLORS.amber;
+      }
+
+      return COLORS.red;
+    };
+
+    const fitTextToWidth = ({
+      text,
+      maxWidth,
+      maximumFontSize,
+      minimumFontSize,
+      fontStyle = "bold",
+    }) => {
+      let fontSize = maximumFontSize;
+
+      doc.setFont("helvetica", fontStyle);
+      doc.setFontSize(fontSize);
+
+      while (
+        doc.getTextWidth(String(text)) > maxWidth &&
+        fontSize > minimumFontSize
+      ) {
+        fontSize -= 0.5;
+        doc.setFontSize(fontSize);
+      }
+
+      return fontSize;
+    };
+
+    const createColumnStyles = ({
+      tableWidth,
+      weights,
+      leftAlignedIndexes = [],
+    }) => {
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+
+      const columnStyles = {};
+      let consumedWidth = 0;
+
+      weights.forEach((weight, index) => {
+        const cellWidth =
+          index === weights.length - 1
+            ? tableWidth - consumedWidth
+            : (tableWidth * weight) / totalWeight;
+
+        consumedWidth += cellWidth;
+
+        columnStyles[index] = {
+          cellWidth,
+          halign: leftAlignedIndexes.includes(index) ? "left" : "center",
+        };
       });
-    } else {
-      doc.text("No assigned classes.", margin, y);
-      y += 6;
-    }
-    y += 8;
 
-    // Best week test table
-    if (bestWeekTestsByGrade.length > 0) {
-      doc.setFont("helvetica", "bold");
-      doc.text("Performance Analysis: Best Week Test by Grade", margin, y);
-      doc.setFont("helvetica", "normal");
-      y += 10;
-      doc.autoTable({
-        startY: y,
-        head: [["Grade", "Best Exam Pattern", "Best Average (%)"]],
-        body: bestWeekTestsByGrade.map((item) => [
-          `Grade ${item.grade}`,
-          item.bestExamPattern,
-          `${item.bestAverage}%`,
-        ]),
-        theme: "grid",
-        styles: { fontSize: 10, cellPadding: 3, halign: "center" },
-        headStyles: { fillColor: [66, 153, 225] },
-        margin: { left: margin, right: margin },
-      });
-      y = doc.lastAutoTable.finalY + 10;
-    }
+      return columnStyles;
+    };
 
-    // Exam averages table
-    if (examPatterns.length > 0) {
-      const teacherCS = [
-        ...new Set(
-          teacher.teacher_assignments.map((a) => `${a.class}-${a.section}`),
-        ),
-      ];
-      const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
-      const dynCols = [];
-      const colHeaders = ["Exam Pattern"];
-      for (const subj of subjects) {
-        for (const cs of teacherCS) {
-          if (
-            teacher.teacher_assignments.some(
-              (a) => a.subject === subj && `${a.class}-${a.section}` === cs,
-            )
-          ) {
-            dynCols.push({ subject: subj, classSection: cs });
-            colHeaders.push(`${subj} (${cs})`);
-          }
+    const schoolDisplayName = safeText(
+      schoolName,
+      "Unknown School",
+    ).toUpperCase();
+
+    const schoolInitial =
+      schoolDisplayName !== "UNKNOWN SCHOOL"
+        ? schoolDisplayName.charAt(0)
+        : "S";
+
+    const schoolLogoForPdf =
+      typeof schoolLogoUrl === "string" && schoolLogoUrl.trim()
+        ? schoolLogoUrl.trim()
+        : null;
+
+    const spectropyLogo =
+      typeof spectropyLogoUrl !== "undefined" ? spectropyLogoUrl : null;
+
+    // =========================================================
+    // SMALL POWERED BY SPECTROPY CONTAINER
+    // =========================================================
+    const drawSpectropyBrand = ({
+      rightX = pageWidth - margin,
+      centerY = 12,
+      compact = false,
+    } = {}) => {
+      const containerWidth = compact ? 45 : 50;
+      const containerHeight = compact ? 10 : 14;
+
+      const containerX = rightX - containerWidth;
+      const containerY = centerY - containerHeight / 2;
+
+      const logoPanelWidth = compact ? 12 : 15;
+      const logoSize = compact ? 7 : 9;
+
+      setFill(COLORS.white);
+      setDraw([190, 211, 239]);
+      doc.setLineWidth(0.25);
+
+      doc.roundedRect(
+        containerX,
+        containerY,
+        containerWidth,
+        containerHeight,
+        compact ? 2 : 2.5,
+        compact ? 2 : 2.5,
+        "FD",
+      );
+
+      const dividerX = containerX + logoPanelWidth;
+
+      setDraw([218, 226, 238]);
+      doc.setLineWidth(0.25);
+
+      doc.line(
+        dividerX,
+        containerY + 2,
+        dividerX,
+        containerY + containerHeight - 2,
+      );
+
+      const logoX = containerX + (logoPanelWidth - logoSize) / 2;
+
+      const logoY = containerY + (containerHeight - logoSize) / 2;
+
+      let logoLoaded = false;
+
+      if (spectropyLogo) {
+        try {
+          doc.addImage(spectropyLogo, "PNG", logoX, logoY, logoSize, logoSize);
+
+          logoLoaded = true;
+        } catch (error) {
+          console.warn("Failed to load Spectropy logo:", error);
         }
       }
+
+      if (!logoLoaded) {
+        setFill(COLORS.blue);
+
+        doc.circle(
+          logoX + logoSize / 2,
+          logoY + logoSize / 2,
+          logoSize / 2,
+          "F",
+        );
+
+        setText(COLORS.white);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(compact ? 4.5 : 5.5);
+
+        doc.text("S", logoX + logoSize / 2, logoY + logoSize * 0.69, {
+          align: "center",
+        });
+      }
+
+      const textX = dividerX + (compact ? 2.2 : 2.8);
+
+      setText([91, 121, 164]);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(compact ? 4 : 5);
+
+      doc.text("Powered by", textX, containerY + (compact ? 3.4 : 4.3));
+
+      setText(COLORS.navy);
       doc.setFont("helvetica", "bold");
-      doc.text("Exam Performance Averages", margin, y);
-      y += 10;
+      doc.setFontSize(compact ? 6.6 : 8.2);
+
+      doc.text("SPECTROPY", textX, containerY + (compact ? 7.1 : 9));
+
+      setText([113, 135, 166]);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(compact ? 3 : 3.8);
+
+      doc.text("Learning Analytics", textX, containerY + (compact ? 9.2 : 12));
+    };
+
+    // =========================================================
+    // PAGE HEADERS
+    // =========================================================
+    const headerDrawnPages = new Set();
+
+    const drawMainHeader = () => {
+      const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+
+      if (headerDrawnPages.has(currentPage)) {
+        return;
+      }
+
+      setFill(COLORS.background);
+      doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+      const headerHeight = 26;
+
+      setFill(COLORS.navy);
+      doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+      setFill(COLORS.blue);
+      doc.rect(0, headerHeight - 2, pageWidth, 2, "F");
+
+      // School logo container
+      const logoBoxX = margin;
+      const logoBoxY = 4;
+      const logoBoxSize = 18;
+
+      setFill(COLORS.white);
+
+      doc.roundedRect(
+        logoBoxX,
+        logoBoxY,
+        logoBoxSize,
+        logoBoxSize,
+        2.5,
+        2.5,
+        "F",
+      );
+
+      let schoolLogoLoaded = false;
+
+      if (schoolLogoForPdf) {
+        try {
+          doc.addImage(
+            schoolLogoForPdf,
+            "PNG",
+            logoBoxX + 2,
+            logoBoxY + 2,
+            logoBoxSize - 4,
+            logoBoxSize - 4,
+          );
+
+          schoolLogoLoaded = true;
+        } catch (error) {
+          console.warn("Failed to load school logo:", error);
+        }
+      }
+
+      // Display the school initial if there is no usable logo
+      if (!schoolLogoLoaded) {
+        setFill(COLORS.lightBlue);
+
+        doc.circle(
+          logoBoxX + logoBoxSize / 2,
+          logoBoxY + logoBoxSize / 2,
+          5.5,
+          "F",
+        );
+
+        setText(COLORS.blue);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+
+        doc.text(schoolInitial, logoBoxX + logoBoxSize / 2, logoBoxY + 11.2, {
+          align: "center",
+        });
+      }
+
+      drawSpectropyBrand({
+        rightX: pageWidth - margin,
+        centerY: headerHeight / 2,
+      });
+
+      const schoolTextX = logoBoxX + logoBoxSize + 6;
+
+      const brandContainerX = pageWidth - margin - 50;
+
+      const schoolTextMaxWidth = brandContainerX - schoolTextX - 8;
+
+      const schoolFontSize = fitTextToWidth({
+        text: schoolDisplayName,
+        maxWidth: schoolTextMaxWidth,
+        maximumFontSize: 13,
+        minimumFontSize: 8,
+      });
+
+      setText(COLORS.white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(schoolFontSize);
+
+      doc.text(schoolDisplayName, schoolTextX, 10.5);
+
+      setText([219, 234, 254]);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+
+      doc.text("IIT Foundation Academic Report", schoolTextX, 17.5);
+
+      headerDrawnPages.add(currentPage);
+    };
+
+    const drawContinuationHeader = () => {
+      const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+
+      if (headerDrawnPages.has(currentPage)) {
+        return;
+      }
+
+      setFill(COLORS.background);
+      doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+      setFill(COLORS.navy);
+      doc.rect(0, 0, pageWidth, 15, "F");
+
+      setFill(COLORS.blue);
+      doc.rect(0, 13.5, pageWidth, 1.5, "F");
+
+      setText(COLORS.white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+
+      doc.text(`${schoolDisplayName} - Teacher Report`, margin, 8.8, {
+        maxWidth: pageWidth - 75,
+      });
+
+      drawSpectropyBrand({
+        rightX: pageWidth - margin,
+        centerY: 7.5,
+        compact: true,
+      });
+
+      headerDrawnPages.add(currentPage);
+    };
+
+    const ensureSectionSpace = (currentY, requiredHeight = 28) => {
+      if (currentY + requiredHeight > pageHeight - 17) {
+        doc.addPage();
+        drawContinuationHeader();
+        return 22;
+      }
+
+      return currentY;
+    };
+
+    // =========================================================
+    // FIRST PAGE
+    // =========================================================
+    drawMainHeader();
+
+    let y = 34;
+
+    // =========================================================
+    // REPORT TITLE
+    // =========================================================
+    setText(COLORS.blue);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.text("IIT FOUNDATION", margin, y);
+
+    y += 5;
+
+    setText(COLORS.dark);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+
+    doc.text("Teacher Performance Report", margin, y);
+
+    setText(COLORS.gray);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+
+    doc.text(`Generated: ${generatedDate}`, pageWidth - margin, y, {
+      align: "right",
+    });
+
+    y += 7;
+
+    // =========================================================
+    // COMPACT TEACHER INFORMATION STRIP
+    // =========================================================
+    setFill(COLORS.white);
+    setDraw(COLORS.border);
+    doc.setLineWidth(0.25);
+
+    doc.roundedRect(margin, y, printableWidth, 12, 2.5, 2.5, "FD");
+
+    const uniqueClassSections = [
+      ...new Set(
+        safeAssignments.map(
+          (assignment) => `${assignment.class}-${assignment.section}`,
+        ),
+      ),
+    ];
+
+    const teacherInfo = [
+      {
+        label: "TEACHER",
+        value: safeText(teacher.name),
+        x: margin + 5,
+        width: 80,
+      },
+      {
+        label: "TEACHER ID",
+        value: safeText(teacher.teacher_id),
+        x: margin + 95,
+        width: 48,
+      },
+      {
+        label: "ALLOTMENTS",
+        value: String(safeAssignments.length),
+        x: margin + 156,
+        width: 32,
+      },
+      {
+        label: "CLASSES",
+        value: String(uniqueClassSections.length),
+        x: margin + 200,
+        width: 30,
+      },
+      {
+        label: "SUBJECTS",
+        value: String(
+          new Set(safeAssignments.map((assignment) => assignment.subject)).size,
+        ),
+        x: margin + 242,
+        width: 30,
+      },
+    ];
+
+    teacherInfo.forEach((item) => {
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(5.4);
+
+      doc.text(item.label, item.x, y + 4.2);
+
+      const valueFontSize = fitTextToWidth({
+        text: item.value,
+        maxWidth: item.width,
+        maximumFontSize: 8,
+        minimumFontSize: 5.5,
+      });
+
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(valueFontSize);
+
+      doc.text(item.value, item.x, y + 9, {
+        maxWidth: item.width,
+      });
+    });
+
+    y += 18;
+
+    // =========================================================
+    // ALLOTMENTS TABLE
+    // =========================================================
+    setText(COLORS.dark);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+
+    doc.text("Teaching Allotments", margin, y);
+
+    setText(COLORS.gray);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.2);
+
+    doc.text(
+      "Classes, sections and subjects assigned to the teacher",
+      margin,
+      y + 4,
+    );
+
+    y += 7;
+
+    const allotmentRows =
+      safeAssignments.length > 0
+        ? safeAssignments.map((assignment, index) => [
+            index + 1,
+            safeText(assignment.class),
+            safeText(assignment.section),
+            safeText(assignment.subject),
+          ])
+        : [["-", "-", "-", "No assigned classes"]];
+
+    doc.autoTable({
+      startY: y,
+
+      head: [["S.No.", "Class", "Section", "Subject"]],
+
+      body: allotmentRows,
+
+      theme: "grid",
+      tableWidth: printableWidth,
+
+      margin: {
+        left: margin,
+        right: margin,
+        top: 20,
+        bottom: 16,
+      },
+
+      styles: {
+        font: "helvetica",
+        fontSize: 8.4,
+        cellPadding: {
+          top: 2,
+          right: 2,
+          bottom: 2,
+          left: 2,
+        },
+        halign: "center",
+        valign: "middle",
+        textColor: COLORS.dark,
+        lineColor: COLORS.border,
+        lineWidth: 0.2,
+        minCellHeight: 7.5,
+      },
+
+      headStyles: {
+        fillColor: COLORS.navy,
+        textColor: COLORS.white,
+        fontStyle: "bold",
+        fontSize: 8.5,
+        halign: "center",
+        minCellHeight: 8.5,
+        lineColor: COLORS.navyLight,
+      },
+
+      alternateRowStyles: {
+        fillColor: COLORS.background,
+      },
+
+      columnStyles: createColumnStyles({
+        tableWidth: printableWidth,
+        weights: [0.45, 0.8, 0.8, 2.2],
+        leftAlignedIndexes: [3],
+      }),
+
+      showHead: "everyPage",
+      rowPageBreak: "avoid",
+
+      willDrawPage: () => {
+        drawContinuationHeader();
+      },
+
+      didParseCell: (data) => {
+        if (data.section === "body" && data.column.index === 3) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.textColor = COLORS.navy;
+        }
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 9;
+
+    // =========================================================
+    // BEST WEEK TEST TABLE
+    // =========================================================
+    if (safeBestWeekTests.length > 0) {
+      y = ensureSectionSpace(y, 35);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+
+      doc.text("Best Week Test by Grade", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+
+      doc.text(
+        "Highest-performing weekly assessment for each grade",
+        margin,
+        y + 4,
+      );
+
+      y += 7;
+
+      const bestWeekRows = safeBestWeekTests.map((item) => [
+        `Grade ${safeText(item.grade)}`,
+        safeText(item.bestExamPattern),
+        formatPercentage(item.bestAverage),
+      ]);
+
       doc.autoTable({
         startY: y,
-        head: [colHeaders],
-        body: examPatterns.map((p) => {
-          const row = [p.exam_pattern];
-          dynCols.forEach((col) => {
-            const a = p.averagesByClassSection[col.classSection]?.[col.subject];
-            row.push(a != null ? `${a}%` : "N/A");
-          });
-          return row;
+
+        head: [["Grade", "Best Exam Pattern", "Best Average"]],
+
+        body: bestWeekRows,
+
+        theme: "grid",
+        tableWidth: printableWidth,
+
+        margin: {
+          left: margin,
+          right: margin,
+          top: 20,
+          bottom: 16,
+        },
+
+        styles: {
+          font: "helvetica",
+          fontSize: 8.5,
+          cellPadding: {
+            top: 2,
+            right: 2,
+            bottom: 2,
+            left: 2,
+          },
+          halign: "center",
+          valign: "middle",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+          minCellHeight: 7.5,
+        },
+
+        headStyles: {
+          fillColor: COLORS.blue,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 8.5,
+          minCellHeight: 8.5,
+          lineColor: COLORS.blue,
+        },
+
+        alternateRowStyles: {
+          fillColor: COLORS.background,
+        },
+
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [0.8, 2.2, 1],
+          leftAlignedIndexes: [1],
         }),
-        theme: "striped",
-        styles: { fontSize: 10, cellPadding: 2.5, halign: "center" },
-        headStyles: { fillColor: [66, 153, 225] },
-        margin: { left: margin, right: margin },
+
+        showHead: "everyPage",
+        rowPageBreak: "avoid",
+
+        willDrawPage: () => {
+          drawContinuationHeader();
+        },
+
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 2) {
+            const average = parseFloat(data.cell.raw);
+
+            if (!Number.isNaN(average)) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = getPerformanceColor(average);
+            }
+          }
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    // =========================================================
+    // EXAM PERFORMANCE AVERAGES
+    // =========================================================
+    if (safeExamPatterns.length > 0) {
+      y = ensureSectionSpace(y, 40);
+
+      const teacherClassSections = [
+        ...new Set(
+          safeAssignments.map(
+            (assignment) => `${assignment.class}-${assignment.section}`,
+          ),
+        ),
+      ];
+
+      const subjects = ["Physics", "Chemistry", "Biology", "Maths"];
+
+      const dynamicColumns = [];
+      const columnHeaders = ["Exam Pattern"];
+
+      subjects.forEach((subject) => {
+        teacherClassSections.forEach((classSection) => {
+          const hasAssignment = safeAssignments.some(
+            (assignment) =>
+              assignment.subject === subject &&
+              `${assignment.class}-${assignment.section}` === classSection,
+          );
+
+          if (hasAssignment) {
+            dynamicColumns.push({
+              subject,
+              classSection,
+            });
+
+            columnHeaders.push(`${subject} (${classSection})`);
+          }
+        });
+      });
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+
+      doc.text("Exam Performance Averages", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+
+      doc.text(
+        "Exam-pattern averages for assigned subjects and classes",
+        margin,
+        y + 4,
+      );
+
+      y += 7;
+
+      const examAverageRows = safeExamPatterns.map((pattern) => {
+        const row = [safeText(pattern.exam_pattern)];
+
+        dynamicColumns.forEach((column) => {
+          const average =
+            pattern.averagesByClassSection?.[column.classSection]?.[
+              column.subject
+            ];
+
+          row.push(average != null ? formatPercentage(average) : "N/A");
+        });
+
+        return row;
+      });
+
+      const examColumnWeights = [1.4, ...dynamicColumns.map(() => 1)];
+
+      const examTableFontSize =
+        columnHeaders.length <= 5
+          ? 8.5
+          : columnHeaders.length <= 8
+            ? 7.5
+            : columnHeaders.length <= 11
+              ? 6.8
+              : 6.1;
+
+      const examHeaderFontSize =
+        columnHeaders.length <= 6 ? 8 : columnHeaders.length <= 10 ? 6.8 : 5.9;
+
+      doc.autoTable({
+        startY: y,
+
+        head: [columnHeaders],
+
+        body:
+          examAverageRows.length > 0
+            ? examAverageRows
+            : [["No examination data", ...dynamicColumns.map(() => "N/A")]],
+
+        theme: "grid",
+        tableWidth: printableWidth,
+
+        margin: {
+          left: margin,
+          right: margin,
+          top: 20,
+          bottom: 16,
+        },
+
+        styles: {
+          font: "helvetica",
+          fontSize: examTableFontSize,
+          cellPadding: {
+            top: 2,
+            right: 1.2,
+            bottom: 2,
+            left: 1.2,
+          },
+          halign: "center",
+          valign: "middle",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+          overflow: "linebreak",
+          minCellHeight: 7.5,
+        },
+
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: examHeaderFontSize,
+          halign: "center",
+          minCellHeight: 9,
+          lineColor: COLORS.navyLight,
+        },
+
+        alternateRowStyles: {
+          fillColor: COLORS.background,
+        },
+
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: examColumnWeights,
+          leftAlignedIndexes: [0],
+        }),
+
+        showHead: "everyPage",
+        rowPageBreak: "avoid",
+
+        willDrawPage: () => {
+          drawContinuationHeader();
+        },
+
+        didParseCell: (data) => {
+          if (data.section !== "body") {
+            return;
+          }
+
+          if (data.column.index === 0) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.textColor = COLORS.navy;
+            data.cell.styles.fillColor = COLORS.lightBlue;
+          }
+
+          if (data.column.index > 0) {
+            const average = parseFloat(data.cell.raw);
+
+            if (!Number.isNaN(average)) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = getPerformanceColor(average);
+            }
+          }
+        },
       });
     }
 
+    // =========================================================
+    // FOOTERS
+    // =========================================================
+    const totalPages = doc.internal.getNumberOfPages();
+
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      doc.setPage(pageNumber);
+
+      setDraw(COLORS.border);
+      doc.setLineWidth(0.25);
+
+      doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(5.8);
+
+      doc.text("CONFIDENTIAL ACADEMIC REPORT", margin, pageHeight - 7);
+
+      doc.setFont("helvetica", "normal");
+
+      doc.text(
+        `Teacher: ${safeText(teacher.name)}`,
+        pageWidth / 2,
+        pageHeight - 7,
+        {
+          align: "center",
+        },
+      );
+
+      doc.setFont("helvetica", "bold");
+
+      doc.text(
+        `Page ${pageNumber} of ${totalPages}`,
+        pageWidth - margin,
+        pageHeight - 7,
+        {
+          align: "right",
+        },
+      );
+    }
+
+    // =========================================================
+    // SAVE
+    // =========================================================
     doc.save(
-      `Teacher_Report_${teacher.teacher_id}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      `Teacher_Report_${teacher.teacher_id}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`,
     );
   };
 
@@ -398,14 +1350,17 @@ export default function TeacherDashboard({
       <div className="td-proxy-wrap">
         <div className="td-proxy-header">
           <div>
-            <h2 className="td-proxy-title">👩‍🏫 {teacher.name}</h2>
+            <h2 className="td-proxy-title">
+              <UserRoundCog size={22} /> {teacher.name}
+            </h2>
             <p className="td-proxy-meta">
               {teacher.teacher_id} · {schoolName}
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={downloadPDF}>
-              📄 Download PDF
+              <Download size={16} />
+              Download PDF
             </button>
             {onBack && (
               <button className="btn btn-outline" onClick={onBack}>
@@ -432,9 +1387,30 @@ export default function TeacherDashboard({
     setSidebarOpen(false);
   };
 
+  const renderPageShell = ({
+    icon: Icon,
+    title,
+    subtitle,
+    actions,
+    children,
+  }) => (
+    <div className="animate-fade-in teacher-page">
+      <div className="page-header teacher-page-header">
+        <div className="page-header-left">
+          <h1 className="page-header-title teacher-page-title">
+            <Icon size={22} strokeWidth={2.2} />
+            {title}
+          </h1>
+          <p className="page-header-subtitle">{subtitle}</p>
+        </div>
+        {actions && <div className="page-header-actions">{actions}</div>}
+      </div>
+      <div className="page-content teacher-page-content">{children}</div>
+    </div>
+  );
+
   return (
     <div className="admin-layout">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="sidebar-overlay"
@@ -443,7 +1419,6 @@ export default function TeacherDashboard({
         />
       )}
 
-      {/* ── Sidebar Rail ────────────────────────────────────── */}
       <aside
         className={`sidebar-rail${sidebarOpen ? " sidebar-rail--open" : ""}`}
         aria-label="Teacher navigation"
@@ -453,31 +1428,46 @@ export default function TeacherDashboard({
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation"
         >
-          ✕
+          <X size={16} />
         </button>
 
         <span className="sidebar-section-label">Navigation</span>
 
-        {TEACHER_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`sidebar-nav-item${activeTab === tab.id ? " sidebar-nav-item--active" : ""}`}
-            onClick={() => goTab(tab)}
-            title={tab.label}
-            aria-current={activeTab === tab.id ? "page" : undefined}
-          >
-            <span className="sidebar-nav-icon">{tab.icon}</span>
-            <span className="sidebar-nav-label">{tab.label}</span>
-          </button>
-        ))}
+        {TEACHER_TABS.map((tab) => {
+          const TabIcon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              className={`sidebar-nav-item${activeTab === tab.id ? " sidebar-nav-item--active" : ""}`}
+              onClick={() => goTab(tab)}
+              title={tab.label}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+            >
+              <span className="sidebar-nav-icon">
+                <TabIcon size={16} />
+              </span>
+              <span className="sidebar-nav-label">{tab.label}</span>
+            </button>
+          );
+        })}
 
-        {/* Sidebar Footer */}
         <div className="sidebar-footer">
           <div className="sidebar-admin-info">
-            <div className="sidebar-admin-avatar">
-              {(teacher.name || "T").charAt(0).toUpperCase()}
-              <span className="sidebar-avatar-status" title="Online" />
-            </div>
+            {schoolLogoUrl ? (
+              <div className="sidebar-admin-avatar sidebar-admin-avatar--logo">
+                <img
+                  src={schoolLogoUrl}
+                  alt={`${schoolName || "School"} logo`}
+                  className="sidebar-admin-logo"
+                />
+                <span className="sidebar-avatar-status" title="Online" />
+              </div>
+            ) : (
+              <div className="sidebar-admin-avatar">
+                {(teacher.name || "T").charAt(0).toUpperCase()}
+                <span className="sidebar-avatar-status" title="Online" />
+              </div>
+            )}
             <div className="sidebar-admin-details">
               <div className="sidebar-admin-name">{teacher.name}</div>
               <div className="sidebar-admin-role">{teacher.teacher_id}</div>
@@ -486,7 +1476,6 @@ export default function TeacherDashboard({
 
           {onBack && (
             <button className="sidebar-logout-btn" onClick={onBack}>
-              <span>⏻</span>
               <span className="sidebar-nav-label">Sign Out</span>
             </button>
           )}
@@ -495,76 +1484,48 @@ export default function TeacherDashboard({
         </div>
       </aside>
 
-      {/* ── Page Canvas ─────────────────────────────────────── */}
       <div className="page-canvas">
         <Routes>
           <Route index element={<Navigate to="overview" replace />} />
 
           <Route
             path="overview"
-            element={
-              <div className="animate-fade-in">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <h1 className="page-header-title">👩‍🏫 Overview</h1>
-                    <p className="page-header-subtitle">
-                      {teacher.name} · {teacher.teacher_id} · {schoolName}
-                    </p>
-                  </div>
-                </div>
-                <div className="page-content">
-                  <OverviewContent teacher={teacher} />
-                </div>
-              </div>
-            }
+            element={renderPageShell({
+              icon: UserRoundCog,
+              title: "Overview",
+              subtitle: `${teacher.name} - ${teacher.teacher_id} - ${schoolName}`,
+              children: <OverviewContent teacher={teacher} />,
+            })}
           />
 
           <Route
             path="performance"
-            element={
-              <div className="animate-fade-in">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <h1 className="page-header-title">📊 Performance</h1>
-                    <p className="page-header-subtitle">
-                      Grade analysis & exam pattern averages
-                    </p>
-                  </div>
-                </div>
-                <div className="page-content">
-                  <PerformanceContent
-                    teacher={teacher}
-                    examPatterns={examPatterns}
-                    bestWeekTestsByGrade={bestWeekTestsByGrade}
-                  />
-                </div>
-              </div>
-            }
+            element={renderPageShell({
+              icon: BarChart3,
+              title: "Performance",
+              subtitle: "Grade analysis and exam pattern averages",
+              actions: (
+                <button
+                  className="btn btn-primary td-report-btn"
+                  onClick={downloadPDF}
+                >
+                  <Download size={16} />
+                  Download PDF Report
+                </button>
+              ),
+              children: (
+                <PerformanceContent
+                  teacher={teacher}
+                  examPatterns={examPatterns}
+                  bestWeekTestsByGrade={bestWeekTestsByGrade}
+                />
+              ),
+            })}
           />
 
           <Route
             path="report"
-            element={
-              <div className="animate-fade-in">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <h1 className="page-header-title">📄 PDF Report</h1>
-                    <p className="page-header-subtitle">
-                      Download your full performance report
-                    </p>
-                  </div>
-                </div>
-                <div className="page-content">
-                  <ReportContent
-                    teacher={teacher}
-                    schoolName={schoolName}
-                    bestWeekTestsByGrade={bestWeekTestsByGrade}
-                    examPatterns={examPatterns}
-                    onDownload={downloadPDF}
-                  />
-                </div>
-              </div>
-            }
+            element={<Navigate to="../performance" replace />}
           />
 
           <Route path="*" element={<Navigate to="overview" replace />} />
@@ -573,15 +1534,10 @@ export default function TeacherDashboard({
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Sub-page: Overview — Profile card + Allotments
-// ─────────────────────────────────────────────────────────────────
 function OverviewContent({ teacher }) {
   return (
     <>
-      {/* Profile Card */}
-      <div className="td-card">
+      <section className="td-card td-card--profile">
         <div className="td-profile-grid">
           <div className="td-avatar-wrap">
             <div className="td-avatar-circle">
@@ -596,22 +1552,24 @@ function OverviewContent({ teacher }) {
               </span>
               {teacher.email && (
                 <span className="td-badge td-badge--gray">
-                  ✉ {teacher.email}
+                  <Mail size={12} style={{ marginRight: 4 }} /> {teacher.email}
                 </span>
               )}
               {teacher.contact && (
                 <span className="td-badge td-badge--gray">
-                  📞 {teacher.contact}
+                  <Phone size={12} style={{ marginRight: 4 }} /> {teacher.contact}
                 </span>
               )}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Allotments */}
-      <div className="td-card">
-        <h2 className="td-section-title">📚 Your Allotments</h2>
+      <section className="td-card">
+        <h2 className="td-section-title">
+          <GraduationCap size={18} /> Your Allotments
+        </h2>
         {teacher.teacher_assignments.length > 0 ? (
           <div className="td-assignments-grid">
             {teacher.teacher_assignments.map((a, idx) => (
@@ -630,7 +1588,7 @@ function OverviewContent({ teacher }) {
         ) : (
           <p className="td-no-data">No assigned classes yet.</p>
         )}
-      </div>
+      </section>
     </>
   );
 }
@@ -661,12 +1619,25 @@ function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
   const getAvg = (subject, classSection, patternData) =>
     patternData.averagesByClassSection[classSection]?.[subject] || null;
 
+  const getDetails = (subject, classSection, patternData) =>
+    patternData.detailsByClassSection?.[classSection]?.[subject] || null;
+
+  const scoreClassName = (value) => {
+    const n = value ? parseFloat(value) : null;
+    if (n == null || Number.isNaN(n)) return "td-score td-score--na";
+    if (n >= 75) return "td-score td-score--high";
+    if (n >= 50) return "td-score td-score--mid";
+    return "td-score td-score--low";
+  };
+
   return (
     <>
       {/* Best Week Test by Grade */}
       {bestWeekTestsByGrade.length > 0 && (
-        <div className="td-card">
-          <h2 className="td-section-title">🏆 Best Week Test by Grade</h2>
+        <section className="td-card">
+          <h2 className="td-section-title">
+            <Award size={18} /> Best Week Test by Grade
+          </h2>
 
           {/* Best overall highlight */}
           {(() => {
@@ -675,8 +1646,8 @@ function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
             );
             return (
               <div className="td-best-banner">
-                🏆 Best Overall: <strong>Grade {best.grade}</strong> —{" "}
-                {best.bestExamPattern} — <strong>{best.bestAverage}%</strong>
+                Best Overall: <strong>Grade {best.grade}</strong> -{" "}
+                {best.bestExamPattern} - <strong>{best.bestAverage}%</strong>
               </div>
             );
           })()}
@@ -691,13 +1662,13 @@ function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Exam Performance Averages Table */}
       {examPatterns.length > 0 && (
-        <div className="td-card">
-          <h2 className="td-section-title">📋 Exam Performance Averages</h2>
+        <section className="td-card">
+          <h2 className="td-section-title">Exam Performance Averages</h2>
           <div className="td-table-scroll">
             <table className="td-table">
               <thead>
@@ -720,21 +1691,22 @@ function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
                     <td className="td-td td-td--pattern">{p.exam_pattern}</td>
                     {columns.map((col, j) => {
                       const val = getAvg(col.subject, col.classSection, p);
-                      const n = val ? parseFloat(val) : null;
+                      const details = getDetails(col.subject, col.classSection, p);
                       return (
                         <td key={j} className="td-td">
-                          {val != null ? (
-                            <span
-                              className={
-                                n >= 75
-                                  ? "td-score td-score--high"
-                                  : n >= 50
-                                    ? "td-score td-score--mid"
-                                    : "td-score td-score--low"
-                              }
-                            >
-                              {val}%
-                            </span>
+                          {details ? (
+                            <div className="td-average-detail">
+                              <span className={scoreClassName(val)}>{val}%</span>
+                              <span className="td-average-detail__line">
+                                {details.count} student{details.count === 1 ? "" : "s"}
+                              </span>
+                              <span className="td-average-detail__line">
+                                High {details.highest}% / Low {details.lowest}%
+                              </span>
+                              <span className="td-average-detail__line">
+                                Median {details.median}% / Spread {details.spread}%
+                              </span>
+                            </div>
                           ) : (
                             <span className="td-score td-score--na">N/A</span>
                           )}
@@ -746,23 +1718,64 @@ function PerformanceContent({ teacher, examPatterns, bestWeekTestsByGrade }) {
               </tbody>
             </table>
           </div>
-        </div>
+          <div className="td-exam-average-cards">
+            {examPatterns.map((p, i) => (
+              <article className="td-exam-average-card" key={i}>
+                <div className="td-exam-average-card__header">
+                  <div className="td-exam-average-card__title">
+                    {p.exam_pattern}
+                  </div>
+                </div>
+                <div className="td-exam-average-card__grid">
+                  {columns.map((col, j) => {
+                    const val = getAvg(col.subject, col.classSection, p);
+                    const details = getDetails(col.subject, col.classSection, p);
+                    return (
+                      <div className="td-exam-average-card__item" key={j}>
+                        <div>
+                          <span>{col.subject}</span>
+                          <small>{col.classSection}</small>
+                        </div>
+                        {details ? (
+                          <div className="td-average-detail td-average-detail--card">
+                            <span className={scoreClassName(val)}>{val}%</span>
+                            <span className="td-average-detail__line">
+                              {details.count} student{details.count === 1 ? "" : "s"}
+                            </span>
+                            <span className="td-average-detail__line">
+                              H {details.highest}% / L {details.lowest}%
+                            </span>
+                            <span className="td-average-detail__line">
+                              Med {details.median}% / Spread {details.spread}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="td-score td-score--na">N/A</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
 
       {examPatterns.length === 0 && teacher.teacher_assignments.length > 0 && (
-        <div className="td-card">
+        <section className="td-card">
           <p className="td-no-data">
             No exam results found for your assigned classes.
           </p>
-        </div>
+        </section>
       )}
 
       {teacher.teacher_assignments.length === 0 && (
-        <div className="td-card">
+        <section className="td-card">
           <p className="td-no-data">
             No class allotments found. Contact your administrator.
           </p>
-        </div>
+        </section>
       )}
     </>
   );
@@ -779,8 +1792,10 @@ function ReportContent({
   onDownload,
 }) {
   return (
-    <div className="td-card td-report-card">
-      <div className="td-report-icon">📄</div>
+    <section className="td-card td-report-card">
+      <div className="td-report-icon">
+        <FileText size={40} />
+      </div>
       <h2 className="td-report-title">Teacher Performance Report</h2>
       <p className="td-report-desc">
         Download a full PDF report including your allotments, best week test
@@ -807,15 +1822,16 @@ function ReportContent({
       </div>
 
       <div className="td-report-meta">
-        <span>👩‍🏫 {teacher.name}</span>
-        <span>🆔 {teacher.teacher_id}</span>
-        <span>🏫 {schoolName}</span>
-        <span>📅 {new Date().toLocaleDateString("en-IN")}</span>
+        <span>{teacher.name}</span>
+        <span>{teacher.teacher_id}</span>
+        <span>{schoolName}</span>
+        <span>{new Date().toLocaleDateString("en-IN")}</span>
       </div>
 
       <button className="btn btn-primary td-report-btn" onClick={onDownload}>
-        ⬇ Download PDF Report
+        <Download size={16} />
+        Download PDF Report
       </button>
-    </div>
+    </section>
   );
 }

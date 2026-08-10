@@ -265,6 +265,15 @@ export const deleteClassById = async (id) => {
   return res.json();
 };
 
+// Delete teacher by database row ID
+export const deleteTeacherById = async (id) => {
+  const res = await fetch(`${API_BASE}/api/teachers/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await parseAndFormatError(res));
+  return res.json();
+};
+
 // Delete teacher assignment by ID
 export const deleteAssignmentById = async (id) => {
   const res = await fetch(`${API_BASE}/api/teacher-assignments/${id}`, {

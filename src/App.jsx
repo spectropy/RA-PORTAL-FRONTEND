@@ -6,6 +6,7 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
+import { GraduationCap, School, User, Users } from "lucide-react";
 import LoginPage from "./components/LoginPage";
 import Dashboard from "./Dashboard";
 import SchoolOwnerDashboard from "./components/SchoolOwnerDashboard";
@@ -23,6 +24,18 @@ const ROLE_ROUTES = {
   PARENT: "/parent",
   GUEST: "/guest",
 };
+
+const ROLE_ICONS = {
+  SCHOOL_OWNER: School,
+  TEACHER: Users,
+  STUDENT: GraduationCap,
+  PARENT: Users,
+};
+
+function RoleIcon({ role }) {
+  const Icon = ROLE_ICONS[role] || User;
+  return <Icon size={14} strokeWidth={2} aria-hidden="true" />;
+}
 
 // ─── Route Guard ─────────────────────────────────────────────────
 // Redirects unauthenticated users to /login.
@@ -169,15 +182,7 @@ function AppShell() {
               className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
             >
               <div style={S.userPill}>
-                <span style={{ fontSize: "14px" }}>
-                  {user.role === "SCHOOL_OWNER"
-                    ? "🏫"
-                    : user.role === "TEACHER"
-                      ? "👩‍🏫"
-                      : user.role === "PARENT"
-                        ? "👨‍👧"
-                        : "👤"}
-                </span>
+                <RoleIcon role={user.role} />
                 <span style={{ fontWeight: 600 }}>
                   {user.username || user.name || user.role}
                 </span>
