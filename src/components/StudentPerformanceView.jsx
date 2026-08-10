@@ -946,15 +946,6 @@ export default function StudentPerformanceView({
       <style>{DASHBOARD_CSS}</style>
       {(onBack || examResults.length > 0) && (
         <div className="sp-page-action">
-          {onBack && (
-            <button
-              type="button"
-              className="sp-button sp-button-page"
-              onClick={onBack}
-            >
-              Back
-            </button>
-          )}
           {examResults.length > 0 && (
             <button
               type="button"
@@ -970,7 +961,16 @@ export default function StudentPerformanceView({
                 }
               }}
             >
-              Download report
+              Download PDF
+            </button>
+          )}
+          {onBack && (
+            <button
+              type="button"
+              className="sp-button sp-button-page"
+              onClick={onBack}
+            >
+              Back to Overview
             </button>
           )}
         </div>
@@ -1601,13 +1601,14 @@ const TOOLTIP_STYLE = {
 const DASHBOARD_CSS = `
   .sp-page-action {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     width: 100%;
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 14px 20px 0;
+    max-width: none;
+    margin: 0;
+    padding: clamp(16px, 3vw, 32px) clamp(16px, 3vw, 32px) 0;
     box-sizing: border-box;
   }
 
@@ -1621,9 +1622,9 @@ const DASHBOARD_CSS = `
     --sp-slate-100: #f1f5f9;
     --sp-slate-50: #f8fafc;
     --sp-blue: #2563eb;
-    width: 90%;
-   
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     padding: 18px 20px 24px;
     box-sizing: border-box;
     color: var(--sp-navy);
@@ -1685,7 +1686,6 @@ const DASHBOARD_CSS = `
     box-shadow: 0 1px 2px rgba(15,23,42,.05);
   }
   .sp-button-page-primary {
-    margin-left: auto;
     border-color: #2563eb;
     color: #fff;
     background: #2563eb;
