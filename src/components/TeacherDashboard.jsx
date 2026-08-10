@@ -46,14 +46,18 @@ function computeExamAnalytics(exams, teacherAssignments) {
       };
 
     const g = patternMap[pattern][classSection];
-    if (exam.physics_percentage != null && exam.physics_percentage !== "")
-      g.physics.push(parseFloat(exam.physics_percentage));
-    if (exam.chemistry_percentage != null && exam.chemistry_percentage !== "")
-      g.chemistry.push(parseFloat(exam.chemistry_percentage));
-    if (exam.maths_percentage != null && exam.maths_percentage !== "")
-      g.maths.push(parseFloat(exam.maths_percentage));
-    if (exam.biology_percentage != null && exam.biology_percentage !== "")
-      g.biology.push(parseFloat(exam.biology_percentage));
+    const subjectAverages = {
+      physics: exam.phy_exam_per_average ?? exam.physics_percentage,
+      chemistry: exam.chem_exam_per_average ?? exam.chemistry_percentage,
+      maths: exam.math_exam_per_average ?? exam.maths_percentage,
+      biology: exam.bioexam_per_average ?? exam.biology_percentage,
+    };
+
+    Object.entries(subjectAverages).forEach(([subject, value]) => {
+      if (value == null || value === "") return;
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue)) g[subject].push(numericValue);
+    });
   });
 
   const avg = (arr) =>

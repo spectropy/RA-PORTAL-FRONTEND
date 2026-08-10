@@ -164,35 +164,37 @@ export const getStudentsByClassSection = async (
   }
 };
 
-const parseApiResponse = async (res, fallbackMessage) => {
-  const contentType = res.headers.get('content-type');
-  const data = contentType?.includes('application/json')
-    ? await res.json()
-    : { message: await res.text() };
+export const deleteStudent = async (schoolId, id) => {
+  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students/${id}`, {
+    method: "DELETE",
+  });
 
   if (!res.ok) {
-    throw new Error(data.error || data.message || fallbackMessage);
+    throw new Error(await parseAndFormatError(res));
   }
 
-  return data;
+  return res.json();
 };
 
-export const deleteStudent = async (schoolId, studentId) => {
-  const res = await fetch(
-    `${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students/${encodeURIComponent(studentId)}`,
-    { method: 'DELETE' }
-  );
+export const deleteStudentsByClassSection = async (
+  schoolId,
+  classValue,
+  sectionValue,
+) => {
+  const query = new URLSearchParams({
+    class: classValue,
+    section: sectionValue,
+  }).toString();
 
-  return parseApiResponse(res, 'Failed to delete student');
-};
+  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students?${query}`, {
+    method: "DELETE",
+  });
 
-export const deleteStudentsByClassSection = async (schoolId, classValue, sectionValue) => {
-  const url = new URL(`${API_BASE}/api/schools/${encodeURIComponent(schoolId)}/students`);
-  url.searchParams.set('class', classValue);
-  url.searchParams.set('section', sectionValue);
+  if (!res.ok) {
+    throw new Error(await parseAndFormatError(res));
+  }
 
-  const res = await fetch(url, { method: 'DELETE' });
-  return parseApiResponse(res, 'Failed to delete students');
+  return res.json();
 };
 
 // ========================
