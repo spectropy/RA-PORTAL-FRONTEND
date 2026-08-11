@@ -128,7 +128,7 @@ export default function ParentDashboard({ onBack }) {
       school={school}
       examResults={examResults}
       teachers={teachers}
-      title="👨‍👧 Your Child's Profile"
+      title="Your Child's Profile"
       onBack={onBack}
     />
   );

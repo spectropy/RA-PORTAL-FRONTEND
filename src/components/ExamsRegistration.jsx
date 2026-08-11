@@ -7,6 +7,7 @@ import {
   BookOpen,
   Calculator,
   CalendarDays,
+  ChevronDown,
   CheckCircle2,
   CloudUpload,
   FileSpreadsheet,
@@ -75,6 +76,13 @@ const formatExamName = (examPattern = "") =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const normalizeExamPattern = (value = "") =>
+  value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
 export default function ExamRegistration({ schools = [], mode = "list" }) {
   const navigate = useNavigate();
   const [selectedSchool, setSelectedSchool] = useState("");
@@ -89,6 +97,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
+  const [examDropdownOpen, setExamDropdownOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -236,6 +245,14 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
 
   const examOptions = getExamOptions();
 
+  const filteredExamOptions = useMemo(() => {
+    const query = examForm.examPattern.trim().toLowerCase();
+    if (!query) return examOptions;
+    return examOptions.filter((exam) =>
+      exam.display_name.toLowerCase().includes(query),
+    );
+  }, [examForm.examPattern, examOptions]);
+
   const handleSchoolSearchChange = (e) => {
     const value = e.target.value;
     setSchoolSearch(value);
@@ -253,6 +270,11 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     setSelectedSchool("");
     setSchoolSearch("");
     setSchoolDropdownOpen(false);
+  };
+
+  const selectExamOption = (exam) => {
+    setExamForm((prev) => ({ ...prev, examPattern: exam.display_name }));
+    setExamDropdownOpen(false);
   };
 
   const getClassSectionParts = () => {
@@ -322,18 +344,43 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
       return;
     }
 
-    const selectedExam = examOptions.find(
-      (exam) => exam.id === examForm.examPattern,
-    );
-
-    if (!selectedExam) {
-      setUploadError("Invalid exam selected.");
-      return;
-    }
-
     const classSectionParts = getClassSectionParts();
     if (!classSectionParts) {
       setUploadError('Invalid Class-Section format. Expected "CLASS-SECTION".');
+      return;
+    }
+
+    const selectedExamOption = examOptions.find(
+      (exam) =>
+        exam.id === examForm.examPattern ||
+        exam.display_name === examForm.examPattern,
+    );
+
+    const selectedClass = schoolData?.classes?.find(
+      (cls) =>
+        String(cls.class || "").trim() === classSectionParts.examClass &&
+        String(cls.section || "").trim() === classSectionParts.examSection,
+    );
+
+    const customExamPattern = normalizeExamPattern(examForm.examPattern);
+
+    if (!selectedExamOption && !customExamPattern) {
+      setUploadError("Please enter a valid exam name.");
+      return;
+    }
+
+    const selectedExam =
+      selectedExamOption || {
+        id: customExamPattern,
+        exam_pattern: customExamPattern,
+        display_name: examForm.examPattern.trim(),
+        program: selectedClass?.program?.toUpperCase() || "",
+        school_id: selectedSchool,
+        type: "CUSTOM",
+      };
+
+    if (!selectedExam.program) {
+      setUploadError("Unable to identify the program for this class-section.");
       return;
     }
 
@@ -2118,20 +2165,55 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                 <div className="form-grid-3">
                   <label className="form-field">
                     <span className="form-label">Select Exam</span>
-                    <select
-                      className="form-input"
-                      name="examPattern"
-                      value={examForm.examPattern}
-                      onChange={handleFormChange}
-                      required
-                    >
-                      <option value="">-- Select Exam --</option>
-                      {examOptions.map((exam) => (
-                        <option key={exam.id} value={exam.id}>
-                          {exam.display_name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="omr-exam-combo">
+                      <input
+                        className="form-input"
+                        name="examPattern"
+                        value={examForm.examPattern}
+                        onChange={(event) => {
+                          handleFormChange(event);
+                          setExamDropdownOpen(true);
+                        }}
+                        onFocus={() => setExamDropdownOpen(true)}
+                        onBlur={() =>
+                          setTimeout(() => setExamDropdownOpen(false), 120)
+                        }
+                        placeholder="Select or type exam name"
+                        autoComplete="off"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="omr-exam-combo-toggle"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() =>
+                          setExamDropdownOpen((isOpen) => !isOpen)
+                        }
+                        aria-label="Show exam options"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                      {examDropdownOpen && (
+                        <div className="omr-exam-dropdown">
+                          {filteredExamOptions.length > 0 ? (
+                            filteredExamOptions.map((exam) => (
+                              <button
+                                type="button"
+                                key={exam.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectExamOption(exam)}
+                              >
+                                {exam.display_name}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="omr-exam-dropdown-empty">
+                              Use typed exam name
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
 
                   <label className="form-field">

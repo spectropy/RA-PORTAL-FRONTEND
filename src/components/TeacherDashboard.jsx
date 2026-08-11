@@ -54,6 +54,20 @@ function computeExamAnalytics(exams, teacherAssignments) {
     ? teacherAssignments
     : [];
 
+  const getSubjectPercentage = (exam, percentageKey, marksKey, maxMarksKey) => {
+    const directPercentage = parseFloat(exam[percentageKey]);
+    if (Number.isFinite(directPercentage)) return directPercentage;
+
+    const marks = parseFloat(exam[marksKey]);
+    const maxMarks = parseFloat(exam[maxMarksKey]);
+
+    if (!Number.isFinite(marks) || !Number.isFinite(maxMarks) || maxMarks <= 0) {
+      return null;
+    }
+
+    return (marks / maxMarks) * 100;
+  };
+
   // Group by (exam_pattern, class-section) and compute subject averages
   const patternMap = {};
   exams.forEach((exam) => {
@@ -1395,7 +1409,10 @@ export default function TeacherDashboard({
             )}
           </div>
         </div>
-        <OverviewContent teacher={teacher} />
+        <OverviewContent
+          teacher={teacher}
+          bestWeekTestsByGrade={bestWeekTestsByGrade}
+        />
         <PerformanceContent
           teacher={teacher}
           examPatterns={examPatterns}
@@ -1523,7 +1540,12 @@ export default function TeacherDashboard({
               icon: UserRoundCog,
               title: "Overview",
               subtitle: `${teacher.name} - ${teacher.teacher_id} - ${schoolName}`,
-              children: <OverviewContent teacher={teacher} />,
+              children: (
+                <OverviewContent
+                  teacher={teacher}
+                  bestWeekTestsByGrade={bestWeekTestsByGrade}
+                />
+              ),
             })}
           />
 
@@ -1566,7 +1588,7 @@ export default function TeacherDashboard({
     </div>
   );
 }
-function OverviewContent({ teacher }) {
+function OverviewContent({ teacher, bestWeekTestsByGrade = [] }) {
   return (
     <>
       <section className="td-card td-card--profile">
@@ -1621,6 +1643,37 @@ function OverviewContent({ teacher }) {
           <p className="td-no-data">No assigned classes yet.</p>
         )}
       </section>
+
+      {bestWeekTestsByGrade.length > 0 && (
+        <section className="td-card">
+          <h2 className="td-section-title">
+            <Award size={18} /> Best Week Test by Grade
+          </h2>
+
+          {(() => {
+            const best = bestWeekTestsByGrade.reduce((a, b) =>
+              parseFloat(a.bestAverage) > parseFloat(b.bestAverage) ? a : b,
+            );
+            return (
+              <div className="td-best-banner">
+                Best Overall: <strong>Grade {best.grade}</strong> -{" "}
+                {best.bestExamPattern} - <strong>{best.bestAverage}%</strong>
+              </div>
+            );
+          })()}
+
+          <div className="td-grade-grid">
+            {bestWeekTestsByGrade.map((item, i) => (
+              <div key={i} className="td-grade-card">
+                <div className="td-grade-label">Grade {item.grade}</div>
+                <div className="td-grade-exam">{item.bestExamPattern}</div>
+                <div className="td-grade-score">{item.bestAverage}%</div>
+                <div className="td-grade-sub">Avg Score</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -1669,40 +1722,127 @@ function PerformanceContent({
     return "td-score td-score--low";
   };
 
+  const formatPercent = (value) => {
+    const number = parseFloat(value);
+    return Number.isFinite(number) ? `${number.toFixed(1)}%` : "N/A";
+  };
+
+  const rankClassName = (rank) => {
+    const number = parseInt(rank, 10);
+    if (!Number.isFinite(number)) return "td-rank-badge td-rank-badge--muted";
+    if (number <= 3) return "td-rank-badge td-rank-badge--top";
+    if (number <= 10) return "td-rank-badge td-rank-badge--good";
+    return "td-rank-badge";
+  };
+
+  const validTeacherRanks = teacherRankRows
+    .map((row) => parseInt(row.all_india_rank, 10))
+    .filter((rank) => Number.isFinite(rank));
+
   return (
     <>
-      {/* Best Week Test by Grade */}
-      {bestWeekTestsByGrade.length > 0 && (
-        <section className="td-card">
-          <h2 className="td-section-title">
-            <Award size={18} /> Best Week Test by Grade
-          </h2>
-
-          {/* Best overall highlight */}
-          {(() => {
-            const best = bestWeekTestsByGrade.reduce((a, b) =>
-              parseFloat(a.bestAverage) > parseFloat(b.bestAverage) ? a : b,
-            );
-            return (
-              <div className="td-best-banner">
-                Best Overall: <strong>Grade {best.grade}</strong> -{" "}
-                {best.bestExamPattern} - <strong>{best.bestAverage}%</strong>
-              </div>
-            );
-          })()}
-
-          <div className="td-grade-grid">
-            {bestWeekTestsByGrade.map((item, i) => (
-              <div key={i} className="td-grade-card">
-                <div className="td-grade-label">Grade {item.grade}</div>
-                <div className="td-grade-exam">{item.bestExamPattern}</div>
-                <div className="td-grade-score">{item.bestAverage}%</div>
-                <div className="td-grade-sub">Avg Score</div>
-              </div>
+      <section className="td-card">
+        <h2 className="td-section-title">
+          <Award size={18} /> Teacher Performance Rankings
+        </h2>
+        {teacherRankRows.length > 0 ? (
+          <>
+          <div className="td-rank-summary-grid">
+            <div className="td-rank-summary">
+              <span>Best Rank</span>
+              <strong>
+                {validTeacherRanks.length
+                  ? `#${Math.min(...validTeacherRanks)}`
+                  : "-"}
+              </strong>
+            </div>
+            <div className="td-rank-summary">
+              <span>Ranked Entries</span>
+              <strong>{teacherRankRows.length}</strong>
+            </div>
+            <div className="td-rank-summary">
+              <span>Average Score</span>
+              <strong>
+                {formatPercent(
+                  teacherRankRows.reduce(
+                    (sum, row) => sum + (parseFloat(row.average) || 0),
+                    0,
+                  ) / teacherRankRows.length,
+                )}
+              </strong>
+            </div>
+          </div>
+          <div className="td-table-scroll">
+            <table className="td-table">
+              <thead>
+                <tr>
+                  <th className="td-th">Exam</th>
+                  <th className="td-th">Class</th>
+                  <th className="td-th">Subject</th>
+                  <th className="td-th">Average</th>
+                  <th className="td-th">All India Rank</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teacherRankRows.map((row, index) => (
+                  <tr
+                    key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-${index}`}
+                    className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                  >
+                    <td className="td-td td-td--pattern">
+                      {row.exam_pattern}
+                      {row.exam_date && (
+                        <span className="td-rank-date">{row.exam_date}</span>
+                      )}
+                    </td>
+                    <td className="td-td">{row.class_section}</td>
+                    <td className="td-td">{row.subject}</td>
+                    <td className="td-td">
+                      <span className={scoreClassName(row.average)}>
+                        {formatPercent(row.average)}
+                      </span>
+                    </td>
+                    <td className="td-td">
+                      <span className={rankClassName(row.all_india_rank)}>
+                        #{row.all_india_rank || "-"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="td-rank-cards">
+            {teacherRankRows.map((row, index) => (
+              <article
+                className="td-rank-card"
+                key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-card-${index}`}
+              >
+                <div>
+                  <strong>{row.exam_pattern}</strong>
+                  <span>
+                    {row.class_section} · {row.subject}
+                  </span>
+                </div>
+                <div className="td-rank-card__metrics">
+                  <span className={scoreClassName(row.average)}>
+                    {formatPercent(row.average)}
+                  </span>
+                  <span className={rankClassName(row.all_india_rank)}>
+                    #{row.all_india_rank || "-"}
+                  </span>
+                </div>
+              </article>
             ))}
           </div>
-        </section>
-      )}
+          </>
+        ) : (
+          <p className="td-no-data">
+            {teacherRanksError ||
+              "No teacher ranking data found for the assigned classes."}
+          </p>
+        )}
+      </section>
 
       {/* Exam Performance Averages Table */}
       {examPatterns.length > 0 && (
@@ -1730,22 +1870,10 @@ function PerformanceContent({
                     <td className="td-td td-td--pattern">{p.exam_pattern}</td>
                     {columns.map((col, j) => {
                       const val = getAvg(col.subject, col.classSection, p);
-                      const details = getDetails(col.subject, col.classSection, p);
                       return (
                         <td key={j} className="td-td">
-                          {details ? (
-                            <div className="td-average-detail">
-                              <span className={scoreClassName(val)}>{val}%</span>
-                              <span className="td-average-detail__line">
-                                {details.count} student{details.count === 1 ? "" : "s"}
-                              </span>
-                              <span className="td-average-detail__line">
-                                High {details.highest}% / Low {details.lowest}%
-                              </span>
-                              <span className="td-average-detail__line">
-                                Median {details.median}% / Spread {details.spread}%
-                              </span>
-                            </div>
+                          {val != null ? (
+                            <span className={scoreClassName(val)}>{val}%</span>
                           ) : (
                             <span className="td-score td-score--na">N/A</span>
                           )}
@@ -1768,26 +1896,14 @@ function PerformanceContent({
                 <div className="td-exam-average-card__grid">
                   {columns.map((col, j) => {
                     const val = getAvg(col.subject, col.classSection, p);
-                    const details = getDetails(col.subject, col.classSection, p);
                     return (
                       <div className="td-exam-average-card__item" key={j}>
                         <div>
                           <span>{col.subject}</span>
                           <small>{col.classSection}</small>
                         </div>
-                        {details ? (
-                          <div className="td-average-detail td-average-detail--card">
-                            <span className={scoreClassName(val)}>{val}%</span>
-                            <span className="td-average-detail__line">
-                              {details.count} student{details.count === 1 ? "" : "s"}
-                            </span>
-                            <span className="td-average-detail__line">
-                              H {details.highest}% / L {details.lowest}%
-                            </span>
-                            <span className="td-average-detail__line">
-                              Med {details.median}% / Spread {details.spread}%
-                            </span>
-                          </div>
+                        {val != null ? (
+                          <span className={scoreClassName(val)}>{val}%</span>
                         ) : (
                           <span className="td-score td-score--na">N/A</span>
                         )}

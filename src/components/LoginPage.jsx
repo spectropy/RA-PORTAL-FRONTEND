@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 // 🖼️ Import Role Specific Images from src/assets
-import adminImg from "../assets/Spectropy Admin.png";
+import adminImg from "../assets/Spectropy Admin Login.png";
 import ownerImg from "../assets/school owner.png";
 import teacherImg from "../assets/Teacher Portal.png";
 import studentImg from "../assets/Student Portal.png";
@@ -689,7 +689,6 @@ export default function LoginPage({ onLogin }) {
         </div>
       </>,
       error,
-      false,
     );
   }
 

@@ -16,19 +16,36 @@ const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED"];
 const PROGRAM_OPTIONS = [
-  "FF",
-  "GHS",
+  "SPHS",
   "MAESTRO",
+  "GHS",
   "SFS",
   "KTS",
   "VIJAYA",
   "PHS",
-  "SPHS",
-  "CATALYST(OLD)",
-  "CATALYST(NEW)",
-  "MANIAR-MAE",
+  "KPS",
+  "SPR",
+  "FF",
+  "CAT",
   "SPARK",
+  "MANAIR_MAESTRO",
 ];
+const PROGRAMS = [
+  { id: "SPHS", name: "SPHS" },
+  { id: "MAESTRO", name: "MAESTRO" },
+  { id: "GHS", name: "GHS" },
+  { id: "SFS", name: "SFS" },
+  { id: "KTS", name: "KTS" },
+  { id: "VIJAYA", name: "VIJAYA" },
+  { id: "PHS", name: "PHS" },
+  { id: "KPS", name: "KPS" },
+  { id: "SPR", name: "SPR" },
+  { id: "FF", name: "FF" },
+  { id: "CAT", name: "CAT" },
+  { id: "SPARK", name: "SPARK" },
+  { id: "MANAIR_MAESTRO", name: "MANAIR_MAESTRO" },
+];
+
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
 
 const forcedGroupForFoundation = (foundation) => {

@@ -5106,7 +5106,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
             borderBottom: "1px solid #e2e8f0",
           }}
         >
-          <div className="exam-results-heading">
+          <div className="exam-results-header-main">
+            <div className="exam-results-heading">
             <h2
               style={{
                 margin: 0,
@@ -5126,8 +5127,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 ? ` | ${new Date(currentOMRExam.exam_date).toLocaleDateString()}`
                 : ""}
             </div>
-          </div>
-          <div
+            </div>
+            <div
             className="exam-results-summary"
             style={{
               display: "grid",
@@ -5197,6 +5198,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
               </div>
             </div>
           </div>
+          </div>
           <div className="exam-results-header-actions">
             <button
               className="page-back-nav exam-results-back"
@@ -5222,8 +5224,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
               <Download size={15} />
               Download Student Results PDF
             </button>
+            </div>
           </div>
-        </div>
 
         {/* === ANALYSIS SECTION === */}
         <div>

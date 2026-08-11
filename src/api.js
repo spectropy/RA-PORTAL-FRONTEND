@@ -179,9 +179,12 @@ export const getStudentsByClassSection = async (
 };
 
 export const deleteStudent = async (schoolId, id) => {
-  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students/${id}`, {
-    method: "DELETE",
-  });
+  const res = await fetch(
+    `${API_BASE}/api/schools/${schoolId}/students/${id}`,
+    {
+      method: "DELETE",
+    },
+  );
 
   if (!res.ok) {
     throw new Error(await parseAndFormatError(res));
@@ -200,9 +203,12 @@ export const deleteStudentsByClassSection = async (
     section: sectionValue,
   }).toString();
 
-  const res = await fetch(`${API_BASE}/api/schools/${schoolId}/students?${query}`, {
-    method: "DELETE",
-  });
+  const res = await fetch(
+    `${API_BASE}/api/schools/${schoolId}/students?${query}`,
+    {
+      method: "DELETE",
+    },
+  );
 
   if (!res.ok) {
     throw new Error(await parseAndFormatError(res));
@@ -226,6 +232,7 @@ export async function getPrograms() {
   const r = await fetch(`${API_BASE}/api/programs`);
   if (!r.ok) throw new Error(await parseAndFormatError(r));
   const j = await r.json();
+  console.log("Programs:", j);
   return j;
 }
 

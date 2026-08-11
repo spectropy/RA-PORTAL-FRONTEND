@@ -595,6 +595,84 @@ body {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
+.omr-exam-combo {
+  position: relative;
+}
+
+.omr-exam-combo .form-input {
+  width: 100%;
+  padding-right: 38px;
+}
+
+.omr-exam-combo-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.omr-exam-combo-toggle:hover {
+  color: var(--color-text-main);
+}
+
+.omr-exam-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 35;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #dbe3ef;
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+}
+
+.omr-exam-dropdown button {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #eef2f7;
+  background: #ffffff;
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.omr-exam-dropdown button:hover {
+  background: var(--color-surface-hover);
+}
+
+.omr-exam-dropdown button:last-child {
+  border-bottom: 0;
+}
+
+.omr-exam-dropdown-empty {
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
 .omr-upload-exam-card .form-grid-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -2175,6 +2253,18 @@ body {
   padding: 18px;
 }
 
+.exam-results-header-main {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-width: 0;
+}
+
+.exam-results-header-main .exam-results-summary {
+  flex: 0 1 260px;
+}
+
 .exam-results-back {
   margin-left: auto;
   margin-bottom: 0;
@@ -2739,6 +2829,14 @@ body {
     min-width: 0;
   }
 
+  .exam-results-header-main {
+    grid-column: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+  }
+
   .exam-results-heading h2 {
     font-size: 17px !important;
     line-height: 1.15 !important;
@@ -2779,13 +2877,12 @@ body {
   }
 
   .exam-results-summary {
-    grid-column: 1 / -1;
-    display: flex !important;
-    width: 100%;
+    display: grid !important;
+    width: min(260px, 100%);
     min-width: 0 !important;
-    gap: 16px !important;
-    padding: 7px 0 0;
-    border-top: 1px solid #e2e8f0;
+    gap: 8px !important;
+    padding: 0;
+    border-top: 0;
   }
 
   .exam-results-summary-item {
@@ -5850,6 +5947,110 @@ textarea:focus {
   display: none;
 }
 
+.td-rank-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.td-rank-summary {
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+}
+
+.td-rank-summary span {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.td-rank-summary strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-main);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.td-rank-date {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.td-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--color-text-main);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.td-rank-badge--top {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.td-rank-badge--good {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.td-rank-badge--muted {
+  color: var(--color-text-muted);
+}
+
+.td-rank-cards {
+  display: none;
+}
+
+.td-rank-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+}
+
+.td-rank-card strong,
+.td-rank-card span {
+  display: block;
+}
+
+.td-rank-card strong {
+  color: var(--color-text-main);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.td-rank-card span {
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.td-rank-card__metrics {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .td-exam-average-card {
   padding: 10px;
   background: #ffffff;
@@ -5950,8 +6151,18 @@ textarea:focus {
     display: none;
   }
 
-  .teacher-page .td-exam-average-cards {
+  .teacher-page .td-exam-average-cards,
+  .teacher-page .td-rank-cards {
     display: block;
+  }
+
+  .teacher-page .td-rank-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .teacher-page .td-rank-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .teacher-page .td-performance-actions {

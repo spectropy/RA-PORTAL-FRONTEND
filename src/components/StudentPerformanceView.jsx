@@ -940,12 +940,16 @@ export default function StudentPerformanceView({
 
   const studentName = student?.name || "Student";
   const classLabel = `${student?.class || "—"}${student?.section ? `-${student.section}` : ""}`;
+  const isParentProfile = title === "Your Child's Profile";
 
   return (
     <>
       <style>{DASHBOARD_CSS}</style>
       {(onBack || examResults.length > 0) && (
         <div className="sp-page-action">
+          {isParentProfile && (
+            <div className="sp-page-action__title">Your Child's Profile</div>
+          )}
           {examResults.length > 0 && (
             <button
               type="button"
@@ -994,7 +998,7 @@ export default function StudentPerformanceView({
               </span>
             </div>
             <div className="sp-identity">
-              <span className="sp-hero-kicker">{title}</span>
+              {!isParentProfile && <span className="sp-hero-kicker">{title}</span>}
               <h1>{studentName}</h1>
               <div className="sp-identity-meta">
                 <span>{school?.school_name || "School name unavailable"}</span>
@@ -1642,6 +1646,16 @@ const DASHBOARD_CSS = `
     box-sizing: border-box;
   }
 
+  .sp-page-action__title {
+    margin-right: auto;
+    color: #1e478f;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
   .sp-dashboard {
     --sp-navy: #0f172a;
     --sp-slate-700: #334155;
@@ -1747,7 +1761,9 @@ const DASHBOARD_CSS = `
 
   .sp-identity { min-width: 0; }
   .sp-hero-kicker {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     margin-bottom: 3px;
     color: #bfdbfe;
     font-size: 10px;
