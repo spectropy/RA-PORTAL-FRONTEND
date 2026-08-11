@@ -101,6 +101,20 @@ export async function assignTeacherToClass(payload) {
   return r.json();
 }
 
+export async function getTeacherRanks(teacherId, payload = {}) {
+  const r = await fetch(
+    `${API_BASE}/api/teachers/${encodeURIComponent(teacherId)}/ranks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || "Failed to load teacher rankings");
+  return data;
+}
+
 // ========================
 // 🎓 STUDENT REGISTRATION
 // ========================
@@ -259,6 +273,15 @@ export async function getExams() {
 // Delete class by ID
 export const deleteClassById = async (id) => {
   const res = await fetch(`${API_BASE}/api/classes/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await parseAndFormatError(res));
+  return res.json();
+};
+
+// Delete teacher by database row ID
+export const deleteTeacherById = async (id) => {
+  const res = await fetch(`${API_BASE}/api/teachers/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await parseAndFormatError(res));

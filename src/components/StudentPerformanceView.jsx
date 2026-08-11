@@ -946,15 +946,6 @@ export default function StudentPerformanceView({
       <style>{DASHBOARD_CSS}</style>
       {(onBack || examResults.length > 0) && (
         <div className="sp-page-action">
-          {onBack && (
-            <button
-              type="button"
-              className="sp-button sp-button-page"
-              onClick={onBack}
-            >
-              Back
-            </button>
-          )}
           {examResults.length > 0 && (
             <button
               type="button"
@@ -970,7 +961,16 @@ export default function StudentPerformanceView({
                 }
               }}
             >
-              Download report
+              Download PDF
+            </button>
+          )}
+          {onBack && (
+            <button
+              type="button"
+              className="sp-button sp-button-page"
+              onClick={onBack}
+            >
+              Back to Overview
             </button>
           )}
         </div>
@@ -997,6 +997,7 @@ export default function StudentPerformanceView({
               <span className="sp-hero-kicker">{title}</span>
               <h1>{studentName}</h1>
               <div className="sp-identity-meta">
+                <span>{school?.school_name || "School name unavailable"}</span>
                 <span>Class {classLabel}</span>
                 <span>
                   Roll No. {student?.roll_no || student?.student_id || "—"}
@@ -1066,7 +1067,7 @@ export default function StudentPerformanceView({
                 icon="#"
                 label="School rank"
                 value={
-                  latestExam?.school_rank ? `#${latestExam.school_rank}` : "â€”"
+                  latestExam?.school_rank ? `#${latestExam.school_rank}` : "—"
                 }
                 helper="Current exam"
                 tone="primary"
@@ -1077,7 +1078,7 @@ export default function StudentPerformanceView({
                 value={
                   latestExam?.all_schools_rank
                     ? `#${latestExam.all_schools_rank}`
-                    : "â€”"
+                    : "—"
                 }
                 helper="Current exam"
                 tone="primary"
@@ -1449,6 +1450,8 @@ export default function StudentPerformanceView({
                           "Total",
                           "%",
                           "Class rank",
+                          "School rank",
+                          "All India rank",
                         ].map((heading) => (
                           <th key={heading}>{heading}</th>
                         ))}
@@ -1493,6 +1496,8 @@ export default function StudentPerformanceView({
                             {round(result.percentage)}%
                           </td>
                           <td>{result.class_rank ?? "—"}</td>
+                          <td>{result.school_rank ?? "—"}</td>
+                          <td>{result.all_schools_rank ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1532,6 +1537,20 @@ export default function StudentPerformanceView({
                         <span>Class rank</span>
                         <strong>
                           {result.class_rank ? `#${result.class_rank}` : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>School rank</span>
+                        <strong>
+                          {result.school_rank ? `#${result.school_rank}` : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>All India rank</span>
+                        <strong>
+                          {result.all_schools_rank
+                            ? `#${result.all_schools_rank}`
+                            : "—"}
                         </strong>
                       </div>
                     </div>
@@ -1612,13 +1631,14 @@ const TOOLTIP_STYLE = {
 const DASHBOARD_CSS = `
   .sp-page-action {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     width: 100%;
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 14px 20px 0;
+    max-width: none;
+    margin: 0;
+    padding: clamp(16px, 3vw, 32px) clamp(16px, 3vw, 32px) 0;
     box-sizing: border-box;
   }
 
@@ -1633,8 +1653,8 @@ const DASHBOARD_CSS = `
     --sp-slate-50: #f8fafc;
     --sp-blue: #2563eb;
     width: 100%;
-    max-width: 1180px;
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
     padding: 18px 20px 24px;
     box-sizing: border-box;
     color: var(--sp-navy);
@@ -1696,7 +1716,6 @@ const DASHBOARD_CSS = `
     box-shadow: 0 1px 2px rgba(15,23,42,.05);
   }
   .sp-button-page-primary {
-    margin-left: auto;
     border-color: #2563eb;
     color: #fff;
     background: #2563eb;
@@ -1989,8 +2008,8 @@ const DASHBOARD_CSS = `
   .sp-snapshot-list dd span { display: inline-block; margin-left: 5px; color: var(--sp-blue); }
 
   .sp-table-panel { overflow: hidden; }
-  .sp-table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
-  .sp-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+  .sp-table-scroll { width: 100%; overflow: hidden; }
+  .sp-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; white-space: normal; }
   .sp-table th {
     position: sticky;
     top: 0;
@@ -2003,8 +2022,10 @@ const DASHBOARD_CSS = `
     font-weight: 850;
     letter-spacing: .025em;
     text-align: left;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
-  .sp-table td { padding: 10px 10px; border-bottom: 1px solid #eef2f7; color: var(--sp-slate-600); }
+  .sp-table td { padding: 10px 6px; border-bottom: 1px solid #eef2f7; color: var(--sp-slate-600); overflow-wrap: anywhere; word-break: break-word; }
   .sp-table tbody tr:last-child td { border-bottom: 0; }
   .sp-table tbody tr:hover { background: #f8fbff; }
   .sp-cell-strong { color: var(--sp-navy) !important; font-weight: 750; }
@@ -2041,6 +2062,8 @@ const DASHBOARD_CSS = `
   /* Reference-led professional results and analysis theme */
   .sp-page-action {
     max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
     padding: 18px 24px 0;
   }
 
@@ -2055,6 +2078,8 @@ const DASHBOARD_CSS = `
     --sp-slate-50: #f7f9fc;
     --sp-blue: #1e478f;
     max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
     padding: 18px 24px 32px;
     color: #111827;
     background: #f7f9fc;
@@ -2262,6 +2287,7 @@ const DASHBOARD_CSS = `
     .sp-section-action { margin-top: 10px; }
     .sp-subject-card-top { grid-template-columns: auto minmax(0, 1fr); }
     .sp-mini-tag { grid-column: 2; justify-self: start; }
+    .sp-mobile-result-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   @media (prefers-reduced-motion: reduce) {

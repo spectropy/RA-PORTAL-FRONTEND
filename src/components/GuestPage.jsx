@@ -1,112 +1,150 @@
 // src/GuestPage.jsx
 import React from "react";
+import {
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Globe,
+  Lightbulb,
+  Mail,
+  Phone,
+  ShieldCheck,
+  Target,
+} from "lucide-react";
+
+const solutions = [
+  {
+    icon: BookOpen,
+    title: "Learning Management System",
+    text: "Centralize curriculum, assignments, and communication in one connected learning workspace.",
+  },
+  {
+    icon: Lightbulb,
+    title: "AI-Ready Question Papers",
+    text: "Create customized assessments from dynamic, syllabus-aligned question banks.",
+  },
+  {
+    icon: BarChart3,
+    title: "Foundation Analytics",
+    text: "Track performance in Physics, Chemistry, Maths, and Biology with actionable insights.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Role-Based Portals",
+    text: "Give schools, teachers, students, and parents secure, intuitive experiences.",
+  },
+];
 
 export default function GuestPage({ onBack }) {
   return (
-    <div className="guest-page" style={styles.container}>
-      <button onClick={onBack} style={styles.backButton}>
-        ← Back
-      </button>
-
-      <div className="guest-card" style={styles.companyCard}>
-        <h1 style={styles.title}>📘 Spectropy Education Technologies</h1>
-        <p style={styles.tagline}>
-          <em>Architects of a Brighter Educational Future</em>
-        </p>
-
-        <p>
-          Headquartered in Hyderabad, Spectropy is more than an EdTech company—we are a movement. Born from a vision in <strong>2017</strong> and officially registered in <strong>2022</strong>, we’ve grown from a home-office startup into a trusted partner for over <strong>100 schools</strong> and <strong>20 junior colleges</strong> across India.
-        </p>
-
-        <h2 style={styles.sectionHeading}>Our Mission</h2>
-        <p>
-          We believe education should be <strong>accessible, engaging, and personalized</strong>. By bridging the gap between teachers and students through intelligent digital tools, we foster collaborative, data-driven learning environments where every learner can thrive.
-        </p>
-
-        <h2 style={styles.sectionHeading}>Our Solutions</h2>
-        <ul style={styles.list}>
-          <li><strong>Learning Management System (LMS)</strong> – Centralize curriculum, assignments, and communication.</li>
-          <li><strong>AI-Ready Question Paper Generator</strong> – Create customized assessments from dynamic, syllabus-aligned question banks.</li>
-          <li><strong>IIT/NEET Foundation Analytics</strong> – Real-time performance tracking in Physics, Chemistry, Maths, and Biology.</li>
-          <li><strong>Role-Based Portals</strong> – Secure, intuitive dashboards for schools, teachers, students, and parents.</li>
-        </ul>
-
-        <h2 style={styles.sectionHeading}>Impact at Scale</h2>
-        <p>
-          From classroom instruction to institutional strategy, Spectropy empowers educators with cutting-edge tools while inspiring students to reach their full potential—because we believe every child deserves the opportunity to succeed.
-        </p>
-
-        <div style={styles.contactSection}>
-          <p>
-            <strong>📞 Phone:</strong> <a href="tel:+919391294429" style={styles.link}>+91 93912 94429</a> (10:00 AM – 7:00 PM)<br />
-            <strong>✉️ Email:</strong> <a href="mailto:contact@spectropy.com" style={styles.link}>contact@spectropy.com</a><br />
-            <strong>🌐 Website:</strong> <a href="https://spectropy.com" target="_blank" rel="noopener noreferrer" style={styles.link}>spectropy.com</a>
-          </p>
-        </div>
+    <main className="guest-page guest-page--modern">
+      <div className="guest-page__toolbar">
+        <button type="button" className="guest-page__back" onClick={onBack}>
+          <ArrowLeft size={16} />
+          <span>Back</span>
+        </button>
       </div>
-    </div>
+
+      <div className="guest-page__content">
+        <section className="guest-hero-card">
+          <div className="guest-hero-card__copy">
+            <span className="guest-eyebrow">Spectropy Education Technologies</span>
+            <h1>Building brighter learning ecosystems.</h1>
+            <p className="guest-hero-card__lead">
+              Intelligent tools that connect educators, students, and institutions
+              through clearer data and more engaging learning experiences.
+            </p>
+            <div className="guest-hero-card__actions">
+              <span className="guest-pill">
+                <Target size={15} />
+                Education, empowered by technology
+              </span>
+            </div>
+          </div>
+          <div className="guest-hero-card__visual" aria-hidden="true">
+            <div className="guest-orbit guest-orbit--one" />
+            <div className="guest-orbit guest-orbit--two" />
+            <div className="guest-visual-mark">S</div>
+            <span className="guest-visual-dot guest-visual-dot--one" />
+            <span className="guest-visual-dot guest-visual-dot--two" />
+            <span className="guest-visual-dot guest-visual-dot--three" />
+          </div>
+        </section>
+
+        <section className="guest-stat-grid" aria-label="Spectropy impact">
+          <div className="guest-stat-card">
+            <strong>2017</strong>
+            <span>Vision started</span>
+          </div>
+          <div className="guest-stat-card">
+            <strong>2022</strong>
+            <span>Officially registered</span>
+          </div>
+          <div className="guest-stat-card">
+            <strong>100+</strong>
+            <span>Schools supported</span>
+          </div>
+          <div className="guest-stat-card">
+            <strong>20</strong>
+            <span>Junior colleges</span>
+          </div>
+        </section>
+
+        <section className="guest-section-grid">
+          <article className="guest-info-card guest-info-card--mission">
+            <div className="guest-section-icon"><Target size={18} /></div>
+            <span className="guest-eyebrow">Our mission</span>
+            <h2>Make every learner visible.</h2>
+            <p>
+              Headquartered in Hyderabad, Spectropy is more than an EdTech company;
+              we are a movement. We believe education should be accessible,
+              engaging, and personalized, with every learner supported by meaningful
+              insight.
+            </p>
+          </article>
+          <article className="guest-info-card">
+            <div className="guest-section-icon"><BarChart3 size={18} /></div>
+            <span className="guest-eyebrow">Our approach</span>
+            <h2>From data to better decisions.</h2>
+            <p>
+              We bridge the gap between teachers and students through intelligent
+              digital tools that foster collaborative, data-driven learning
+              environments where every learner can thrive.
+            </p>
+          </article>
+        </section>
+
+        <section className="guest-solutions-section">
+          <div className="guest-section-heading">
+            <div>
+              <span className="guest-eyebrow">What we build</span>
+              <h2>Solutions for the whole education journey.</h2>
+            </div>
+            <p>One connected ecosystem for classrooms, campuses, and communities.</p>
+          </div>
+          <div className="guest-solution-grid">
+            {solutions.map(({ icon: Icon, title, text }) => (
+              <article className="guest-solution-card" key={title}>
+                <div className="guest-solution-card__icon"><Icon size={19} /></div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="guest-contact-card">
+          <div>
+            <span className="guest-eyebrow">Connect with Spectropy</span>
+            <h2>Let’s shape the future of learning together.</h2>
+          </div>
+          <div className="guest-contact-links">
+            <a href="tel:+919391294429"><Phone size={16} /> +91 93912 94429</a>
+            <a href="mailto:contact@spectropy.com"><Mail size={16} /> contact@spectropy.com</a>
+            <a href="https://spectropy.com" target="_blank" rel="noopener noreferrer"><Globe size={16} /> spectropy.com</a>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
-
-const styles = {
-  container: {
-    padding: '24px',
-    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-    backgroundColor: '#f8fafc',
-    minHeight: '100vh',
-  },
-  backButton: {
-    padding: '8px 16px',
-    margin: '0 0 24px',
-    border: '1px solid #3182ce',
-    background: 'white',
-    color: '#3182ce',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s ease',
-  },
-  companyCard: {
-    background: 'white',
-    padding: '36px',
-    borderRadius: '16px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-    maxWidth: '800px',
-    margin: '0 auto',
-    lineHeight: '1.7',
-  },
-  title: {
-    color: '#1e55a0',
-    fontSize: '28px',
-    marginBottom: '8px',
-  },
-  tagline: {
-    fontSize: '16px',
-    color: '#5a6b82',
-    fontStyle: 'italic',
-    marginBottom: '24px',
-  },
-  sectionHeading: {
-    fontSize: '20px',
-    color: '#2d3748',
-    marginTop: '24px',
-    marginBottom: '12px',
-  },
-  list: {
-    paddingLeft: '20px',
-    marginBottom: '20px',
-    color: '#333',
-  },
-  contactSection: {
-    marginTop: '24px',
-    paddingTop: '20px',
-    borderTop: '1px solid #edf2f7',
-    fontSize: '15px',
-  },
-  link: {
-    color: '#1e55a0',
-    textDecoration: 'none',
-    fontWeight: '500',
-  },
-};

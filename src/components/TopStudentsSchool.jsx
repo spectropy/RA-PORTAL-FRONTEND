@@ -159,9 +159,9 @@ const TopStudentsSchool = () => {
 
   // Render
   return (
-    <div className="legacy-responsive-page" style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{ margin: "0 auto" }}>
       <h2 style={{ marginBottom: "20px", color: "#1e293b" }}>
-        🏆 Top 5 Students by Class & Section
+        Top 5 Students by Class & Section
       </h2>
 
       {/* School Dropdown */}
@@ -213,7 +213,7 @@ const TopStudentsSchool = () => {
               fontSize: "15px",
             }}
           >
-            📥 Download CSV
+            Download CSV
           </button>
         </div>
       )}

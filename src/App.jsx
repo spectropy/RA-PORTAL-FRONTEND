@@ -6,6 +6,7 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
+import { GraduationCap, School, User, Users } from "lucide-react";
 import LoginPage from "./components/LoginPage";
 import Dashboard from "./Dashboard";
 import SchoolOwnerDashboard from "./components/SchoolOwnerDashboard";
@@ -24,6 +25,18 @@ const ROLE_ROUTES = {
   PARENT: "/parent",
   GUEST: "/guest",
 };
+
+const ROLE_ICONS = {
+  SCHOOL_OWNER: School,
+  TEACHER: Users,
+  STUDENT: GraduationCap,
+  PARENT: Users,
+};
+
+function RoleIcon({ role }) {
+  const Icon = ROLE_ICONS[role] || User;
+  return <Icon size={14} strokeWidth={2} aria-hidden="true" />;
+}
 
 // ─── Route Guard ─────────────────────────────────────────────────
 // Redirects unauthenticated users to /login.
@@ -78,6 +91,14 @@ function AppShell() {
     setUser(null);
     navigate("/login", { replace: true });
   };
+
+  const headerRoleLabel =
+    {
+      SPECTROPY_ADMIN: "SPECTROPY ADMIN",
+      SCHOOL_OWNER: "SCHOOL OWNER",
+      TEACHER: "TEACHER LOGIN",
+      STUDENT: "STUDENT LOGIN",
+    }[user?.role] || user?.username || user?.name || user?.role;
 
   if (loading) {
     return (
@@ -162,29 +183,21 @@ function AppShell() {
         </div>
 
         {/* User pill + logout — hidden for SPECTROPY_ADMIN (sidebar) and TEACHER (sidebar has Sign Out) */}
-        {user &&
-          user.role !== "SPECTROPY_ADMIN" &&
-          user.role !== "SCHOOL_OWNER" && (
+        {user && (
             <div
               style={S.userMeta}
               className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
             >
               <div style={S.userPill}>
-                <span style={{ fontSize: "14px" }}>
-                  {user.role === "SCHOOL_OWNER"
-                    ? "🏫"
-                    : user.role === "TEACHER"
-                      ? "👩‍🏫"
-                      : user.role === "PARENT"
-                        ? "👨‍👧"
-                        : "👤"}
-                </span>
+                <RoleIcon role={user.role} />
                 <span style={{ fontWeight: 600 }}>
-                  {user.username || user.name || user.role}
+                  {headerRoleLabel}
                 </span>
               </div>
               {/* Sign Out hidden for TEACHER — already in sidebar */}
-              {user.role !== "TEACHER" && (
+              {user.role !== "TEACHER" &&
+                user.role !== "SPECTROPY_ADMIN" &&
+                user.role !== "SCHOOL_OWNER" && (
                 <button
                   onClick={handleLogout}
                   style={S.logoutBtn}
@@ -298,33 +311,30 @@ const S = {
     backgroundColor: "var(--color-bg)",
   },
   header: {
-    background:
-      "linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #1d4ed8 100%)",
-    color: "#ffffff",
+    background: "var(--app-shell-bg)",
+    color: "var(--color-text-main)",
     padding: "10px clamp(16px, 3vw, 32px)",
     display: "flex",
     flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: "12px",
-    borderBottom: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 8px 24px -4px rgba(15,23,42,0.3)",
+    borderBottom: "1px solid var(--app-shell-border)",
+    boxShadow: "0 4px 14px -6px rgba(15,23,42,0.18)",
     position: "sticky",
     top: 0,
     zIndex: 100,
   },
   brandGroup: { display: "flex", alignItems: "center", gap: "14px" },
   logoContainer: {
-    background: "#ffffff",
-    padding: "4px 8px",
-    borderRadius: "8px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+    padding: "2px 4px",
+
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
   logoImg: {
-    height: "34px",
+    height: "40px",
     width: "auto",
     maxWidth: "130px",
     objectFit: "contain",
@@ -347,10 +357,14 @@ const S = {
     fontSize: "clamp(17px, 2.2vw, 20px)",
     fontWeight: 800,
     letterSpacing: "0.8px",
-    color: "#ffffff",
+    color: "var(--color-text-main)",
     lineHeight: 1.1,
   },
-  subtitle: { fontSize: "12px", color: "#93c5fd", fontWeight: 500 },
+  subtitle: {
+    fontSize: "12px",
+    color: "var(--color-text-muted)",
+    fontWeight: 500,
+  },
   userMeta: { display: "flex", alignItems: "center", gap: "12px" },
   userPill: {
     display: "flex",
@@ -358,18 +372,18 @@ const S = {
     gap: "8px",
     padding: "6px 14px",
     borderRadius: "99px",
-    background: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.2)",
-    color: "#ffffff",
+    background: "var(--color-bg)",
+    border: "1px solid var(--color-border)",
+    color: "var(--color-text-main)",
     fontSize: "13px",
   },
   logoutBtn: {
     padding: "6px 14px",
     fontSize: "13px",
     minHeight: "36px",
-    color: "#ffffff",
-    borderColor: "rgba(255,255,255,0.3)",
-    background: "rgba(255,255,255,0.08)",
+    color: "var(--color-text-main)",
+    borderColor: "var(--color-border)",
+    background: "var(--color-bg)",
   },
   mainContent: { flex: 1, display: "flex", flexDirection: "column" },
   loadingWrap: {

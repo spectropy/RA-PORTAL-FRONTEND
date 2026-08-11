@@ -1,14 +1,4 @@
-import React, { useEffect, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-} from "recharts";
+import React, { useState } from "react";
 
 // 🖼️ Import Role Specific Images from src/assets
 import adminImg from "../assets/Spectropy Admin.png";
@@ -375,17 +365,20 @@ export default function LoginPage({ onLogin }) {
     onSubmit,
     children,
     errorMessage,
+    showHeroImage = true,
   ) => (
     <div style={{ width: "100%", background: "#ffffff" }}>
-      <div className="fullscreen-split-layout">
+      <div
+        className={`fullscreen-split-layout${showHeroImage ? "" : " fullscreen-split-layout--no-image"}`}
+      >
         {/* 👈 LEFT SIDE (50%): Hero Image sitting directly on white canvas */}
-        <div className="slide-in-left left-image-half">
+        {showHeroImage && <div className="slide-in-left left-image-half">
           <img
             src={roleAssetImg}
             alt={`${title} Full Hero Illustration`}
             className="full-hero-image"
           />
-        </div>
+        </div>}
 
         {/* 👉 RIGHT SIDE (50%): Clean Credentials Login Form */}
         <div className="slide-in-right right-form-half">
@@ -696,6 +689,7 @@ export default function LoginPage({ onLogin }) {
         </div>
       </>,
       error,
+      false,
     );
   }
 
@@ -787,36 +781,17 @@ export default function LoginPage({ onLogin }) {
   ];
 
   return (
-    <main className="login-landing animate-fade-in">
-      <section className="login-hero" aria-labelledby="login-hero-title">
-        <div className="login-hero-copy">
-          <span className="login-eyebrow">SPECTROPY Result Analysis</span>
-          <h1 id="login-hero-title">
-            <span>Transform Results into</span>
-            <span>Academic Progress.</span>
-          </h1>
-          <p>
-            A unified result-analysis platform that helps every role understand
-            performance, make informed decisions and improve learning outcomes.
+    <div style={customStyles.whitePageWrap} className="animate-fade-in">
+      <div style={customStyles.portalCard}>
+        <header style={customStyles.headerSection}>
+          <h1 style={customStyles.mainHeading}>SPECTROPY — Portal Login</h1>
+          <p style={customStyles.mainSubheading}>
+            Select your role to access your portal workspace
           </p>
-          <div className="login-benefits" aria-label="Platform benefits">
-            <span>Accurate reports</span>
-            <span>Real-time insights</span>
-            <span>Secure and reliable</span>
-          </div>
-        </div>
-        <LiveAnalyticsPreview />
-      </section>
-
-      <section className="login-portals" aria-labelledby="portal-choice-title">
-        <header className="login-portals-header">
-          <span className="login-eyebrow">Portal access</span>
-          <h2 id="portal-choice-title">Choose your portal to get started</h2>
-          <p>Select the workspace that matches your role.</p>
         </header>
 
         {/* Multi-Login Cards Grid */}
-        <div className="role-card-grid login-role-grid" role="list">
+        <div className="role-card-grid" role="list">
           {roleOptions.map(
             ({
               key,
@@ -862,8 +837,22 @@ export default function LoginPage({ onLogin }) {
           )}
         </div>
 
-      </section>
-    </main>
+        <footer style={customStyles.mainFooter}>
+          <p style={customStyles.footerLinkText}>
+            Need assistance? Visit{" "}
+            <a
+              href="https://spectropy.com"
+              target="_blank"
+              rel="noreferrer"
+              style={customStyles.link}
+            >
+              spectropy.com
+            </a>{" "}
+            or contact portal support.
+          </p>
+        </footer>
+      </div>
+    </div>
   );
 }
 
@@ -896,135 +885,6 @@ function PasswordInput({ value, onChange, placeholder }) {
 }
 
 // 🎨 Clean Styles (No drop shadow, no background aura blob)
-function LiveAnalyticsPreview() {
-  const [pulse, setPulse] = useState(0);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setPulse((value) => (value + 1) % 12);
-    }, 2200);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const lineData = [56, 61, 59, 68, 65, 74, 78, 84].map(
-    (value, index) => ({
-      name: `T${index + 1}`,
-      value: Math.min(96, value + ((pulse + index) % 3) * 2),
-    }),
-  );
-  const barData = [48, 65, 57, 76, 69, 88].map((value, index) => ({
-    name: `S${index + 1}`,
-    value: Math.min(96, value + ((pulse + index) % 4)),
-  }));
-  const achieved = 72 + (pulse % 4);
-  const mathematicsShare = 28 + (pulse % 3);
-  const donutData = [
-    { name: "Mathematics", value: mathematicsShare, color: "#2454a6" },
-    { name: "Science", value: 26, color: "#6f67d8" },
-    { name: "English", value: 24, color: "#63b6cc" },
-    {
-      name: "Other subjects",
-      value: 100 - mathematicsShare - 26 - 24,
-      color: "#d8e4f4",
-    },
-  ];
-
-  return (
-    <div className="login-analytics" aria-label="Live performance analytics preview">
-      <div className="login-analytics-glow" aria-hidden="true" />
-
-      <section className="login-preview-card login-preview-line">
-        <header>
-          <div>
-            <strong>Performance Overview</strong>
-            <span>Academic progress</span>
-          </div>
-          <span className="login-preview-live"><i /> Live</span>
-        </header>
-        <div className="login-preview-line-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={lineData} margin={{ top: 8, right: 8, bottom: 3, left: 3 }}>
-              <defs>
-                <linearGradient id="performanceShade" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4b78c8" stopOpacity={0.32} />
-                  <stop offset="100%" stopColor="#dbe8f8" stopOpacity={0.04} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="natural"
-                dataKey="value"
-                stroke="#2454a6"
-                strokeWidth={3}
-                fill="url(#performanceShade)"
-                dot={false}
-                isAnimationActive
-                animationDuration={700}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="login-preview-card login-preview-combined">
-        <div className="login-preview-donut">
-          <span>Average score</span>
-          <div className="login-preview-donut-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  dataKey="value"
-                  innerRadius="58%"
-                  outerRadius="88%"
-                  startAngle={90}
-                  endAngle={-270}
-                  paddingAngle={2}
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                  isAnimationActive
-                  animationDuration={700}
-                >
-                  {donutData.map((segment) => (
-                    <Cell key={segment.name} fill={segment.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <strong>{achieved}%</strong>
-          </div>
-        </div>
-        <div className="login-preview-bars">
-          <span>Subject performance</span>
-          <div>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 6, right: 2, bottom: 0, left: 2 }}>
-                <Bar
-                  dataKey="value"
-                  fill="#356bd2"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive
-                  animationDuration={700}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
-      <section className="login-preview-card login-preview-profile">
-        <div className="login-preview-profile-icon" aria-hidden="true">
-          <span />
-        </div>
-        <strong>Student Report</strong>
-        <span>Performance summary</span>
-        <div className="login-preview-profile-lines">
-          <i /><i /><i />
-        </div>
-      </section>
-    </div>
-  );
-}
-
 const customStyles = {
   whitePageWrap: {
     minHeight: "calc(100vh - 65px)",

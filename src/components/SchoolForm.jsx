@@ -39,7 +39,19 @@ const STATES = {
   Puducherry: "PY",
 };
 
-const ACADEMIC_YEARS = ["2025-2026", "2026-2027"];
+const ACADEMIC_YEARS = [
+  "2025-2026",
+  "2026-2027",
+  "2027-2028",
+  "2028-2029",
+  "2029-2030",
+  "2030-2031",
+  "2031-2032",
+];
+
+const SUPPORTED_LOGO_TYPES = ["image/png", "image/jpeg"];
+const SUPPORTED_LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg"];
+const MAX_LOGO_SIZE_BYTES = 100 * 1024;
 
 function yy(ay) {
   if (!ay) return "";
@@ -79,6 +91,7 @@ export default function SchoolForm({
       );
       return;
     }
+
     const isDuplicate = existingSchools.some(
       (school) => school.school_id === schoolId,
     );
@@ -86,6 +99,7 @@ export default function SchoolForm({
       setAlertMsg(`A school with SCHOOL_ID "${schoolId}" already exists.`);
       return;
     }
+
     onSubmit?.({
       school_name: name,
       state,
@@ -98,6 +112,7 @@ export default function SchoolForm({
       classes: [],
       teachers: [],
     });
+
     setAlertMsg("");
     setName("");
     setArea("");
@@ -107,30 +122,18 @@ export default function SchoolForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ width: "100%" }}>
+    <form className="school-form" onSubmit={handleSubmit}>
       {alertMsg && (
-        <div
-          className="alert-banner alert-banner--error"
-          style={{ marginBottom: 16 }}
-        >
-          <span className="alert-banner-icon">⚠️</span>
+        <div className="alert-banner alert-banner--error school-form-alert">
+          <span className="alert-banner-icon">!</span>
           <span>{alertMsg}</span>
         </div>
       )}
 
-      {/* Section 1: School Name & Identification */}
-      <div className="ct-section">
-        <div className="ct-section-title">📋 School Information &amp; ID</div>
+      <section className="school-form-section">
+        <div className="school-form-section-title">School Information & ID</div>
 
-        {/* Row 1: School Name & School Logo */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 16,
-            marginBottom: 16,
-          }}
-        >
+        <div className="school-form-grid school-form-grid--main">
           <div className="form-field">
             <label className="form-label" htmlFor="school-name">
               School Name *
@@ -150,96 +153,30 @@ export default function SchoolForm({
           </div>
 
           <div className="form-field">
-            <label className="form-label" htmlFor="school-logo">
-              School Logo (URL or Upload Image)
+            <label className="form-label" htmlFor="school-state">
+              State *
             </label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                id="school-logo"
-                className="form-input"
-                type="text"
-                placeholder="Paste Image URL or select file..."
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <label
-                className="btn btn-outline"
-                style={{
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                🖼️ Upload
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setLogoUrl(ev.target.result);
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </label>
-              {logoUrl && (
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <img
-                    src={logoUrl}
-                    alt="Logo preview"
-                    style={{
-                      height: 38,
-                      width: 38,
-                      objectFit: "contain",
-                      borderRadius: 6,
-                      border: "1px solid #cbd5e1",
-                      background: "#fff",
-                      padding: 2,
-                    }}
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLogoUrl("")}
-                    title="Remove logo"
-                    style={{
-                      position: "absolute",
-                      top: -6,
-                      right: -6,
-                      background: "#ef4444",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: 18,
-                      height: 18,
-                      fontSize: 10,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-            </div>
+            <select
+              id="school-state"
+              className="form-input"
+              value={state}
+              onChange={(e) => {
+                setState(e.target.value);
+                setAlertMsg("");
+              }}
+              required
+            >
+              <option value="">-- Select State --</option>
+              {Object.keys(STATES).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Row 2: Below School Name -> Academic Year, School Number, Auto-Generated ID */}
-        <div className="form-grid-3">
+        <div className="school-form-grid school-form-grid--three">
           <div className="form-field">
             <label className="form-label" htmlFor="school-ay">
               Academic Year *
@@ -264,7 +201,7 @@ export default function SchoolForm({
 
           <div className="form-field">
             <label className="form-label" htmlFor="school-num">
-              School Number (2 Digits: 01-99) *
+              School Number *
             </label>
             <input
               id="school-num"
@@ -272,7 +209,7 @@ export default function SchoolForm({
               type="text"
               inputMode="numeric"
               maxLength={2}
-              placeholder="e.g. 01"
+              placeholder="01-99"
               value={schoolNum}
               onChange={(e) => {
                 setSchoolNum(e.target.value);
@@ -288,44 +225,19 @@ export default function SchoolForm({
             </label>
             <input
               id="school-id"
-              className="form-input"
+              className="form-input school-id-preview-input"
               type="text"
               value={schoolId}
               readOnly
-              placeholder="Auto-generated (e.g. TS2501)"
-              style={{ backgroundColor: "#f1f5f9", fontWeight: 700 }}
+              placeholder="Auto-generated, e.g. TS2501"
             />
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Section 2: Address & Location Details (State placed with Area and District) */}
-      <div className="ct-section">
-        <div className="ct-section-title">📍 Address &amp; Location</div>
-        <div className="form-grid-3">
-          <div className="form-field">
-            <label className="form-label" htmlFor="school-state">
-              State *
-            </label>
-            <select
-              id="school-state"
-              className="form-input"
-              value={state}
-              onChange={(e) => {
-                setState(e.target.value);
-                setAlertMsg("");
-              }}
-              required
-            >
-              <option value="">— Select State —</option>
-              {Object.keys(STATES).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
+      <section className="school-form-section">
+        <div className="school-form-section-title">Address & Location</div>
+        <div className="school-form-grid school-form-grid--three">
           <div className="form-field">
             <label className="form-label" htmlFor="school-area">
               Area / Address Line
@@ -353,12 +265,95 @@ export default function SchoolForm({
               onChange={(e) => setDistrict(e.target.value)}
             />
           </div>
-        </div>
-      </div>
 
-      <div className="form-actions" style={{ marginTop: 20 }}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="school-logo">
+              School Logo
+            </label>
+            <div className="school-logo-input-row">
+              <input
+                id="school-logo"
+                className="form-input"
+                type="text"
+                placeholder="Paste image URL or select a file"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+              />
+              <label className="btn btn-outline school-logo-upload-btn">
+                Upload
+                <input
+                  type="file"
+                  accept={SUPPORTED_LOGO_EXTENSIONS.join(",")}
+                  className="school-logo-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    const fileName = file.name.toLowerCase();
+                    const hasSupportedExtension =
+                      SUPPORTED_LOGO_EXTENSIONS.some((ext) =>
+                        fileName.endsWith(ext),
+                      );
+                    const hasSupportedType = SUPPORTED_LOGO_TYPES.includes(
+                      file.type,
+                    );
+
+                    if (!hasSupportedType || !hasSupportedExtension) {
+                      setAlertMsg(
+                        "Unsupported logo format. Please upload PNG, JPG, or JPEG only.",
+                      );
+                      e.target.value = "";
+                      return;
+                    }
+
+                    if (file.size > MAX_LOGO_SIZE_BYTES) {
+                      setAlertMsg(
+                        "Logo file is too large. Please upload a PNG, JPG, or JPEG under 100 KB.",
+                      );
+                      e.target.value = "";
+                      return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setLogoUrl(ev.target.result);
+                      setAlertMsg("");
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+              {logoUrl && (
+                <div className="school-logo-preview-wrap">
+                  <img
+                    src={logoUrl}
+                    alt="Logo preview"
+                    className="school-logo-preview"
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogoUrl("")}
+                    title="Remove logo"
+                    className="school-logo-remove"
+                  >
+                    X
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="form-help" style={{ marginTop: 6 }}>
+              Supported logo formats: PNG, JPG, JPEG. Maximum size: 100 KB.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="form-actions school-form-actions">
         <button type="submit" className="btn btn-primary">
-          🏫 Add School
+          Add School
         </button>
         {onCancel && (
           <button type="button" className="btn btn-outline" onClick={onCancel}>
@@ -367,8 +362,8 @@ export default function SchoolForm({
         )}
       </div>
 
-      <p className="form-help" style={{ marginTop: 12 }}>
-        Format: <b>STATE_ABBR + YY + NN</b> — e.g. TS + 25 + 01 → <b>TS2501</b>
+      <p className="form-help school-form-help">
+        Format: <b>STATE_ABBR + YY + NN</b> - e.g. TS + 25 + 01 = <b>TS2501</b>
       </p>
     </form>
   );

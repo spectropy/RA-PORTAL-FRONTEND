@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+﻿import React, { useEffect, useCallback } from "react";
 import {
   Routes,
   Route,
@@ -17,25 +17,64 @@ import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
 import TopStudentsSchool from "./components/TopStudentsSchool.jsx";
+import {
+  BookOpenCheck,
+  ClipboardList,
+  GraduationCap,
+  LogOut,
+  MessageCircleQuestion,
+  School,
+  Trophy,
+  UsersRound,
+} from "lucide-react";
 
-// ─── Tab Definitions ────────────────────────────────────────────
-// path is relative to /admin/
+//  Tab Definitions
 const TABS = [
-  { id: "schools", path: "schools", icon: "🏫", label: "Schools" },
-  { id: "classes", path: "classes", icon: "👩‍🏫", label: "Class & Teacher" },
-  { id: "students", path: "students", icon: "🎓", label: "Students" },
-  { id: "exams", path: "exams", icon: "📝", label: "OMR Exams" },
-  { id: "lms", path: "lms", icon: "📚", label: "LMS Converter" },
-  { id: "queries", path: "queries", icon: "🔍", label: "Queries" },
+  {
+    id: "schools",
+    path: "schools",
+    icon: <School size={18} strokeWidth={2.2} />,
+    label: "Schools",
+  },
+  {
+    id: "classes",
+    path: "classes",
+    icon: <UsersRound size={18} strokeWidth={2.2} />,
+    label: "Class & Teacher",
+  },
+  {
+    id: "students",
+    path: "students",
+    icon: <GraduationCap size={18} strokeWidth={2.2} />,
+    label: "Students",
+  },
+  {
+    id: "exams",
+    path: "exams",
+    icon: <ClipboardList size={18} strokeWidth={2.2} />,
+    label: "OMR Exams",
+  },
+  {
+    id: "lms",
+    path: "lms",
+    icon: <BookOpenCheck size={18} strokeWidth={2.2} />,
+    label: "LMS Converter",
+  },
+  {
+    id: "queries",
+    path: "queries",
+    icon: <MessageCircleQuestion size={18} strokeWidth={2.2} />,
+    label: "Queries",
+  },
   {
     id: "top-students",
     path: "top-students",
-    icon: "🏆",
+    icon: <Trophy size={18} strokeWidth={2.2} />,
     label: "Top Students",
   },
 ];
 
-// ─── Skeleton rows while loading ─────────────────────────────────
+// € Skeleton rows while loading
 function SkeletonRows() {
   return (
     <div>
@@ -52,7 +91,7 @@ function SkeletonRows() {
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────
+//  Main Component
 export default function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,15 +99,16 @@ export default function Dashboard({ user, onLogout }) {
 
   // Derive active tab from current URL segment
   // location.pathname inside /admin/* looks like "/admin/schools"
-  const segment = location.pathname.split("/")[2] || "schools"; // "schools" | "classes" | …
+  const segment = location.pathname.split("/")[2] || "schools"; // "schools" | "classes" | ...
   const activeTab = TABS.find((t) => t.path === segment)?.id || "schools";
   const isAddSchool = location.pathname === "/admin/add-school";
 
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [schoolMobileDetailOpen, setSchoolMobileDetailOpen] = useState(false);
 
-  // ── Data ─────────────────────────────────────────────────────
+  //  Data
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -85,14 +125,18 @@ export default function Dashboard({ user, onLogout }) {
     refresh();
   }, [refresh]);
 
-  // ── Mobile sidebar toggle event ──────────────────────────────
+  useEffect(() => {
+    setSchoolMobileDetailOpen(false);
+  }, [location.pathname]);
+
+  //  Mobile sidebar toggle event
   useEffect(() => {
     const onToggle = () => setSidebarOpen((p) => !p);
     window.addEventListener("toggleAdminSidebar", onToggle);
     return () => window.removeEventListener("toggleAdminSidebar", onToggle);
   }, []);
 
-  // ── Navigation helpers ───────────────────────────────────────
+  //  Navigation helpers
   const goTab = (tab) => {
     navigate(`/admin/${tab.path}`);
     setSidebarOpen(false);
@@ -114,7 +158,7 @@ export default function Dashboard({ user, onLogout }) {
   );
   const adminName = user?.username || user?.name || "Admin";
 
-  // ── Render ───────────────────────────────────────────────────
+  //  Render
   return (
     <div className="admin-layout">
       {/* Mobile overlay */}
@@ -126,7 +170,7 @@ export default function Dashboard({ user, onLogout }) {
         />
       )}
 
-      {/* ── Sidebar Rail ──────────────────────────────────────── */}
+      {/*  Sidebar Rail  */}
       <aside
         className={`sidebar-rail${sidebarOpen ? " sidebar-rail--open" : ""}`}
         aria-label="Admin navigation"
@@ -136,7 +180,7 @@ export default function Dashboard({ user, onLogout }) {
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation"
         >
-          ✕
+          x
         </button>
 
         <span className="sidebar-section-label">Navigation</span>
@@ -171,38 +215,40 @@ export default function Dashboard({ user, onLogout }) {
 
           {onLogout && (
             <button className="sidebar-logout-btn" onClick={onLogout}>
-              <span>⏻</span>
+              <LogOut size={16} strokeWidth={2.2} />
               <span className="sidebar-nav-label">Sign Out</span>
             </button>
           )}
 
           <div className="sidebar-version">
-            v1.0 · {schools.length} school{schools.length !== 1 ? "s" : ""}
+            v1.0 - {schools.length} school{schools.length !== 1 ? "s" : ""}
           </div>
         </div>
       </aside>
 
-      {/* ── Page Canvas ───────────────────────────────────────── */}
+      {/*  Page Canvas  */}
       <div className="page-canvas">
         <Routes>
-          {/* Default → redirect to /admin/schools */}
+          {/* Default -> redirect to /admin/schools */}
           <Route index element={<Navigate to="schools" replace />} />
 
-          {/* ── Schools list ── */}
+          {/*  Schools list  */}
           <Route
             path="schools"
             element={
               <div className="animate-fade-in">
-                <div className="page-header">
+                <div
+                  className={`page-header${schoolMobileDetailOpen ? " schools-header--mobile-hidden" : ""}`}
+                >
                   <div className="page-header-left">
-                    <h1 className="page-header-title">
-                      🏫 School Registration
+                    <h1 className="page-header-title page-header-title--school">
+                      School Registration
                     </h1>
                     <p className="page-header-subtitle">
                       {schools.length} school{schools.length !== 1 ? "s" : ""}{" "}
                       registered
                       {totalClasses > 0 &&
-                        ` · ${totalClasses} classes · ${totalTeachers} teachers`}
+                        ` - ${totalClasses} classes - ${totalTeachers} teachers`}
                     </p>
                   </div>
                   <div className="page-header-actions">
@@ -211,7 +257,7 @@ export default function Dashboard({ user, onLogout }) {
                       onClick={() => navigate("/admin/add-school")}
                       aria-label="Add a new school"
                     >
-                      + Add School ↗
+                      + Add School
                     </button>
                   </div>
                 </div>
@@ -219,7 +265,7 @@ export default function Dashboard({ user, onLogout }) {
                 {error && (
                   <div className="responsive-status-wrap" style={{ padding: "16px 32px 0" }}>
                     <div className="alert-banner alert-banner--error">
-                      <span className="alert-banner-icon">⚠️</span>
+                      <span className="alert-banner-icon">!</span>
                       <span>{error}</span>
                     </div>
                   </div>
@@ -234,13 +280,14 @@ export default function Dashboard({ user, onLogout }) {
                     rows={schools}
                     onSchoolDeleted={refresh}
                     exportButtons={<ReportButtons rows={schools} />}
+                    onMobileDetailChange={setSchoolMobileDetailOpen}
                   />
                 )}
               </div>
             }
           />
 
-          {/* ── Add School ── */}
+          {/*  Add School  */}
           <Route
             path="add-school"
             element={
@@ -267,7 +314,7 @@ export default function Dashboard({ user, onLogout }) {
                     style={{ marginTop: 4 }}
                     onClick={() => navigate("/admin/schools")}
                   >
-                    ← Back to Schools
+                    Back to Schools
                   </button>
                 </div>
                 <div className="page-content">
@@ -283,7 +330,7 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* ── Class & Teacher ── */}
+          {/*  Class & Teacher  */}
           <Route
             path="classes/*"
             element={
@@ -291,7 +338,7 @@ export default function Dashboard({ user, onLogout }) {
                 <div className="page-header">
                   <div className="page-header-left">
                     <h1 className="page-header-title">
-                      👩‍🏫 Class &amp; Teacher Registration
+                      Class &amp; Teacher Registration
                     </h1>
                     <p className="page-header-subtitle">
                       Add classes, sections, and assign teachers per subject.
@@ -305,16 +352,14 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* ── Students ── */}
+          {/*  Students  */}
           <Route
             path="students"
             element={
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">
-                      🎓 Student Registration
-                    </h1>
+                    <h1 className="page-header-title">Student Registration</h1>
                     <p className="page-header-subtitle">
                       Register and manage student records across schools.
                     </p>
@@ -327,36 +372,33 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* ── OMR Exams ── */}
+          {/*  OMR Exams  */}
           <Route
-            path="exams"
+            path="exams/new"
             element={
               <div className="animate-fade-in">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <h1 className="page-header-title">
-                      📝 OMR Exam Registration
-                    </h1>
-                    <p className="page-header-subtitle">
-                      Create exam records and upload OMR score sheets.
-                    </p>
-                  </div>
-                </div>
-                <div className="page-content">
-                  <ExamsRegistration schools={schools} />
-                </div>
+                <ExamsRegistration schools={schools} mode="new" />
               </div>
             }
           />
 
-          {/* ── LMS Converter ── */}
+          <Route
+            path="exams"
+            element={
+              <div className="animate-fade-in">
+                <ExamsRegistration schools={schools} />
+              </div>
+            }
+          />
+
+          {/*  LMS Converter  */}
           <Route
             path="lms"
             element={
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">📚 LMS Exam Converter</h1>
+                    <h1 className="page-header-title">LMS Exam Converter</h1>
                     <p className="page-header-subtitle">
                       Convert and import LMS exam result files.
                     </p>
@@ -369,14 +411,14 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* ── Queries ── */}
+          {/*  Queries  */}
           <Route
             path="queries"
             element={
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">🔍 Queries</h1>
+                    <h1 className="page-header-title">Queries</h1>
                     <p className="page-header-subtitle">
                       View and respond to support queries.
                     </p>
@@ -389,14 +431,14 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* ── Top Students ── */}
+          {/*  Top Students  */}
           <Route
             path="top-students"
             element={
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">🏆 Top Students</h1>
+                    <h1 className="page-header-title">Top Students</h1>
                     <p className="page-header-subtitle">
                       View top 5 students by class &amp; section across all
                       schools.
@@ -410,7 +452,7 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/* Catch-all: unknown sub-paths → schools */}
+          {/* Catch-all: unknown sub-paths -> schools */}
           <Route path="*" element={<Navigate to="schools" replace />} />
         </Routes>
       </div>
