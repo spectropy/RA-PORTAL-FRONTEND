@@ -7,6 +7,7 @@ import {
   BookOpen,
   Calculator,
   CalendarDays,
+  ChevronDown,
   CheckCircle2,
   CloudUpload,
   FileSpreadsheet,
@@ -28,123 +29,46 @@ import spectropyLogo from "../assets/logo.png";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 // Exam patterns by program
-const getExamPatternsByProgram = (program) => {
-  switch (program) {
-    case "CAT":
-    case "FF":
-      return [
-        { id: "PART_TEST_1", name: "Part Test 1", type: "PART_TEST" },
-        { id: "PART_TEST_2", name: "Part Test 2", type: "PART_TEST" },
-        { id: "PART_TEST_3", name: "Part Test 3", type: "PART_TEST" },
-        { id: "PART_TEST_4", name: "Part Test 4", type: "PART_TEST" },
-        { id: "PART_TEST_5", name: "Part Test 5", type: "PART_TEST" },
-        { id: "PART_TEST_6", name: "Part Test 6", type: "PART_TEST" },
-        { id: "PART_TEST_7", name: "Part Test 7", type: "PART_TEST" },
-        { id: "PART_TEST_8", name: "Part Test 8", type: "PART_TEST" },
-        { id: "PART_TEST_9", name: "Part Test 9", type: "PART_TEST" },
-        { id: "UNIT_TEST_1", name: "Unit Test 1", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_2", name: "Unit Test 2", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_3", name: "Unit Test 3", type: "UNIT_TEST" },
-        { id: "GRAND_TEST_1", name: "Grand Test 1", type: "GRAND_TEST" },
-        { id: "GRAND_TEST_2", name: "Grand Test 2", type: "GRAND_TEST" },
-      ];
-    case "MAE":
-    case "PIO":
-      return [
-        { id: "WEEK_TEST_1", name: "Week Test 1", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_2", name: "Week Test 2", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_3", name: "Week Test 3", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_4", name: "Week Test 4", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_5", name: "Week Test 5", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_6", name: "Week Test 6", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_7", name: "Week Test 7", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_8", name: "Week Test 8", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_9", name: "Week Test 9", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_10", name: "Week Test 10", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_11", name: "Week Test 11", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_12", name: "Week Test 12", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_13", name: "Week Test 13", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_14", name: "Week Test 14", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_15", name: "Week Test 15", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_16", name: "Week Test 16", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_17", name: "Week Test 17", type: "WEEK_TEST" },
-        { id: "WEEK_TEST_18", name: "Week Test 18", type: "WEEK_TEST" },
-        { id: "UNIT_TEST_1", name: "Unit Test 1", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_2", name: "Unit Test 2", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_3", name: "Unit Test 3", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_4", name: "Unit Test 4", type: "UNIT_TEST" },
-        { id: "UNIT_TEST_5", name: "Unit Test 5", type: "UNIT_TEST" },
-        { id: "GRAND_TEST_1", name: "Grand Test 1", type: "GRAND_TEST" },
-        { id: "GRAND_TEST_2", name: "Grand Test 2", type: "GRAND_TEST" },
-      ];
-    case "NGHS_MAE":
-      return [
-        { id: "CDF_1", name: "CDF 1", type: "CDF" },
-        { id: "CDF_2", name: "CDF 2", type: "CDF" },
-        { id: "CDF_3", name: "CDF 3", type: "CDF" },
-        { id: "CDF_4", name: "CDF 4", type: "CDF" },
-        { id: "CDF_5", name: "CDF 5", type: "CDF" },
-        { id: "CDF_6", name: "CDF 6", type: "CDF" },
-        { id: "CDF_7", name: "CDF 7", type: "CDF" },
-        { id: "CDF_8", name: "CDF 8", type: "CDF" },
-        { id: "CDF_9", name: "CDF 9", type: "CDF" },
-        { id: "CDF_10", name: "CDF 10", type: "CDF" },
-        { id: "CDF_11", name: "CDF 11", type: "CDF" },
-        { id: "CDF_12", name: "CDF 12", type: "CDF" },
-        { id: "CDF_13", name: "CDF 13", type: "CDF" },
-        { id: "CDF_14", name: "CDF 14", type: "CDF" },
-        { id: "CDF_15", name: "CDF 15", type: "CDF" },
-        { id: "CDF_16", name: "CDF 16", type: "CDF" },
-        { id: "CDF_17", name: "CDF 17", type: "CDF" },
-        { id: "CDF_18", name: "CDF 18", type: "CDF" },
-        { id: "JEE_1_L1", name: "JEE 1_L1", type: "JEE_L1" },
-        { id: "JEE_2_L1", name: "JEE 2_L1", type: "JEE_L1" },
-        { id: "JEE_3_L1", name: "JEE 3_L1", type: "JEE_L1" },
-        { id: "JEE_4_L1", name: "JEE 4_L1", type: "JEE_L1" },
-        { id: "JEE_5_L1", name: "JEE 5_L1", type: "JEE_L1" },
-        { id: "JEE_6_L1", name: "JEE 6_L1", type: "JEE_L1" },
-        { id: "JEE_7_L1", name: "JEE 7_L1", type: "JEE_L1" },
-        { id: "JEE_8_L1", name: "JEE 8_L1", type: "JEE_L1" },
-        { id: "JEE_9_L1", name: "JEE 9_L1", type: "JEE_L1" },
-        { id: "JEE_10_L1", name: "JEE 10_L1", type: "JEE_L1" },
-        { id: "JEE_11_L1", name: "JEE 11_L1", type: "JEE_L1" },
-        { id: "JEE_12_L1", name: "JEE 12_L1", type: "JEE_L1" },
-        { id: "JEE_13_L1", name: "JEE 13_L1", type: "JEE_L1" },
-        { id: "JEE_14_L1", name: "JEE 14_L1", type: "JEE_L1" },
-        { id: "JEE_15_L1", name: "JEE 15_L1", type: "JEE_L1" },
-        { id: "JEE_16_L1", name: "JEE 16_L1", type: "JEE_L1" },
-        { id: "JEE_17_L1", name: "JEE 17_L1", type: "JEE_L1" },
-        { id: "JEE_18_L1", name: "JEE 18_L1", type: "JEE_L1" },
-        { id: "JEE_1_L2", name: "JEE 1_L2", type: "JEE_L2" },
-        { id: "JEE_2_L2", name: "JEE 2_L2", type: "JEE_L2" },
-        { id: "JEE_3_L2", name: "JEE 3_L2", type: "JEE_L2" },
-        { id: "JEE_4_L2", name: "JEE 4_L2", type: "JEE_L2" },
-        { id: "JEE_5_L2", name: "JEE 5_L2", type: "JEE_L2" },
-        { id: "JEE_6_L2", name: "JEE 6_L2", type: "JEE_L2" },
-        { id: "JEE_7_L2", name: "JEE 7_L2", type: "JEE_L2" },
-        { id: "JEE_8_L2", name: "JEE 8_L2", type: "JEE_L2" },
-        { id: "JEE_9_L2", name: "JEE 9_L2", type: "JEE_L2" },
-        { id: "JEE_10_L2", name: "JEE 10_L2", type: "JEE_L2" },
-        { id: "JEE_11_L2", name: "JEE 11_L2", type: "JEE_L2" },
-        { id: "JEE_12_L2", name: "JEE 12_L2", type: "JEE_L2" },
-        { id: "JEE_13_L2", name: "JEE 13_L2", type: "JEE_L2" },
-        { id: "JEE_14_L2", name: "JEE 14_L2", type: "JEE_L2" },
-        { id: "JEE_15_L2", name: "JEE 15_L2", type: "JEE_L2" },
-        { id: "JEE_16_L2", name: "JEE 16_L2", type: "JEE_L2" },
-        { id: "JEE_17_L2", name: "JEE 17_L2", type: "JEE_L2" },
-        { id: "JEE_18_L2", name: "JEE 18_L2", type: "JEE_L2" },
-      ];
-    default:
-      return [];
-  }
-};
+const EXAM_PATTERNS = [
+  { id: "PART_TEST_1", name: "Part Test 1", type: "PART_TEST" },
+  { id: "PART_TEST_2", name: "Part Test 2", type: "PART_TEST" },
+  { id: "PART_TEST_3", name: "Part Test 3", type: "PART_TEST" },
+  { id: "PART_TEST_4", name: "Part Test 4", type: "PART_TEST" },
+  { id: "PART_TEST_5", name: "Part Test 5", type: "PART_TEST" },
+  { id: "PART_TEST_6", name: "Part Test 6", type: "PART_TEST" },
+  { id: "PART_TEST_7", name: "Part Test 7", type: "PART_TEST" },
+  { id: "PART_TEST_8", name: "Part Test 8", type: "PART_TEST" },
+  { id: "PART_TEST_9", name: "Part Test 9", type: "PART_TEST" },
+  { id: "PART_TEST_10", name: "Part Test 10", type: "PART_TEST" },
+  { id: "PART_TEST_11", name: "Part Test 11", type: "PART_TEST" },
+  { id: "PART_TEST_12", name: "Part Test 12", type: "PART_TEST" },
+  { id: "PART_TEST_13", name: "Part Test 13", type: "PART_TEST" },
+  { id: "PART_TEST_14", name: "Part Test 14", type: "PART_TEST" },
+  { id: "PART_TEST_15", name: "Part Test 15", type: "PART_TEST" },
+  { id: "UNIT_TEST_1", name: "Unit Test 1", type: "UNIT_TEST" },
+  { id: "UNIT_TEST_2", name: "Unit Test 2", type: "UNIT_TEST" },
+  { id: "UNIT_TEST_3", name: "Unit Test 3", type: "UNIT_TEST" },
+  { id: "GRAND_TEST_1", name: "Grand Test 1", type: "GRAND_TEST" },
+  { id: "GRAND_TEST_2", name: "Grand Test 2", type: "GRAND_TEST" },
+];
 
+const getExamPatternsByProgram = () => EXAM_PATTERNS;
 const PROGRAM_NAMES = {
   MAE: "MAESTRO",
   PIO: "PIONEER",
   CAT: "CATALYST",
   FF: "FUTURE FOUNDATION",
   NGHS_MAE: "NGHS MAESTRO",
+  SPHS: "SPHS",
+  GHS: "GHS",
+  SFS: "SFS",
+  KTS: "KTS",
+  VIJAYA: "VIJAYA",
+  PHS: "PHS",
+  KPS: "KPS",
+  SPR: "SPR",
+  SPARK: "SPARK",
+  MANAIR_MAESTRO: "MANAIR_MAESTRO",
 };
 
 const formatExamName = (examPattern = "") =>
@@ -153,6 +77,13 @@ const formatExamName = (examPattern = "") =>
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const normalizeExamPattern = (value = "") =>
+  value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
 export default function ExamRegistration({ schools = [], mode = "list" }) {
   const navigate = useNavigate();
@@ -168,6 +99,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
+  const [examDropdownOpen, setExamDropdownOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -313,6 +245,14 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
 
   const examOptions = getExamOptions();
 
+  const filteredExamOptions = useMemo(() => {
+    const query = examForm.examPattern.trim().toLowerCase();
+    if (!query) return examOptions;
+    return examOptions.filter((exam) =>
+      exam.display_name.toLowerCase().includes(query),
+    );
+  }, [examForm.examPattern, examOptions]);
+
   const handleSchoolSearchChange = (e) => {
     const value = e.target.value;
     setSchoolSearch(value);
@@ -330,6 +270,11 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     setSelectedSchool("");
     setSchoolSearch("");
     setSchoolDropdownOpen(false);
+  };
+
+  const selectExamOption = (exam) => {
+    setExamForm((prev) => ({ ...prev, examPattern: exam.display_name }));
+    setExamDropdownOpen(false);
   };
 
   const getClassSectionParts = () => {
@@ -399,18 +344,43 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
       return;
     }
 
-    const selectedExam = examOptions.find(
-      (exam) => exam.id === examForm.examPattern,
-    );
-
-    if (!selectedExam) {
-      setUploadError("Invalid exam selected.");
-      return;
-    }
-
     const classSectionParts = getClassSectionParts();
     if (!classSectionParts) {
       setUploadError('Invalid Class-Section format. Expected "CLASS-SECTION".');
+      return;
+    }
+
+    const selectedExamOption = examOptions.find(
+      (exam) =>
+        exam.id === examForm.examPattern ||
+        exam.display_name === examForm.examPattern,
+    );
+
+    const selectedClass = schoolData?.classes?.find(
+      (cls) =>
+        String(cls.class || "").trim() === classSectionParts.examClass &&
+        String(cls.section || "").trim() === classSectionParts.examSection,
+    );
+
+    const customExamPattern = normalizeExamPattern(examForm.examPattern);
+
+    if (!selectedExamOption && !customExamPattern) {
+      setUploadError("Please enter a valid exam name.");
+      return;
+    }
+
+    const selectedExam =
+      selectedExamOption || {
+        id: customExamPattern,
+        exam_pattern: customExamPattern,
+        display_name: examForm.examPattern.trim(),
+        program: selectedClass?.program?.toUpperCase() || "",
+        school_id: selectedSchool,
+        type: "CUSTOM",
+      };
+
+    if (!selectedExam.program) {
+      setUploadError("Unable to identify the program for this class-section.");
       return;
     }
 
@@ -2195,20 +2165,55 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                 <div className="form-grid-3">
                   <label className="form-field">
                     <span className="form-label">Select Exam</span>
-                    <select
-                      className="form-input"
-                      name="examPattern"
-                      value={examForm.examPattern}
-                      onChange={handleFormChange}
-                      required
-                    >
-                      <option value="">-- Select Exam --</option>
-                      {examOptions.map((exam) => (
-                        <option key={exam.id} value={exam.id}>
-                          {exam.display_name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="omr-exam-combo">
+                      <input
+                        className="form-input"
+                        name="examPattern"
+                        value={examForm.examPattern}
+                        onChange={(event) => {
+                          handleFormChange(event);
+                          setExamDropdownOpen(true);
+                        }}
+                        onFocus={() => setExamDropdownOpen(true)}
+                        onBlur={() =>
+                          setTimeout(() => setExamDropdownOpen(false), 120)
+                        }
+                        placeholder="Select or type exam name"
+                        autoComplete="off"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="omr-exam-combo-toggle"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() =>
+                          setExamDropdownOpen((isOpen) => !isOpen)
+                        }
+                        aria-label="Show exam options"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                      {examDropdownOpen && (
+                        <div className="omr-exam-dropdown">
+                          {filteredExamOptions.length > 0 ? (
+                            filteredExamOptions.map((exam) => (
+                              <button
+                                type="button"
+                                key={exam.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectExamOption(exam)}
+                              >
+                                {exam.display_name}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="omr-exam-dropdown-empty">
+                              Use typed exam name
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
 
                   <label className="form-field">
