@@ -28,6 +28,7 @@ import {
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import spectropyLogoUrl from "../assets/logo.png";
+import { getTeacherRanks } from "../api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -82,35 +83,18 @@ function computeExamAnalytics(exams, teacherAssignments) {
       };
 
     const g = patternMap[pattern][classSection];
-    const physicsPercentage = getSubjectPercentage(
-      exam,
-      "physics_percentage",
-      "physics_marks",
-      "max_marks_physics",
-    );
-    const chemistryPercentage = getSubjectPercentage(
-      exam,
-      "chemistry_percentage",
-      "chemistry_marks",
-      "max_marks_chemistry",
-    );
-    const mathsPercentage = getSubjectPercentage(
-      exam,
-      "maths_percentage",
-      "maths_marks",
-      "max_marks_maths",
-    );
-    const biologyPercentage = getSubjectPercentage(
-      exam,
-      "biology_percentage",
-      "biology_marks",
-      "max_marks_biology",
-    );
+    const subjectAverages = {
+      physics: exam.phy_exam_per_average ?? exam.physics_percentage,
+      chemistry: exam.chem_exam_per_average ?? exam.chemistry_percentage,
+      maths: exam.math_exam_per_average ?? exam.maths_percentage,
+      biology: exam.bioexam_per_average ?? exam.biology_percentage,
+    };
 
-    if (physicsPercentage != null) g.physics.push(physicsPercentage);
-    if (chemistryPercentage != null) g.chemistry.push(chemistryPercentage);
-    if (mathsPercentage != null) g.maths.push(mathsPercentage);
-    if (biologyPercentage != null) g.biology.push(biologyPercentage);
+    Object.entries(subjectAverages).forEach(([subject, value]) => {
+      if (value == null || value === "") return;
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue)) g[subject].push(numericValue);
+    });
   });
 
   const avg = (arr) =>
@@ -228,7 +212,8 @@ export default function TeacherDashboard({
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
   const [teacherRankRows, setTeacherRankRows] = useState([]);
-  const [teacherRanksError, setTeacherRanksError] = useState("");
+  const [teacherRankLoading, setTeacherRankLoading] = useState(false);
+  const [teacherRankError, setTeacherRankError] = useState("");
   const hasFetched = useRef(false);
 
   const isProxyView = !!externalTeacherId && externalTeacherId.trim() !== "";
@@ -347,30 +332,22 @@ export default function TeacherDashboard({
         setExamPatterns(examPatterns);
         setBestWeekTestsByGrade(bestWeekTestsByGrade);
 
-        setTeacherRanksError("");
-        const rankPayloadBody = {
-          teacher_id: teacherData.teacher_id,
-          school_id: schoolId,
-          assignments: teacherData.teacher_assignments,
-        };
-        let rankRes = await fetch(`${API_BASE}/api/teachers/ranks`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rankPayloadBody),
-        });
-
-        if (!rankRes.ok && teacherData.teacher_id) {
-          rankRes = await fetch(
-            `${API_BASE}/api/teachers/${teacherData.teacher_id}/ranks`,
-          );
-        }
-
-        if (rankRes.ok) {
-          const rankPayload = await rankRes.json();
-          setTeacherRankRows(Array.isArray(rankPayload.rows) ? rankPayload.rows : []);
-        } else {
+        setTeacherRankLoading(true);
+        setTeacherRankError("");
+        try {
+          const rankData = await getTeacherRanks(teacherData.teacher_id, {
+            school_id: schoolId,
+            assignments: teacherData.teacher_assignments,
+          });
+          setTeacherRankRows(Array.isArray(rankData.rows) ? rankData.rows : []);
+        } catch (rankError) {
+          console.error("Teacher rankings error:", rankError);
           setTeacherRankRows([]);
-          setTeacherRanksError("Teacher rankings could not be loaded.");
+          setTeacherRankError(
+            rankError.message || "Failed to load teacher rankings.",
+          );
+        } finally {
+          setTeacherRankLoading(false);
         }
       } catch (err) {
         console.error("TeacherDashboard error:", err);
@@ -1441,7 +1418,8 @@ export default function TeacherDashboard({
           examPatterns={examPatterns}
           bestWeekTestsByGrade={bestWeekTestsByGrade}
           teacherRankRows={teacherRankRows}
-          teacherRanksError={teacherRanksError}
+          teacherRankLoading={teacherRankLoading}
+          teacherRankError={teacherRankError}
         />
       </div>
     );
@@ -1592,7 +1570,8 @@ export default function TeacherDashboard({
                   examPatterns={examPatterns}
                   bestWeekTestsByGrade={bestWeekTestsByGrade}
                   teacherRankRows={teacherRankRows}
-                  teacherRanksError={teacherRanksError}
+                  teacherRankLoading={teacherRankLoading}
+                  teacherRankError={teacherRankError}
                 />
               ),
             })}
@@ -1707,7 +1686,8 @@ function PerformanceContent({
   examPatterns,
   bestWeekTestsByGrade,
   teacherRankRows,
-  teacherRanksError,
+  teacherRankLoading,
+  teacherRankError,
 }) {
   const teacherCS = [
     ...new Set(
@@ -1942,6 +1922,59 @@ function PerformanceContent({
           <p className="td-no-data">
             No exam results found for your assigned classes.
           </p>
+        </section>
+      )}
+
+      {teacher.teacher_assignments.length > 0 && (
+        <section className="td-card">
+          <h2 className="td-section-title">Teacher Performance Rankings</h2>
+          {teacherRankLoading ? (
+            <p className="td-no-data">Loading teacher performance rankings...</p>
+          ) : teacherRankError ? (
+            <p className="td-no-data">{teacherRankError}</p>
+          ) : teacherRankRows.length === 0 ? (
+            <p className="td-no-data">
+              No teacher performance rankings found.
+            </p>
+          ) : (
+            <div className="td-table-scroll">
+              <table className="td-table">
+                <thead>
+                  <tr>
+                    <th className="td-th">Program</th>
+                    <th className="td-th">Exam</th>
+                    <th className="td-th">Date</th>
+                    <th className="td-th">Class-Section</th>
+                    <th className="td-th">Subject</th>
+                    <th className="td-th">Average</th>
+                    <th className="td-th">All India Rank</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teacherRankRows.map((row, index) => (
+                    <tr
+                      key={`${row.program || "program"}-${row.exam_pattern || "exam"}-${row.exam_date || "date"}-${row.class_section || "class"}-${row.subject || "subject"}-${index}`}
+                      className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                    >
+                      <td className="td-td">{row.program || "-"}</td>
+                      <td className="td-td">{row.exam_pattern || "-"}</td>
+                      <td className="td-td">{row.exam_date || "-"}</td>
+                      <td className="td-td">{row.class_section || "-"}</td>
+                      <td className="td-td">{row.subject || "-"}</td>
+                      <td className="td-td">
+                        {row.average !== null && row.average !== undefined && row.average !== ""
+                          ? `${row.average}%`
+                          : "-"}
+                      </td>
+                      <td className="td-td">
+                        {row.all_india_rank ?? row.all_schools_rank ?? "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 

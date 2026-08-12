@@ -1,5 +1,5 @@
 ﻿// src/components/SchoolOwnerDashboard.jsx
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import JSZip from "jszip";
@@ -51,13 +51,13 @@ const OWNER_TABS = [
     icon: ClipboardList,
     label: "Batch Wise",
   },
+  { id: "teacher", path: "teacher", icon: UserRoundCog, label: "Teacher Wise" },
   {
     id: "student",
     path: "student",
     icon: GraduationCap,
     label: "Student Wise",
   },
-  { id: "teacher", path: "teacher", icon: UserRoundCog, label: "Teacher Wise" },
 ];
 
 export default function SchoolOwnerDashboard({ onBack }) {
@@ -87,6 +87,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [examResults, setExamResults] = useState({});
   const [currentOMRExam, setCurrentOMRExam] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false); // 👈 New loading state
+  const analysisDownloadButtonRef = useRef(null);
+  const studentResultsDownloadButtonRef = useRef(null);
 
   // 📝 Exam Wise View State (isolated from batch flow)
   const [examWiseClassSection, setExamWiseClassSection] = useState(null);
@@ -5104,7 +5106,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
             borderBottom: "1px solid #e2e8f0",
           }}
         >
-          <div className="exam-results-heading">
+          <div className="exam-results-header-main">
+            <div className="exam-results-heading">
             <h2
               style={{
                 margin: 0,
@@ -5124,8 +5127,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 ? ` | ${new Date(currentOMRExam.exam_date).toLocaleDateString()}`
                 : ""}
             </div>
-          </div>
-          <div
+            </div>
+            <div
             className="exam-results-summary"
             style={{
               display: "grid",
@@ -5195,13 +5198,34 @@ export default function SchoolOwnerDashboard({ onBack }) {
               </div>
             </div>
           </div>
-          <button
-            className="page-back-nav exam-results-back"
-            onClick={() => setView("exam")}
-          >
-            Back to Batch Wise Results
-          </button>
-        </div>
+          </div>
+          <div className="exam-results-header-actions">
+            <button
+              className="page-back-nav exam-results-back"
+              onClick={() => setView("exam")}
+            >
+              Back to Batch Wise Results
+            </button>
+            <button
+              type="button"
+              className="exam-results-header-download"
+              disabled={resultsLoading || results.length === 0}
+              onClick={() => analysisDownloadButtonRef.current?.click()}
+            >
+              <Download size={15} />
+              Download Analysis PDF
+            </button>
+            <button
+              type="button"
+              className="exam-results-header-download exam-results-header-download--student"
+              disabled={resultsLoading || results.length === 0}
+              onClick={() => studentResultsDownloadButtonRef.current?.click()}
+            >
+              <Download size={15} />
+              Download Student Results PDF
+            </button>
+            </div>
+          </div>
 
         {/* === ANALYSIS SECTION === */}
         <div>
@@ -5498,6 +5522,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         {/* ===== DOWNLOAD ANALYSIS PDF BUTTON ===== */}
         <button
           className="exam-results-download-btn exam-results-download-btn--analysis"
+          ref={analysisDownloadButtonRef}
           onClick={() => {
             if (!results.length) {
               alert("No data to analyze");
@@ -6573,6 +6598,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             >
               <button
                 className="exam-results-download-btn exam-results-download-btn--students"
+                ref={studentResultsDownloadButtonRef}
                 onClick={() => {
                   if (!Array.isArray(results) || results.length === 0) {
                     alert("No data to export");
@@ -7783,7 +7809,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       : "";
 
   return (
-    <div className="admin-layout">
+    <div className="admin-layout school-owner-layout">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

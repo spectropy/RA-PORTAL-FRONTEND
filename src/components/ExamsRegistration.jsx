@@ -28,48 +28,46 @@ import spectropyLogo from "../assets/logo.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
-// Exam patterns by program
-const EXAM_PATTERNS = [
-  { id: "PART_TEST_1", name: "Part Test 1", type: "PART_TEST" },
-  { id: "PART_TEST_2", name: "Part Test 2", type: "PART_TEST" },
-  { id: "PART_TEST_3", name: "Part Test 3", type: "PART_TEST" },
-  { id: "PART_TEST_4", name: "Part Test 4", type: "PART_TEST" },
-  { id: "PART_TEST_5", name: "Part Test 5", type: "PART_TEST" },
-  { id: "PART_TEST_6", name: "Part Test 6", type: "PART_TEST" },
-  { id: "PART_TEST_7", name: "Part Test 7", type: "PART_TEST" },
-  { id: "PART_TEST_8", name: "Part Test 8", type: "PART_TEST" },
-  { id: "PART_TEST_9", name: "Part Test 9", type: "PART_TEST" },
-  { id: "PART_TEST_10", name: "Part Test 10", type: "PART_TEST" },
-  { id: "PART_TEST_11", name: "Part Test 11", type: "PART_TEST" },
-  { id: "PART_TEST_12", name: "Part Test 12", type: "PART_TEST" },
-  { id: "PART_TEST_13", name: "Part Test 13", type: "PART_TEST" },
-  { id: "PART_TEST_14", name: "Part Test 14", type: "PART_TEST" },
-  { id: "PART_TEST_15", name: "Part Test 15", type: "PART_TEST" },
-  { id: "UNIT_TEST_1", name: "Unit Test 1", type: "UNIT_TEST" },
-  { id: "UNIT_TEST_2", name: "Unit Test 2", type: "UNIT_TEST" },
-  { id: "UNIT_TEST_3", name: "Unit Test 3", type: "UNIT_TEST" },
-  { id: "GRAND_TEST_1", name: "Grand Test 1", type: "GRAND_TEST" },
-  { id: "GRAND_TEST_2", name: "Grand Test 2", type: "GRAND_TEST" },
+const SUPPORTED_PROGRAMS = new Set([
+  "SPHS",
+  "MAESTRO",
+  "GHS",
+  "SFS",
+  "KTS",
+  "VIJAYA",
+  "PHS",
+  "KPS",
+  "SPR",
+  "FF",
+  "CAT",
+  "SPARK",
+  "MANAIR_MAESTRO",
+]);
+
+const COMMON_EXAM_PATTERNS = [
+  ...Array.from({ length: 15 }, (_, index) => ({
+    id: `PART_TEST_${index + 1}`,
+    name: `Part Test ${index + 1}`,
+    type: "PART_TEST",
+  })),
+  ...Array.from({ length: 3 }, (_, index) => ({
+    id: `UNIT_TEST_${index + 1}`,
+    name: `Unit Test ${index + 1}`,
+    type: "UNIT_TEST",
+  })),
+  ...Array.from({ length: 2 }, (_, index) => ({
+    id: `GRAND_TEST_${index + 1}`,
+    name: `Grand Test ${index + 1}`,
+    type: "GRAND_TEST",
+  })),
 ];
 
-const getExamPatternsByProgram = () => EXAM_PATTERNS;
-const PROGRAM_NAMES = {
-  MAE: "MAESTRO",
-  PIO: "PIONEER",
-  CAT: "CATALYST",
-  FF: "FUTURE FOUNDATION",
-  NGHS_MAE: "NGHS MAESTRO",
-  SPHS: "SPHS",
-  GHS: "GHS",
-  SFS: "SFS",
-  KTS: "KTS",
-  VIJAYA: "VIJAYA",
-  PHS: "PHS",
-  KPS: "KPS",
-  SPR: "SPR",
-  SPARK: "SPARK",
-  MANAIR_MAESTRO: "MANAIR_MAESTRO",
-};
+const getExamPatternsByProgram = (program) =>
+  SUPPORTED_PROGRAMS.has(program) ? COMMON_EXAM_PATTERNS : [];
+
+const PROGRAM_NAMES = Object.fromEntries(
+  [...SUPPORTED_PROGRAMS].map((program) => [program, program]),
+);
 
 const formatExamName = (examPattern = "") =>
   examPattern
@@ -216,7 +214,9 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
       ...new Set(
         schoolData.classes
           .map((cls) => cls.program?.toUpperCase())
-          .filter(Boolean),
+          .filter(
+            (program) => program && SUPPORTED_PROGRAMS.has(program),
+          ),
       ),
     ];
 

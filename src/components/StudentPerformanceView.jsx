@@ -944,12 +944,16 @@ export default function StudentPerformanceView({
 
   const studentName = student?.name || "Student";
   const classLabel = `${student?.class || "—"}${student?.section ? `-${student.section}` : ""}`;
+  const isParentProfile = title === "Your Child's Profile";
 
   return (
     <>
       <style>{DASHBOARD_CSS}</style>
       {(onBack || examResults.length > 0) && (
         <div className="sp-page-action">
+          {isParentProfile && (
+            <div className="sp-page-action__title">Your Child's Profile</div>
+          )}
           {examResults.length > 0 && (
             <button
               type="button"
@@ -994,12 +998,24 @@ export default function StudentPerformanceView({
         <header className="sp-hero">
           <div className="sp-hero-content">
             <div className="sp-avatar" aria-hidden="true">
-              {getInitials(studentName)}
+              <img
+                className="sp-avatar-logo"
+                src={school?.logo_url || spectropyLogoUrl}
+                alt=""
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                  event.currentTarget.nextElementSibling.style.display = "grid";
+                }}
+              />
+              <span className="sp-avatar-fallback">
+                {getInitials(studentName)}
+              </span>
             </div>
             <div className="sp-identity">
-              <span className="sp-hero-kicker">{title}</span>
+              {!isParentProfile && <span className="sp-hero-kicker">{title}</span>}
               <h1>{studentName}</h1>
               <div className="sp-identity-meta">
+                <span>{school?.school_name || "School name unavailable"}</span>
                 <span>Class {classLabel}</span>
                 <span>
                   Roll No. {student?.roll_no || student?.student_id || "—"}
@@ -1452,6 +1468,8 @@ export default function StudentPerformanceView({
                           "Total",
                           "%",
                           "Class rank",
+                          "School rank",
+                          "All India rank",
                         ].map((heading) => (
                           <th key={heading}>{heading}</th>
                         ))}
@@ -1496,6 +1514,8 @@ export default function StudentPerformanceView({
                             {round(result.percentage)}%
                           </td>
                           <td>{result.class_rank ?? "—"}</td>
+                          <td>{result.school_rank ?? "—"}</td>
+                          <td>{result.all_schools_rank ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1535,6 +1555,20 @@ export default function StudentPerformanceView({
                         <span>Class rank</span>
                         <strong>
                           {result.class_rank ? `#${result.class_rank}` : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>School rank</span>
+                        <strong>
+                          {result.school_rank ? `#${result.school_rank}` : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>All India rank</span>
+                        <strong>
+                          {result.all_schools_rank
+                            ? `#${result.all_schools_rank}`
+                            : "—"}
                         </strong>
                       </div>
                     </div>
@@ -1624,6 +1658,16 @@ const DASHBOARD_CSS = `
     margin: 0;
     padding: clamp(16px, 3vw, 32px) clamp(16px, 3vw, 32px) 0;
     box-sizing: border-box;
+  }
+
+  .sp-page-action__title {
+    margin-right: auto;
+    color: #1e478f;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: .08em;
+    text-transform: uppercase;
   }
 
   .sp-dashboard {
@@ -1737,7 +1781,9 @@ const DASHBOARD_CSS = `
 
   .sp-identity { min-width: 0; }
   .sp-hero-kicker {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     margin-bottom: 3px;
     color: #bfdbfe;
     font-size: 10px;
@@ -1998,8 +2044,8 @@ const DASHBOARD_CSS = `
   .sp-snapshot-list dd span { display: inline-block; margin-left: 5px; color: var(--sp-blue); }
 
   .sp-table-panel { overflow: hidden; }
-  .sp-table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
-  .sp-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+  .sp-table-scroll { width: 100%; overflow: hidden; }
+  .sp-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; white-space: normal; }
   .sp-table th {
     position: sticky;
     top: 0;
@@ -2012,8 +2058,10 @@ const DASHBOARD_CSS = `
     font-weight: 850;
     letter-spacing: .025em;
     text-align: left;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
-  .sp-table td { padding: 10px 10px; border-bottom: 1px solid #eef2f7; color: var(--sp-slate-600); }
+  .sp-table td { padding: 10px 6px; border-bottom: 1px solid #eef2f7; color: var(--sp-slate-600); overflow-wrap: anywhere; word-break: break-word; }
   .sp-table tbody tr:last-child td { border-bottom: 0; }
   .sp-table tbody tr:hover { background: #f8fbff; }
   .sp-cell-strong { color: var(--sp-navy) !important; font-weight: 750; }
@@ -2046,6 +2094,158 @@ const DASHBOARD_CSS = `
   .sp-empty-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #eff6ff; font-size: 28px; }
   .sp-empty-state h2 { margin: 16px 0 0; font-size: 21px; }
   .sp-empty-state p { max-width: 540px; margin: 8px 0 0; color: var(--sp-slate-500); font-size: 13px; line-height: 1.6; }
+
+  /* Reference-led professional results and analysis theme */
+  .sp-page-action {
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 18px 24px 0;
+  }
+
+  .sp-dashboard {
+    --sp-navy: #102a63;
+    --sp-slate-700: #26354a;
+    --sp-slate-600: #44546a;
+    --sp-slate-500: #66758a;
+    --sp-slate-300: #cbd5e1;
+    --sp-slate-200: #dce3ec;
+    --sp-slate-100: #edf1f6;
+    --sp-slate-50: #f7f9fc;
+    --sp-blue: #1e478f;
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 18px 24px 32px;
+    color: #111827;
+    background: #f7f9fc;
+  }
+
+  .sp-button-page {
+    min-height: 38px;
+    border-color: #d7dee8;
+    border-radius: 7px;
+    color: #102a63;
+    box-shadow: none;
+  }
+  .sp-button-page:hover { border-color: #102a63; background: #f4f7fb; }
+  .sp-button-page-primary,
+  .sp-button-page-primary:hover {
+    border-color: #163b82;
+    color: #fff;
+    background: #163b82;
+    box-shadow: 0 3px 8px rgba(16,42,99,.16);
+  }
+
+  .sp-hero {
+    padding: 20px 22px;
+    border: 1px solid #dce3ec;
+    border-left: 4px solid #163b82;
+    border-radius: 12px;
+    color: #111827;
+    background: #fff;
+    box-shadow: 0 2px 5px rgba(15,23,42,.07);
+  }
+
+  .sp-avatar {
+    width: 58px;
+    padding: 6px;
+    overflow: hidden;
+    border: 1px solid #dce3ec;
+    border-radius: 10px;
+    color: #102a63;
+    background: #fff;
+    backdrop-filter: none;
+  }
+  .sp-avatar-logo { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .sp-avatar-fallback { display: none; width: 100%; height: 100%; place-items: center; }
+  .sp-hero-kicker { color: #1e478f; }
+  .sp-identity h1 { color: #111827; font-size: clamp(22px, 3vw, 27px); }
+  .sp-identity-meta { color: #66758a; }
+  .sp-identity-meta span:not(:last-child)::after { background: #a8b3c3; }
+
+  .sp-status-badge {
+    border-color: #cfdaea;
+    border-radius: 7px;
+    color: #163b82;
+    background: #edf4ff;
+    backdrop-filter: none;
+  }
+  .sp-status-dot,
+  .sp-status-success .sp-status-dot,
+  .sp-status-warning .sp-status-dot,
+  .sp-status-danger .sp-status-dot { background: #1e478f; }
+
+  .sp-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+  .sp-metric-card {
+    min-height: 104px;
+    padding: 16px;
+    border-color: #dce3ec;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06);
+  }
+  .sp-metric-icon,
+  .sp-tone-primary .sp-metric-icon,
+  .sp-tone-success .sp-metric-icon,
+  .sp-tone-warning .sp-metric-icon,
+  .sp-tone-danger .sp-metric-icon {
+    color: #163b82;
+    background: #edf4ff;
+  }
+  .sp-metric-value { color: #111827; letter-spacing: -.02em; }
+
+  .sp-insight-strip {
+    grid-template-columns: minmax(0, 1.4fr) minmax(240px, .6fr);
+    padding: 18px;
+    border: 1px solid #dce3ec;
+    border-left: 4px solid #163b82;
+    border-radius: 10px;
+    color: #111827;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06);
+  }
+  .sp-insight-main .sp-eyebrow { color: #1e478f; }
+  .sp-insight-icon {
+    position: relative;
+    color: transparent;
+    background: #edf4ff;
+    font-size: 0;
+  }
+  .sp-insight-icon::after { content: "↑"; color: #163b82; font-size: 20px; font-weight: 800; }
+  .sp-insight-main p { color: #5f6f85; }
+  .sp-insight-stats {
+    border-color: #dce3ec;
+    border-radius: 8px;
+    background: #f7f9fc;
+    backdrop-filter: none;
+  }
+  .sp-insight-stats div + div { border-left-color: #dce3ec; }
+  .sp-insight-stats span { color: #66758a; }
+  .sp-insight-stats strong { color: #102a63; }
+
+  .sp-dashboard-section { margin-top: 26px; }
+  .sp-section-eyebrow { color: #1e478f; }
+  .sp-section-header h2,
+  .sp-panel-header h3,
+  .sp-subject-card h3,
+  .sp-teacher-copy h3 { color: #111827; }
+  .sp-count-chip,
+  .sp-panel-badge { border-radius: 6px; color: #163b82; background: #edf4ff; }
+  .sp-panel,
+  .sp-subject-card,
+  .sp-teacher-card,
+  .sp-mobile-result-card {
+    border-color: #dce3ec;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.055);
+  }
+  .sp-action-list li { border-radius: 8px; }
+  .sp-action-list li > span { border-radius: 6px; background: #163b82; }
+  .sp-table th { color: #43526a; background: #f3f6fa; }
+  .sp-table tbody tr:hover { background: #f6f9fd; }
+  .sp-cell-score { color: #163b82 !important; }
+  .sp-teacher-avatar,
+  .sp-teacher-links a { color: #163b82; background: #edf4ff; }
 
   @media (max-width: 1120px) {
     .sp-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -2123,6 +2323,7 @@ const DASHBOARD_CSS = `
     .sp-section-action { margin-top: 10px; }
     .sp-subject-card-top { grid-template-columns: auto minmax(0, 1fr); }
     .sp-mini-tag { grid-column: 2; justify-self: start; }
+    .sp-mobile-result-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   @media (prefers-reduced-motion: reduce) {

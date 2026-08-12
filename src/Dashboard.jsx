@@ -263,7 +263,7 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
 
                 {error && (
-                  <div style={{ padding: "16px 32px 0" }}>
+                  <div className="responsive-status-wrap" style={{ padding: "16px 32px 0" }}>
                     <div className="alert-banner alert-banner--error">
                       <span className="alert-banner-icon">!</span>
                       <span>{error}</span>
@@ -272,7 +272,7 @@ export default function Dashboard({ user, onLogout }) {
                 )}
 
                 {loading ? (
-                  <div style={{ padding: "0 32px" }}>
+                  <div className="responsive-status-wrap" style={{ padding: "0 32px" }}>
                     <SkeletonRows />
                   </div>
                 ) : (

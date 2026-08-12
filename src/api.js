@@ -101,6 +101,20 @@ export async function assignTeacherToClass(payload) {
   return r.json();
 }
 
+export async function getTeacherRanks(teacherId, payload = {}) {
+  const r = await fetch(
+    `${API_BASE}/api/teachers/${encodeURIComponent(teacherId)}/ranks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || "Failed to load teacher rankings");
+  return data;
+}
+
 // ========================
 // 🎓 STUDENT REGISTRATION
 // ========================

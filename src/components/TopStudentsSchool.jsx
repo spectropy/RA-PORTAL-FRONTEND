@@ -251,6 +251,7 @@ const TopStudentsSchool = () => {
               const [cls, sec] = key.split("|");
               return (
                 <div
+                  className="responsive-table-scroll"
                   key={key}
                   style={{
                     border: "1px solid #e2e8f0",

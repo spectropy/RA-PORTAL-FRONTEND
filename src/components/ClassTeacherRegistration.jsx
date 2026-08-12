@@ -204,6 +204,13 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     }
   };
 
+  const refreshSchoolViews = async () => {
+    await Promise.all([
+      fetchSchoolData(),
+      typeof onSchoolsChanged === 'function' ? onSchoolsChanged() : Promise.resolve()
+    ]);
+  };
+
   const handleAddClass = async (e) => {
     e.preventDefault();
     if (!selectedSchool) {

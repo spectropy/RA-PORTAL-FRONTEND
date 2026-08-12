@@ -116,7 +116,7 @@ const handleUpload = async (exam) => {
   if (!currentOMRExam) return null;
 
   return (
-    <div style={{ 
+    <div className="legacy-responsive-page" style={{
       padding: '16px 0', 
       border: '1px solid #ddd', 
       borderRadius: '8px', 
@@ -201,7 +201,7 @@ const handleUpload = async (exam) => {
 
         {examResults[currentOMRExam.id]?.length > 0 && (
           <>
-            <div style={{ 
+            <div style={{
               marginBottom: '20px', 
               display: 'flex', 
               justifyContent: 'flex-end' 
@@ -226,7 +226,7 @@ const handleUpload = async (exam) => {
               </button>
             </div>
 
-            <div style={{ 
+            <div className="responsive-table-scroll" style={{
                border: '1px solid #ddd', 
                borderRadius: '8px',
                background: 'white',

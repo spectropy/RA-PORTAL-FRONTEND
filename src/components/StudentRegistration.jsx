@@ -320,6 +320,7 @@ export default function StudentRegistration({ schools = [] }) {
           <select
             value={selectedAcademicYear}
             onChange={(e) => setSelectedAcademicYear(e.target.value)}
+            disabled={deletingClassSection || Boolean(deletingStudentId)}
             style={{
               width: "100%",
               padding: "8px",
@@ -349,7 +350,15 @@ export default function StudentRegistration({ schools = [] }) {
           </label>
           <select
             value={selectedSchool}
-            onChange={(e) => setSelectedSchool(e.target.value)}
+            onChange={(e) => {
+              setSelectedSchool(e.target.value);
+              setSelectedClassSection('');
+              setStudents([]);
+              setSchoolData(null);
+              setError('');
+              setSuccess('');
+            }}
+            disabled={deletingClassSection || Boolean(deletingStudentId)}
             style={{
               width: "100%",
               padding: "8px",
@@ -388,8 +397,11 @@ export default function StudentRegistration({ schools = [] }) {
               onChange={(e) => {
                 setSelectedClassSection(e.target.value);
                 // 👇 Auto-fetch students when selection changes
-                if (e.target.value) fetchStudents();
+                setStudents([]);
+                setError('');
+                setSuccess('');
               }}
+              disabled={deletingClassSection || Boolean(deletingStudentId)}
               style={{
                 width: "100%",
                 padding: "8px",
@@ -495,7 +507,9 @@ export default function StudentRegistration({ schools = [] }) {
                 cursor: "pointer",
                 marginBottom: "30px", // 👈 Add space before table
               }}
-              disabled={loading}
+              disabled={
+                loading || deletingClassSection || Boolean(deletingStudentId)
+              }
             >
               {loading ? "Uploading..." : "Upload Students"}
             </button>

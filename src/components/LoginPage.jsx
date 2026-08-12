@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 // 🖼️ Import Role Specific Images from src/assets
-import adminImg from "../assets/Spectropy Admin.png";
+import adminImg from "../assets/Spectropy Admin Login.png";
 import ownerImg from "../assets/school owner.png";
 import teacherImg from "../assets/Teacher Portal.png";
 import studentImg from "../assets/Student Portal.png";
@@ -365,17 +365,20 @@ export default function LoginPage({ onLogin }) {
     onSubmit,
     children,
     errorMessage,
+    showHeroImage = true,
   ) => (
     <div style={{ width: "100%", background: "#ffffff" }}>
-      <div className="fullscreen-split-layout">
+      <div
+        className={`fullscreen-split-layout${showHeroImage ? "" : " fullscreen-split-layout--no-image"}`}
+      >
         {/* 👈 LEFT SIDE (50%): Hero Image sitting directly on white canvas */}
-        <div className="slide-in-left left-image-half">
+        {showHeroImage && <div className="slide-in-left left-image-half">
           <img
             src={roleAssetImg}
             alt={`${title} Full Hero Illustration`}
             className="full-hero-image"
           />
-        </div>
+        </div>}
 
         {/* 👉 RIGHT SIDE (50%): Clean Credentials Login Form */}
         <div className="slide-in-right right-form-half">

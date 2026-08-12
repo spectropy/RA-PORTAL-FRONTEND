@@ -2,7 +2,17 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 
 import spectropyLogoUrl from "../assets/logo.png";
-import studentProfileUrl from "../assets/icons/student_profile.png";
+
+const rankIconUrls = {
+  class: "/assets/classrank.png",
+  school: "/assets/schoolrank.png",
+  allIndia: "/assets/allinidarank.png",
+};
+
+const subjectIconUrls = {
+  maths: "/assets/pi.png",
+  biology: "/assets/leaf.png",
+};
 
 // Optional approved CEO signature only.
 // import ceoSignatureUrl from "../assets/ceo-signature.png";
@@ -65,6 +75,33 @@ const ICON_SVG = {
       <circle cx="32" cy="32" r="5.5" fill="${c}"/>
     </svg>`,
 
+  magnet: (c = "#2563EB") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <path d="M16 10h12v26c0 6.6 5.4 12 12 12s12-5.4 12-12V10h12v26c0 13.3-10.7 24-24 24S16 49.3 16 36V10Z"
+        fill="${c}"/>
+      <rect x="16" y="10" width="12" height="12" fill="#EF4444"/>
+      <rect x="52" y="10" width="12" height="12" fill="#EF4444"/>
+      <rect x="16" y="23" width="12" height="6" fill="white" opacity=".78"/>
+      <rect x="52" y="23" width="12" height="6" fill="white" opacity=".78"/>
+    </svg>`,
+
+  bulb: (c = "#2563EB") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <path d="M32 6c-11 0-20 8.7-20 19.5 0 6.8 3.4 11.5 7.2 15.1 2.2 2.1 3.8 4.8 4.5 7.8h16.6c.7-3 2.3-5.7 4.5-7.8C48.6 37 52 32.3 52 25.5 52 14.7 43 6 32 6Z"
+        fill="${c}"/>
+      <path d="M24 52h16M26 58h12" stroke="${c}" stroke-width="5" stroke-linecap="round"/>
+      <path d="M27 27h10l-6 9h8" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18 8 13 3M46 8l5-5M32 1v6" stroke="${c}" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+    </svg>`,
+
+  bolt: (c = "#2563EB") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <path d="M36 3 10 36h19l-4 25 29-36H34l2-22Z"
+        fill="${c}" stroke="${c}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M31 15 20 30h15l-2 12 11-14H31l0-13Z"
+        fill="white" opacity=".82"/>
+    </svg>`,
+
   flask: (c = "#0F9F95") => `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
       <path d="M24 7h16M28 7v18L13 49c-3 5 0 8 5 8h28c5 0 8-3 5-8L36 25V7"
@@ -112,15 +149,91 @@ const ICON_SVG = {
 
   // ── Ranking icons ──────────────────────────────────────────────────────────
   podium: (c = "#1E55A0") => `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-      <path fill="${c}" d="M5 39h15v18H5V39Zm20-13h15v31H25V26Zm20 7h14v24H45V33Z"/>
-      <text x="29" y="21" font-size="17" font-family="Arial"
-        font-weight="700" fill="${c}">1</text>
-      <text x="8" y="35" font-size="14" font-family="Arial"
-        font-weight="700" fill="${c}">2</text>
-      <text x="49" y="30" font-size="14" font-family="Arial"
-        font-weight="700" fill="${c}">3</text>
-    </svg>`,
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 64 64"
+     fill="none">
+
+  <!-- Trophy / achievement mark -->
+  <path
+    d="M32 5
+       L34.2 9.5
+       L39.2 10.2
+       L35.6 13.7
+       L36.5 18.6
+       L32 16.2
+       L27.5 18.6
+       L28.4 13.7
+       L24.8 10.2
+       L29.8 9.5
+       Z"
+    fill="${c}"
+  />
+
+  <!-- Second place -->
+  <rect
+    x="5"
+    y="37"
+    width="16"
+    height="21"
+    rx="2.5"
+    fill="${c}"
+    opacity="0.72"
+  />
+
+  <!-- First place -->
+  <rect
+    x="24"
+    y="26"
+    width="16"
+    height="32"
+    rx="2.5"
+    fill="${c}"
+  />
+
+  <!-- Third place -->
+  <rect
+    x="43"
+    y="42"
+    width="16"
+    height="16"
+    rx="2.5"
+    fill="${c}"
+    opacity="0.55"
+  />
+
+  <!-- Rank numbers -->
+  <text
+    x="32"
+    y="40"
+    text-anchor="middle"
+    font-size="13"
+    font-family="Arial, sans-serif"
+    font-weight="700"
+    fill="white"
+  >1</text>
+
+  <text
+    x="13"
+    y="50"
+    text-anchor="middle"
+    font-size="11"
+    font-family="Arial, sans-serif"
+    font-weight="700"
+    fill="white"
+  >2</text>
+
+  <text
+    x="51"
+    y="53"
+    text-anchor="middle"
+    font-size="11"
+    font-family="Arial, sans-serif"
+    font-weight="700"
+    fill="white"
+  >3</text>
+
+</svg>
+`,
 
   school: (c = "#0F9F95") => `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -139,6 +252,33 @@ const ICON_SVG = {
     </svg>`,
 
   // ── Student card icons ─────────────────────────────────────────────────────
+  medal: (c = "#1E55A0") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <rect x="8" y="36" width="13" height="20" rx="1.8" fill="${c}" opacity=".88"/>
+      <rect x="26" y="25" width="13" height="31" rx="1.8" fill="${c}"/>
+      <rect x="44" y="31" width="12" height="25" rx="1.8" fill="${c}" opacity=".78"/>
+      <path d="M32 7 35 13l7 1-5 5 1 7-6-3.5L26 26l1-7-5-5 7-1 3-6Z" fill="${c}"/>
+      <text x="12" y="51" font-size="10" font-family="Arial" font-weight="700" fill="white">2</text>
+      <text x="30" y="43" font-size="10" font-family="Arial" font-weight="700" fill="white">1</text>
+    </svg>`,
+
+  buildingRank: (c = "#0F9F95") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <path d="M8 26 32 10l24 16v32H8V26Z" fill="${c}"/>
+      <rect x="16" y="32" width="8" height="8" fill="white" opacity=".95"/>
+      <rect x="40" y="32" width="8" height="8" fill="white" opacity=".95"/>
+      <rect x="27" y="43" width="10" height="15" fill="white" opacity=".95"/>
+      <path d="M32 10V4h12v13" stroke="${c}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="32" cy="28" r="4" fill="white" opacity=".95"/>
+    </svg>`,
+
+  globeRank: (c = "#7C3FC2") => `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <path fill="${c}" d="M23 5 35 8l4 7 8 3-2 8 6 5-5 6-3 10-6 4-4 8-6-7-6-5-2-10-7-5 5-8-1-8 7-11Z"/>
+      <circle cx="31" cy="24" r="3.5" fill="white" opacity=".9"/>
+      <path d="M18 46 10 58M44 45l8 13" stroke="${c}" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+    </svg>`,
+
   graduation: (c = "#1E55A0") => `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
       <path fill="${c}" d="M3 22 32 7l29 15-29 15L3 22Z"/>
@@ -212,12 +352,7 @@ const ICON_SVG = {
 // ============================================================================
 
 export const generatePDF = async (studentData, schoolData, examResults) => {
-  if (
-    !studentData ||
-    !schoolData ||
-    !Array.isArray(examResults) ||
-    !examResults.length
-  ) {
+  if (!studentData || !schoolData) {
     throw new Error("Missing required data for PDF generation");
   }
 
@@ -263,7 +398,7 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
       marks: "physics_marks",
       max: "max_marks_physics",
       color: [21, 96, 202],
-      icon: "atom",
+      icon: "bolt",
     },
     {
       key: "chemistry",
@@ -291,22 +426,54 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     },
   ];
 
+  const useDummyExamResults = false;
+  const dummyExamResults = Array.from({ length: 18 }, (_, index) => {
+    const examNo = index + 1;
+    const maxMarks = 100;
+    const physics = 58 + ((index * 7) % 34);
+    const chemistry = 55 + ((index * 5) % 36);
+    const maths = 52 + ((index * 9) % 38);
+    const biology = 60 + ((index * 6) % 32);
+    const total = physics + chemistry + maths + biology;
+    const percentage = (total / (maxMarks * 4)) * 100;
+
+    return {
+      date: `2026-${String(Math.floor(index / 3) + 1).padStart(2, "0")}-${String(
+        6 + ((index * 4) % 22),
+      ).padStart(2, "0")}`,
+      exam: `Practice Assessment ${examNo}`,
+      program: "IIT-MED",
+      correct_answers: 24 + ((index * 3) % 28),
+      wrong_answers: 4 + (index % 8),
+      unattempted: 2 + ((index * 2) % 7),
+      physics_marks: physics,
+      max_marks_physics: maxMarks,
+      chemistry_marks: chemistry,
+      max_marks_chemistry: maxMarks,
+      maths_marks: maths,
+      max_marks_maths: maxMarks,
+      biology_marks: biology,
+      max_marks_biology: maxMarks,
+      total_marks: total,
+      percentage,
+      class_rank: 1 + (index % 12),
+      school_rank: 3 + ((index * 2) % 25),
+      all_schools_rank: 25 + ((index * 11) % 180),
+    };
+  });
+  const reportExamResults = useDummyExamResults
+    ? dummyExamResults
+    : examResults;
+  if (!Array.isArray(reportExamResults) || !reportExamResults.length) {
+    throw new Error("Missing required data for PDF generation");
+  }
+
   // --------------------------------------------------------------------------
   // UTILITY FUNCTIONS  (unchanged)
   // --------------------------------------------------------------------------
   const safe = (v, fb = "-") =>
     v === null || v === undefined || v === "" ? fb : String(v);
   const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
-
-  const getInitials = (name = "") => {
-    const parts = String(name).trim().split(/\s+/).filter(Boolean);
-    return parts.length
-      ? parts
-          .slice(0, 2)
-          .map((p) => p[0].toUpperCase())
-          .join("")
-      : "ST";
-  };
 
   const examName = (exam) => safe(exam?.exam, "Assessment").replace(/_/g, " ");
   const formatDate = (value) => {
@@ -366,7 +533,7 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   // --------------------------------------------------------------------------
   // DATA PROCESSING  (unchanged)
   // --------------------------------------------------------------------------
-  const exams = [...examResults].sort(
+  const exams = [...reportExamResults].sort(
     (a, b) => new Date(a?.date || 0) - new Date(b?.date || 0),
   );
 
@@ -435,26 +602,49 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   // --------------------------------------------------------------------------
   // IMAGE LOADING
   // --------------------------------------------------------------------------
-  const [spectropyLogo, schoolLogo, studentProfile, ceoSignature, iconMap] =
-    await Promise.all([
-      toDataUrl(spectropyLogoUrl),
-      toDataUrl(
-        schoolData?.logo_base64 ||
-          schoolData?.logo_data_url ||
-          schoolData?.logo_url,
-      ),
-      toDataUrl(studentProfileUrl),
-      toDataUrl(ceoSignatureUrl),
-      (async () => {
-        const entries = await Promise.all(
-          Object.entries(ICON_SVG).map(async ([k, f]) => [
-            k,
-            await svgToPng(f(), 180, 180),
-          ]),
-        );
-        return Object.fromEntries(entries);
-      })(),
-    ]);
+  const [
+    spectropyLogo,
+    schoolLogo,
+    ceoSignature,
+    rankIcons,
+    subjectIcons,
+    iconMap,
+  ] = await Promise.all([
+    toDataUrl(spectropyLogoUrl),
+    toDataUrl(
+      schoolData?.logo_base64 ||
+        schoolData?.logo_data_url ||
+        schoolData?.logo_url,
+    ),
+    toDataUrl(ceoSignatureUrl),
+    (async () => {
+      const entries = await Promise.all(
+        Object.entries(rankIconUrls).map(async ([k, src]) => [
+          k,
+          await toDataUrl(src),
+        ]),
+      );
+      return Object.fromEntries(entries);
+    })(),
+    (async () => {
+      const entries = await Promise.all(
+        Object.entries(subjectIconUrls).map(async ([k, src]) => [
+          k,
+          await toDataUrl(src),
+        ]),
+      );
+      return Object.fromEntries(entries);
+    })(),
+    (async () => {
+      const entries = await Promise.all(
+        Object.entries(ICON_SVG).map(async ([k, f]) => [
+          k,
+          await svgToPng(f(), 180, 180),
+        ]),
+      );
+      return Object.fromEntries(entries);
+    })(),
+  ]);
 
   // ==========================================================================
   // DRAW HELPERS
@@ -532,6 +722,33 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     }
   };
 
+  const drawImageCoverCircle = (dataUrl, cx, cy, r) => {
+    if (!dataUrl) return false;
+    try {
+      const props = doc.getImageProperties(dataUrl);
+      const box = r * 2;
+      const scale = Math.max(box / props.width, box / props.height);
+      const dw = props.width * scale;
+      const dh = props.height * scale;
+      const fmt = /^data:image\/jpe?g/i.test(dataUrl)
+        ? "JPEG"
+        : /^data:image\/webp/i.test(dataUrl)
+          ? "WEBP"
+          : "PNG";
+
+      doc.saveGraphicsState();
+      doc.circle(cx, cy, r, null);
+      doc.clip();
+      doc.discardPath();
+      doc.addImage(dataUrl, fmt, cx - dw / 2, cy - dh / 2, dw, dh);
+      doc.restoreGraphicsState();
+      return true;
+    } catch (e) {
+      console.warn("Image draw failed", e);
+      return false;
+    }
+  };
+
   const drawIconCircle = (
     iconKey,
     x,
@@ -551,6 +768,39 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
       size * 0.56,
       size * 0.56,
     );
+  };
+
+  const drawRankImageCircle = (
+    dataUrl,
+    fallbackIcon,
+    x,
+    y,
+    size,
+    bg,
+    border,
+  ) => {
+    doc.setFillColor(...bg);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.35);
+    doc.circle(x, y, size / 2, "FD");
+
+    const imageAdded = drawImageContain(
+      dataUrl,
+      x - size * 0.36,
+      y - size * 0.36,
+      size * 0.72,
+      size * 0.72,
+    );
+
+    if (!imageAdded) {
+      drawImageContain(
+        iconMap[fallbackIcon],
+        x - size * 0.3,
+        y - size * 0.3,
+        size * 0.6,
+        size * 0.6,
+      );
+    }
   };
 
   const fitText = (
@@ -592,12 +842,11 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     doc.setLineWidth(0.6);
     doc.circle(20.5, HEADER_H / 2, 9.6, "FD");
 
-    const schoolAdded = drawImageContain(
+    const schoolAdded = drawImageCoverCircle(
       schoolLogo,
-      13.1,
-      HEADER_H / 2 - 7.4,
-      14.8,
-      14.8,
+      20.5,
+      HEADER_H / 2,
+      9.2,
     );
     if (!schoolAdded) {
       // Placeholder: small navy filled inner circle + bold initial
@@ -749,38 +998,18 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   // --------------------------------------------------------------------------
   rounded(8, 29, 281, 22, C.soft, C.border2, 3.5);
 
-  // Avatar circle — navy fill, white initials
-  doc.setFillColor(...C.white);
-  doc.setDrawColor(...C.border2);
-  doc.setLineWidth(0.35);
-  doc.circle(22, 40, 8.5, "FD");
-
-  const studentImageAdded = drawImageContain(
-    studentProfile,
-    13.5,
-    31.5,
-    17,
-    17,
-  );
-  if (!studentImageAdded) {
-    doc.setFillColor(...C.navy);
-    doc.circle(22, 40, 6.7, "F");
-    setText(10.5, C.white, "bold");
-    doc.text(getInitials(studentData?.name), 22, 43.4, { align: "center" });
-  }
-
-  // Student name + subtitle
+  // Student name + subtitle, vertically centered in the hero card.
   fitText(
     safe(studentData?.name, "Student Name").toUpperCase(),
-    35,
-    37.5,
-    90,
+    16,
+    40.2,
+    102,
     16.5,
     "left",
     C.navy,
   );
   setText(7, C.muted, "normal");
-  doc.text("STUDENT PERFORMANCE PROFILE", 35, 44);
+  doc.text("STUDENT PERFORMANCE PROFILE", 16, 44.8);
 
   // ── Meta chips (Grade | Section | Roll No.) ──
   // Chip 1 – Grade
@@ -792,7 +1021,7 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   line(184, 36.4, 184, 43.3, C.border2, 0.3);
   drawImageContain(iconMap["graduation"], 116, 36.8, 6, 6);
   setText(7.4, C.ink, "bold");
-  doc.text(`Grade ${safe(studentData?.class)}`, 124, 41.5);
+  doc.text(`${safe(studentData?.class)}`, 124, 41.5);
 
   // Chip 2 – Section
   drawImageContain(iconMap["users"], 152.2, 36.8, 6, 6);
@@ -804,7 +1033,7 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
 
   // Program badge — solid navy pill (right)
   doc.setFillColor(...C.navy);
-  doc.roundedRect(237, 33.5, 44, 12, 3.5, 3.5, "F");
+  doc.roundedRect(237, 34.2, 44, 12, 3.5, 3.5, "F");
   fitText(fullProgram.toUpperCase(), 259, 41.5, 41, 9, "center", C.white);
 
   // --------------------------------------------------------------------------
@@ -838,11 +1067,17 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     doc.setDrawColor(...bg);
     doc.setLineWidth(0);
     doc.circle(17.5, y, 4.4, "FD");
-    drawImageContain(iconMap[subject.icon], 13.5, y - 4, 8, 8);
+    drawImageContain(
+      subjectIcons[subject.key] || iconMap[subject.icon],
+      15,
+      y - 2.5,
+      5,
+      5,
+    );
 
     // Subject name
     setText(8.5, C.ink, "bold");
-    doc.text(subject.label, 26, y + 2.5);
+    doc.text(subject.label, 26, y + 1);
 
     // Progress bar
     const bx = 50,
@@ -958,21 +1193,24 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
 
   const rankItems = [
     {
-      icon: "podium",
+      image: rankIcons.class,
+      fallbackIcon: "medal",
       value: safe(latestExam?.class_rank),
       label: "CLASS RANK",
       color: C.blue,
       bg: [232, 242, 255],
     },
     {
-      icon: "school",
+      image: rankIcons.school,
+      fallbackIcon: "buildingRank",
       value: safe(latestExam?.school_rank),
       label: "SCHOOL RANK",
       color: C.teal,
       bg: [226, 248, 246],
     },
     {
-      icon: "india",
+      image: rankIcons.allIndia,
+      fallbackIcon: "globeRank",
       value: safe(latestExam?.all_schools_rank),
       label: "ALL INDIA RANK",
       color: C.purple,
@@ -984,13 +1222,21 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     const cx = 88 + i * 66.5;
     if (i > 0) line(cx - 33.2, 123, cx - 33.2, 141.5, C.border2, 0.3);
 
-    drawIconCircle(rank.icon, cx - 15, 131.5, 11.2, rank.bg, C.border);
+    drawRankImageCircle(
+      rank.image,
+      rank.fallbackIcon,
+      cx - 10,
+      131.5,
+      14.5,
+      rank.bg,
+      C.border,
+    );
 
-    setText(18.5, rank.color, "bold");
-    doc.text(String(rank.value), cx + 4, 132.5);
+    setText(22.5, rank.color, "bold");
+    doc.text(String(rank.value), cx + 4.5, 133.2);
 
     setText(6.8, C.ink, "bold");
-    doc.text(rank.label, cx + 4, 139.5);
+    doc.text(rank.label, cx + 4.5, 139.5);
 
     // Colored underline bar
     doc.setFillColor(...rank.color);
@@ -1002,18 +1248,18 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   // --------------------------------------------------------------------------
   rounded(8, 148, 281, 14, C.paleBlue, [199, 218, 242], 3);
 
-  drawIconCircle("info", 20.5, 155, 9, C.white, [199, 218, 242]);
+  drawIconCircle("info", 16.5, 155, 9, C.white, [199, 218, 242]);
 
-  setText(7.2, C.ink, "normal");
+  setText(9, C.ink, "normal");
   doc.text(
     `Strong overall achievement with excellent performance in ${strongest?.label || "the strongest subject"}.`,
-    31,
-    152.5,
+    24,
+    154.2,
   );
-  setText(7, C.muted, "normal");
+  setText(8, C.muted, "normal");
   doc.text(
     `Greater consistency in ${focus?.label || "the focus area"} can further improve the overall result.`,
-    31,
+    24,
     158.5,
   );
 
@@ -1067,13 +1313,13 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   // Large section title with big clipboard icon
   // --------------------------------------------------------------------------
   // Clipboard icon (large)
-  drawIconCircle("clipboard", 24, 38.5, 17, [232, 241, 255], C.border);
+  drawIconCircle("clipboard", 18, 38.5, 13, [232, 241, 255], C.border);
 
   // "ASSESSMENT HISTORY" large bold
-  setText(16, C.navy, "bold");
-  doc.text("ASSESSMENT HISTORY", 36.5, 36);
+  setText(14, C.navy, "bold");
+  doc.text("ACADEMIC PERFORMANCE RECORD", 26.5, 39);
   setText(7.5, C.muted, "normal");
-  doc.text("Detailed Performance Across All Assessments", 36.5, 43);
+  doc.text("Detailed Performance Across All Assessments", 26.5, 43);
 
   // --------------------------------------------------------------------------
   // Table
@@ -1134,21 +1380,66 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
 
   const percentageIndex = 5 + activeSubjects.length + 1;
   const lastRowIndex = tableBody.length - 1;
+  const tableWidth = 281;
+  const fixedColumnWidth = 24 + 41 + 17 + 16 + 25 + 22 + 15 + 18 + 19 + 22;
+  const subjectColumnWidth =
+    (tableWidth - fixedColumnWidth) / Math.max(activeSubjects.length, 1);
+  const tableColumnStyles = {
+    0: { cellWidth: 24 },
+    1: { cellWidth: 41 },
+    2: { cellWidth: 17 },
+    3: { cellWidth: 16 },
+    4: { cellWidth: 25 },
+  };
+  activeSubjects.forEach((_, i) => {
+    tableColumnStyles[5 + i] = { cellWidth: subjectColumnWidth };
+  });
+  tableColumnStyles[5 + activeSubjects.length] = { cellWidth: 22 };
+  tableColumnStyles[percentageIndex] = { cellWidth: 15 };
+  tableColumnStyles[percentageIndex + 1] = { cellWidth: 18 };
+  tableColumnStyles[percentageIndex + 2] = { cellWidth: 19 };
+  tableColumnStyles[percentageIndex + 3] = { cellWidth: 22 };
+
+  const tableStartY = 49;
+  const tableTargetBottomY = 180;
+  const estimatedHeaderHeight = 18.5;
+  const targetBodyRowHeight =
+    (tableTargetBottomY - tableStartY - estimatedHeaderHeight) /
+    Math.max(tableBody.length, 1);
+  const minBodyRowHeight = 6.5;
+  const maxBodyRowHeight = 9.2;
+  const tableBodyRowHeight = Math.max(
+    minBodyRowHeight,
+    Math.min(maxBodyRowHeight, targetBodyRowHeight),
+  );
+  const tableBodyFontSize = Math.max(
+    6.3,
+    Math.min(8.4, tableBodyRowHeight * 0.62),
+  );
+  const tableHeaderFontSize = Math.max(
+    5.9,
+    Math.min(7.2, tableBodyFontSize - 0.2),
+  );
+  const tableCellPadding = Math.max(
+    0.75,
+    Math.min(1.2, tableBodyRowHeight * 0.09),
+  );
 
   doc.autoTable({
     head,
     body: tableBody,
-    startY: 50,
+    startY: tableStartY,
     theme: "grid",
-    margin: { left: 8, right: 8, bottom: 20 },
+    margin: { left: 8, right: 8, bottom: 18 },
 
     styles: {
       font: "helvetica",
-      fontSize: 6.8,
+      fontSize: tableBodyFontSize,
       textColor: C.ink,
       lineColor: C.border,
       lineWidth: 0.2,
-      cellPadding: 1.4,
+      cellPadding: tableCellPadding,
+      minCellHeight: tableBodyRowHeight,
       halign: "center",
       valign: "middle",
       overflow: "linebreak",
@@ -1158,15 +1449,21 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
       fillColor: C.navy,
       textColor: C.white,
       fontStyle: "bold",
-      fontSize: 6.4,
-      minCellHeight: 7.5,
+      fontSize: tableHeaderFontSize,
+      minCellHeight: Math.max(7.5, Math.min(8, tableBodyRowHeight * 0.84)),
       lineColor: [55, 95, 148],
       lineWidth: 0.25,
     },
 
+    columnStyles: tableColumnStyles,
+
     alternateRowStyles: { fillColor: [248, 251, 255] },
 
     didParseCell: (data) => {
+      if (data.section === "head" && data.row.index === 0) {
+        data.cell.styles.fontSize = tableHeaderFontSize + 1;
+      }
+
       // Sub-header row (row index 1) — slightly lighter navy
       if (data.section === "head" && data.row.index === 1) {
         data.cell.styles.fillColor = C.navyMid;
@@ -1217,11 +1514,11 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
   const infoY = Math.min((doc.lastAutoTable?.finalY || 172) + 4, 182);
   rounded(8, infoY, 281, 9.5, C.soft, C.border, 2.5);
   drawIconCircle("info", 15, infoY + 4.8, 7, C.white, C.border);
-  setText(5.9, C.muted, "normal");
+  setText(6, C.muted, "normal");
   doc.text(
     "Rank values are calculated based on the performance of all students who appeared in the same assessment.",
     22,
-    infoY + 6.3,
+    infoY + 5.5,
   );
 
   drawFooterBar("Page 2 of 2");

@@ -14,6 +14,7 @@ import TeacherDashboard from "./components/TeacherDashboard";
 import StudentDashboard from "./components/StudentDashboard";
 import ParentDashboard from "./components/ParentDashboard";
 import GuestPage from "./components/GuestPage";
+import portalLogo from "./assets/logo.png";
 
 // ─── Role → Route map ────────────────────────────────────────────
 const ROLE_ROUTES = {
@@ -91,6 +92,14 @@ function AppShell() {
     navigate("/login", { replace: true });
   };
 
+  const headerRoleLabel =
+    {
+      SPECTROPY_ADMIN: "SPECTROPY ADMIN",
+      SCHOOL_OWNER: "SCHOOL OWNER",
+      TEACHER: "TEACHER LOGIN",
+      STUDENT: "STUDENT LOGIN",
+    }[user?.role] || user?.username || user?.name || user?.role;
+
   if (loading) {
     return (
       <div style={S.loadingWrap}>
@@ -155,7 +164,7 @@ function AppShell() {
         <div style={S.brandGroup} className="app-brand-group">
           <div style={S.logoContainer}>
             <img
-              src="/spectropy_logo.png"
+              src={portalLogo}
               alt="SPECTROPY Logo"
               style={S.logoImg}
               onError={(e) => {
@@ -174,9 +183,7 @@ function AppShell() {
         </div>
 
         {/* User pill + logout — hidden for SPECTROPY_ADMIN (sidebar) and TEACHER (sidebar has Sign Out) */}
-        {user &&
-          user.role !== "SPECTROPY_ADMIN" &&
-          user.role !== "SCHOOL_OWNER" && (
+        {user && (
             <div
               style={S.userMeta}
               className={`app-user-meta${user.role === "TEACHER" ? " app-user-meta--teacher" : ""}`}
@@ -184,11 +191,13 @@ function AppShell() {
               <div style={S.userPill}>
                 <RoleIcon role={user.role} />
                 <span style={{ fontWeight: 600 }}>
-                  {user.username || user.name || user.role}
+                  {headerRoleLabel}
                 </span>
               </div>
               {/* Sign Out hidden for TEACHER — already in sidebar */}
-              {user.role !== "TEACHER" && (
+              {user.role !== "TEACHER" &&
+                user.role !== "SPECTROPY_ADMIN" &&
+                user.role !== "SCHOOL_OWNER" && (
                 <button
                   onClick={handleLogout}
                   style={S.logoutBtn}

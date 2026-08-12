@@ -153,86 +153,26 @@ export default function SchoolForm({
           </div>
 
           <div className="form-field">
-            <label className="form-label" htmlFor="school-logo">
-              School Logo
+            <label className="form-label" htmlFor="school-state">
+              State *
             </label>
-            <div className="school-logo-input-row">
-              <input
-                id="school-logo"
-                className="form-input"
-                type="text"
-                placeholder="Paste image URL or select a file"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-              />
-              <label className="btn btn-outline school-logo-upload-btn">
-                Upload
-                <input
-                  type="file"
-                  accept={SUPPORTED_LOGO_EXTENSIONS.join(",")}
-                  className="school-logo-file-input"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const fileName = file.name.toLowerCase();
-                      const hasSupportedExtension =
-                        SUPPORTED_LOGO_EXTENSIONS.some((ext) =>
-                          fileName.endsWith(ext),
-                        );
-                      const hasSupportedType = SUPPORTED_LOGO_TYPES.includes(
-                        file.type,
-                      );
-
-                      if (!hasSupportedType || !hasSupportedExtension) {
-                        setAlertMsg(
-                          "Unsupported logo format. Please upload PNG, JPG, or JPEG only.",
-                        );
-                        e.target.value = "";
-                        return;
-                      }
-
-                      if (file.size > MAX_LOGO_SIZE_BYTES) {
-                        setAlertMsg(
-                          "Logo file is too large. Please upload a PNG, JPG, or JPEG under 100 KB.",
-                        );
-                        e.target.value = "";
-                        return;
-                      }
-
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        setLogoUrl(ev.target.result);
-                        setAlertMsg("");
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </label>
-              {logoUrl && (
-                <div className="school-logo-preview-wrap">
-                  <img
-                    src={logoUrl}
-                    alt="Logo preview"
-                    className="school-logo-preview"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLogoUrl("")}
-                    title="Remove logo"
-                    className="school-logo-remove"
-                  >
-                    X
-                  </button>
-                </div>
-              )}
-            </div>
-            <p className="form-help" style={{ marginTop: 6 }}>
-              Supported logo formats: PNG, JPG, JPEG. Maximum size: 100 KB.
-            </p>
+            <select
+              id="school-state"
+              className="form-input"
+              value={state}
+              onChange={(e) => {
+                setState(e.target.value);
+                setAlertMsg("");
+              }}
+              required
+            >
+              <option value="">-- Select State --</option>
+              {Object.keys(STATES).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -299,29 +239,6 @@ export default function SchoolForm({
         <div className="school-form-section-title">Address & Location</div>
         <div className="school-form-grid school-form-grid--three">
           <div className="form-field">
-            <label className="form-label" htmlFor="school-state">
-              State *
-            </label>
-            <select
-              id="school-state"
-              className="form-input"
-              value={state}
-              onChange={(e) => {
-                setState(e.target.value);
-                setAlertMsg("");
-              }}
-              required
-            >
-              <option value="">-- Select State --</option>
-              {Object.keys(STATES).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-field">
             <label className="form-label" htmlFor="school-area">
               Area / Address Line
             </label>
@@ -347,6 +264,89 @@ export default function SchoolForm({
               value={district}
               onChange={(e) => setDistrict(e.target.value)}
             />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="school-logo">
+              School Logo
+            </label>
+            <div className="school-logo-input-row">
+              <input
+                id="school-logo"
+                className="form-input"
+                type="text"
+                placeholder="Paste image URL or select a file"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+              />
+              <label className="btn btn-outline school-logo-upload-btn">
+                Upload
+                <input
+                  type="file"
+                  accept={SUPPORTED_LOGO_EXTENSIONS.join(",")}
+                  className="school-logo-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    const fileName = file.name.toLowerCase();
+                    const hasSupportedExtension =
+                      SUPPORTED_LOGO_EXTENSIONS.some((ext) =>
+                        fileName.endsWith(ext),
+                      );
+                    const hasSupportedType = SUPPORTED_LOGO_TYPES.includes(
+                      file.type,
+                    );
+
+                    if (!hasSupportedType || !hasSupportedExtension) {
+                      setAlertMsg(
+                        "Unsupported logo format. Please upload PNG, JPG, or JPEG only.",
+                      );
+                      e.target.value = "";
+                      return;
+                    }
+
+                    if (file.size > MAX_LOGO_SIZE_BYTES) {
+                      setAlertMsg(
+                        "Logo file is too large. Please upload a PNG, JPG, or JPEG under 100 KB.",
+                      );
+                      e.target.value = "";
+                      return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setLogoUrl(ev.target.result);
+                      setAlertMsg("");
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+              {logoUrl && (
+                <div className="school-logo-preview-wrap">
+                  <img
+                    src={logoUrl}
+                    alt="Logo preview"
+                    className="school-logo-preview"
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogoUrl("")}
+                    title="Remove logo"
+                    className="school-logo-remove"
+                  >
+                    X
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="form-help" style={{ marginTop: 6 }}>
+              Supported logo formats: PNG, JPG, JPEG. Maximum size: 100 KB.
+            </p>
           </div>
         </div>
       </section>
