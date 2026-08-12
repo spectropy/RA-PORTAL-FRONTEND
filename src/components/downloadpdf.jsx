@@ -351,7 +351,12 @@ const ICON_SVG = {
 // REPORT  —  generatePDF
 // ============================================================================
 
-export const generatePDF = async (studentData, schoolData, examResults) => {
+export const generatePDF = async (
+  studentData,
+  schoolData,
+  examResults,
+  options = {},
+) => {
   if (!studentData || !schoolData) {
     throw new Error("Missing required data for PDF generation");
   }
@@ -1531,7 +1536,7 @@ export const generatePDF = async (studentData, schoolData, examResults) => {
     .trim()
     .replace(/\s+/g, "_");
 
-  doc.save(
-    `ReportCard_${safeStudentName}_${new Date().toISOString().split("T")[0]}.pdf`,
-  );
+  const fileName = `ReportCard_${safeStudentName}_${new Date().toISOString().split("T")[0]}.pdf`;
+  if (options.output === "blob") return doc.output("blob");
+  doc.save(fileName);
 };

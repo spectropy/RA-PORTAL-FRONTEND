@@ -979,7 +979,9 @@ export default function StudentPerformanceView({
               disabled={isGeneratingPdf}
             >
               <FileDown size={15} strokeWidth={2.3} aria-hidden="true" />
-              <span>{isGeneratingPdf ? "Generating..." : "Download PDF"}</span>
+              <span>
+                {isGeneratingPdf ? "Generating..." : "Download Report Card"}
+              </span>
             </button>
           )}
           {onBack && (
@@ -1012,7 +1014,9 @@ export default function StudentPerformanceView({
               </span>
             </div>
             <div className="sp-identity">
-              {!isParentProfile && <span className="sp-hero-kicker">{title}</span>}
+              {!isParentProfile && (
+                <span className="sp-hero-kicker">{title}</span>
+              )}
               <h1>{studentName}</h1>
               <div className="sp-identity-meta">
                 <span>{school?.school_name || "School name unavailable"}</span>
