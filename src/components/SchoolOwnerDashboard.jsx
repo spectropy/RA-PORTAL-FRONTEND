@@ -35,6 +35,7 @@ import physicsicon from "../assets/icons/physics.png";
 import chemistryicon from "../assets/icons/chemistry.png";
 import mathsicon from "../assets/icons/Maths.png";
 import biologyicon from "../assets/icons/biology.png";
+import { generatePDF as generateNewReportPDF } from "./downloadpdf";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -1032,10 +1033,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
             section: student.section,
           };
 
-          const pdfBlob = await generateStudentReportPDF(
+          const pdfBlob = await generateNewReportPDF(
             studentData,
             school,
             examResults,
+            { output: "blob" },
           );
 
           const safeName = studentData.name.replace(/[^a-z0-9]/gi, "_");

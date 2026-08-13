@@ -157,7 +157,7 @@ export default function StudentDashboard({ studentId, onBack }) {
       school={school}
       examResults={examResults}
       teachers={teachers}
-      title="🎓 Student Dashboard"
+      title="Student Dashboard"
       onBack={onBack}
     />
   );

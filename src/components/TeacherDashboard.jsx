@@ -61,7 +61,11 @@ function computeExamAnalytics(exams, teacherAssignments) {
     const marks = parseFloat(exam[marksKey]);
     const maxMarks = parseFloat(exam[maxMarksKey]);
 
-    if (!Number.isFinite(marks) || !Number.isFinite(maxMarks) || maxMarks <= 0) {
+    if (
+      !Number.isFinite(marks) ||
+      !Number.isFinite(maxMarks) ||
+      maxMarks <= 0
+    ) {
       return null;
     }
 
@@ -109,7 +113,8 @@ function computeExamAnalytics(exams, teacherAssignments) {
 
     if (!values.length) return null;
 
-    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const average =
+      values.reduce((sum, value) => sum + value, 0) / values.length;
     const highest = Math.max(...values);
     const lowest = Math.min(...values);
     const sorted = [...values].sort((a, b) => a - b);
@@ -146,7 +151,11 @@ function computeExamAnalytics(exams, teacherAssignments) {
         Maths: stats(s.maths),
       };
     }
-    return { exam_pattern: pattern, averagesByClassSection, detailsByClassSection };
+    return {
+      exam_pattern: pattern,
+      averagesByClassSection,
+      detailsByClassSection,
+    };
   });
   examPatterns.sort((a, b) => a.exam_pattern.localeCompare(b.exam_pattern));
 
@@ -1076,7 +1085,7 @@ export default function TeacherDashboard({
         },
 
         headStyles: {
-          fillColor: COLORS.blue,
+          fillColor: COLORS.navy,
           textColor: COLORS.white,
           fontStyle: "bold",
           fontSize: 8.5,
@@ -1561,7 +1570,7 @@ export default function TeacherDashboard({
                   onClick={downloadPDF}
                 >
                   <Download size={16} />
-                  Download PDF Report
+                  Download Report
                 </button>
               ),
               children: (
@@ -1611,7 +1620,8 @@ function OverviewContent({ teacher, bestWeekTestsByGrade = [] }) {
               )}
               {teacher.contact && (
                 <span className="td-badge td-badge--gray">
-                  <Phone size={12} style={{ marginRight: 4 }} /> {teacher.contact}
+                  <Phone size={12} style={{ marginRight: 4 }} />{" "}
+                  {teacher.contact}
                 </span>
               )}
             </div>
@@ -1747,94 +1757,94 @@ function PerformanceContent({
         </h2>
         {teacherRankRows.length > 0 ? (
           <>
-          <div className="td-rank-summary-grid">
-            <div className="td-rank-summary">
-              <span>Best Rank</span>
-              <strong>
-                {validTeacherRanks.length
-                  ? `#${Math.min(...validTeacherRanks)}`
-                  : "-"}
-              </strong>
+            <div className="td-rank-summary-grid">
+              <div className="td-rank-summary">
+                <span>Best Rank</span>
+                <strong>
+                  {validTeacherRanks.length
+                    ? `#${Math.min(...validTeacherRanks)}`
+                    : "-"}
+                </strong>
+              </div>
+              <div className="td-rank-summary">
+                <span>Ranked Entries</span>
+                <strong>{teacherRankRows.length}</strong>
+              </div>
+              <div className="td-rank-summary">
+                <span>Average Score</span>
+                <strong>
+                  {formatPercent(
+                    teacherRankRows.reduce(
+                      (sum, row) => sum + (parseFloat(row.average) || 0),
+                      0,
+                    ) / teacherRankRows.length,
+                  )}
+                </strong>
+              </div>
             </div>
-            <div className="td-rank-summary">
-              <span>Ranked Entries</span>
-              <strong>{teacherRankRows.length}</strong>
-            </div>
-            <div className="td-rank-summary">
-              <span>Average Score</span>
-              <strong>
-                {formatPercent(
-                  teacherRankRows.reduce(
-                    (sum, row) => sum + (parseFloat(row.average) || 0),
-                    0,
-                  ) / teacherRankRows.length,
-                )}
-              </strong>
-            </div>
-          </div>
-          <div className="td-table-scroll">
-            <table className="td-table">
-              <thead>
-                <tr>
-                  <th className="td-th">Exam</th>
-                  <th className="td-th">Class</th>
-                  <th className="td-th">Subject</th>
-                  <th className="td-th">Average</th>
-                  <th className="td-th">All India Rank</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teacherRankRows.map((row, index) => (
-                  <tr
-                    key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-${index}`}
-                    className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
-                  >
-                    <td className="td-td td-td--pattern">
-                      {row.exam_pattern}
-                      {row.exam_date && (
-                        <span className="td-rank-date">{row.exam_date}</span>
-                      )}
-                    </td>
-                    <td className="td-td">{row.class_section}</td>
-                    <td className="td-td">{row.subject}</td>
-                    <td className="td-td">
-                      <span className={scoreClassName(row.average)}>
-                        {formatPercent(row.average)}
-                      </span>
-                    </td>
-                    <td className="td-td">
-                      <span className={rankClassName(row.all_india_rank)}>
-                        #{row.all_india_rank || "-"}
-                      </span>
-                    </td>
+            <div className="td-table-scroll">
+              <table className="td-table">
+                <thead>
+                  <tr>
+                    <th className="td-th">Exam</th>
+                    <th className="td-th">Class</th>
+                    <th className="td-th">Subject</th>
+                    <th className="td-th">Average</th>
+                    <th className="td-th">All India Rank</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="td-rank-cards">
-            {teacherRankRows.map((row, index) => (
-              <article
-                className="td-rank-card"
-                key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-card-${index}`}
-              >
-                <div>
-                  <strong>{row.exam_pattern}</strong>
-                  <span>
-                    {row.class_section} · {row.subject}
-                  </span>
-                </div>
-                <div className="td-rank-card__metrics">
-                  <span className={scoreClassName(row.average)}>
-                    {formatPercent(row.average)}
-                  </span>
-                  <span className={rankClassName(row.all_india_rank)}>
-                    #{row.all_india_rank || "-"}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
+                </thead>
+                <tbody>
+                  {teacherRankRows.map((row, index) => (
+                    <tr
+                      key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-${index}`}
+                      className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                    >
+                      <td className="td-td td-td--pattern">
+                        {row.exam_pattern}
+                        {row.exam_date && (
+                          <span className="td-rank-date">{row.exam_date}</span>
+                        )}
+                      </td>
+                      <td className="td-td">{row.class_section}</td>
+                      <td className="td-td">{row.subject}</td>
+                      <td className="td-td">
+                        <span className={scoreClassName(row.average)}>
+                          {formatPercent(row.average)}
+                        </span>
+                      </td>
+                      <td className="td-td">
+                        <span className={rankClassName(row.all_india_rank)}>
+                          #{row.all_india_rank || "-"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="td-rank-cards">
+              {teacherRankRows.map((row, index) => (
+                <article
+                  className="td-rank-card"
+                  key={`${row.exam_pattern}-${row.exam_date}-${row.class_section}-${row.subject}-card-${index}`}
+                >
+                  <div>
+                    <strong>{row.exam_pattern}</strong>
+                    <span>
+                      {row.class_section} · {row.subject}
+                    </span>
+                  </div>
+                  <div className="td-rank-card__metrics">
+                    <span className={scoreClassName(row.average)}>
+                      {formatPercent(row.average)}
+                    </span>
+                    <span className={rankClassName(row.all_india_rank)}>
+                      #{row.all_india_rank || "-"}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </>
         ) : (
           <p className="td-no-data">
@@ -1929,13 +1939,13 @@ function PerformanceContent({
         <section className="td-card">
           <h2 className="td-section-title">Teacher Performance Rankings</h2>
           {teacherRankLoading ? (
-            <p className="td-no-data">Loading teacher performance rankings...</p>
+            <p className="td-no-data">
+              Loading teacher performance rankings...
+            </p>
           ) : teacherRankError ? (
             <p className="td-no-data">{teacherRankError}</p>
           ) : teacherRankRows.length === 0 ? (
-            <p className="td-no-data">
-              No teacher performance rankings found.
-            </p>
+            <p className="td-no-data">No teacher performance rankings found.</p>
           ) : (
             <div className="td-table-scroll">
               <table className="td-table">
@@ -1962,7 +1972,9 @@ function PerformanceContent({
                       <td className="td-td">{row.class_section || "-"}</td>
                       <td className="td-td">{row.subject || "-"}</td>
                       <td className="td-td">
-                        {row.average !== null && row.average !== undefined && row.average !== ""
+                        {row.average !== null &&
+                        row.average !== undefined &&
+                        row.average !== ""
                           ? `${row.average}%`
                           : "-"}
                       </td>

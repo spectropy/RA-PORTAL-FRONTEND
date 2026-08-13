@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { FileDown } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import spectropyLogoUrl from "../assets/logo.png";
@@ -6,6 +7,7 @@ import physicsicon from "../assets/icons/physics.png";
 import chemistryicon from "../assets/icons/chemistry.png";
 import mathsicon from "../assets/icons/Maths.png";
 import biologyicon from "../assets/icons/biology.png";
+import { generatePDF as generateReportPDF } from "./downloadpdf";
 import {
   Area,
   AreaChart,
@@ -745,6 +747,8 @@ export default function StudentPerformanceView({
   title = "Student Performance",
   onBack,
 }) {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
   const analytics = useMemo(() => {
     const chronologicalResults = [...examResults].sort((a, b) => {
       const first = a.date ? new Date(a.date).getTime() : 0;
@@ -954,18 +958,30 @@ export default function StudentPerformanceView({
             <button
               type="button"
               className="sp-button sp-button-page sp-button-page-primary"
-              onClick={() => {
+              onClick={async () => {
+                if (isGeneratingPdf) {
+                  return;
+                }
+
+                setIsGeneratingPdf(true);
+
                 try {
-                  generatePDF(student, school || {}, examResults);
+                  await generateReportPDF(student, school || {}, examResults);
                 } catch (error) {
                   console.error(error);
                   window.alert(
                     "Unable to generate the report card. Please try again.",
                   );
+                } finally {
+                  setIsGeneratingPdf(false);
                 }
               }}
+              disabled={isGeneratingPdf}
             >
-              Download PDF
+              <FileDown size={15} strokeWidth={2.3} aria-hidden="true" />
+              <span>
+                {isGeneratingPdf ? "Generating..." : "Download Report Card"}
+              </span>
             </button>
           )}
           {onBack && (
@@ -998,7 +1014,9 @@ export default function StudentPerformanceView({
               </span>
             </div>
             <div className="sp-identity">
-              {!isParentProfile && <span className="sp-hero-kicker">{title}</span>}
+              {!isParentProfile && (
+                <span className="sp-hero-kicker">{title}</span>
+              )}
               <h1>{studentName}</h1>
               <div className="sp-identity-meta">
                 <span>{school?.school_name || "School name unavailable"}</span>
@@ -1719,6 +1737,12 @@ const DASHBOARD_CSS = `
 
   .sp-button:hover { transform: translateY(-1px); }
   .sp-button:focus-visible { outline: 3px solid rgba(125, 211, 252, .7); outline-offset: 2px; }
+  .sp-button:disabled {
+    cursor: wait;
+    opacity: .72;
+    transform: none;
+  }
+  .sp-button:disabled:hover { transform: none; }
   .sp-button-ghost { color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); }
   .sp-button-light { color: #1e3a8a; background: #fff; box-shadow: 0 10px 25px rgba(15,23,42,.18); }
   .sp-button-page {
