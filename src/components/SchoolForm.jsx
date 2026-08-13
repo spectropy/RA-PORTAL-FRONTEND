@@ -49,10 +49,6 @@ const ACADEMIC_YEARS = [
   "2031-2032",
 ];
 
-const SUPPORTED_LOGO_TYPES = ["image/png", "image/jpeg"];
-const SUPPORTED_LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg"];
-const MAX_LOGO_SIZE_BYTES = 100 * 1024;
-
 function yy(ay) {
   if (!ay) return "";
   const start = ay.split("-")[0] || "";
@@ -283,32 +279,15 @@ export default function SchoolForm({
                 Upload
                 <input
                   type="file"
-                  accept={SUPPORTED_LOGO_EXTENSIONS.join(",")}
+                  accept="image/*"
                   className="school-logo-file-input"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
 
-                    const fileName = file.name.toLowerCase();
-                    const hasSupportedExtension =
-                      SUPPORTED_LOGO_EXTENSIONS.some((ext) =>
-                        fileName.endsWith(ext),
-                      );
-                    const hasSupportedType = SUPPORTED_LOGO_TYPES.includes(
-                      file.type,
-                    );
-
-                    if (!hasSupportedType || !hasSupportedExtension) {
+                    if (!file.type.startsWith("image/")) {
                       setAlertMsg(
-                        "Unsupported logo format. Please upload PNG, JPG, or JPEG only.",
-                      );
-                      e.target.value = "";
-                      return;
-                    }
-
-                    if (file.size > MAX_LOGO_SIZE_BYTES) {
-                      setAlertMsg(
-                        "Logo file is too large. Please upload a PNG, JPG, or JPEG under 100 KB.",
+                        "Unsupported logo format. Please upload an image file.",
                       );
                       e.target.value = "";
                       return;
@@ -345,7 +324,7 @@ export default function SchoolForm({
               )}
             </div>
             <p className="form-help" style={{ marginTop: 6 }}>
-              Supported logo formats: PNG, JPG, JPEG. Maximum size: 100 KB.
+              Supported logo formats: Any image file.
             </p>
           </div>
         </div>
