@@ -13,7 +13,6 @@ import {
 
 // ===== Constants =====
 const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
-const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED"];
 const PROGRAM_OPTIONS = [
   "SPHS",
@@ -47,6 +46,7 @@ const PROGRAMS = [
 ];
 
 const GROUP_OPTIONS = ["PCM", "PCB", "PCMB"];
+const EMPTY_ASSIGNMENT_ROW = { class: "", section: "", subject: "" };
 
 const forcedGroupForFoundation = (foundation) => {
   if (foundation === "IIT-MED") return "PCMB";
@@ -128,12 +128,8 @@ export default function ClassTeacherRegistration({ schools = [] }) {
   // Teacher assignment state
   const [assignment, setAssignment] = useState({
     teacherId: "",
-    class: "",
-    section: "",
-    subject: "",
+    rows: [{ ...EMPTY_ASSIGNMENT_ROW }],
   });
-
-  const [selectedClassFoundation, setSelectedClassFoundation] = useState("");
 
   useEffect(() => {
     const fetchAcademicYearsData = async () => {
@@ -218,14 +214,21 @@ export default function ClassTeacherRegistration({ schools = [] }) {
       return;
     }
 
+    const section = newClass.section.trim();
+
+    if (!section) {
+      setError("Please enter a section.");
+      return;
+    }
+
     // ✅ Duplicate validation for class + section
     const isDuplicate = schoolData?.classes?.some(
-      (cls) => cls.class === newClass.class && cls.section === newClass.section,
+      (cls) => cls.class === newClass.class && cls.section === section,
     );
 
     if (isDuplicate) {
       setError(
-        `Class "${newClass.class} - Section ${newClass.section}" already exists for this school.`,
+        `Class "${newClass.class} - Section ${section}" already exists for this school.`,
       );
       return;
     }
@@ -241,7 +244,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
         foundation: newClass.foundation,
         program: newClass.program,
         group: newClass.group,
-        section: newClass.section,
+        section,
         num_students: parseInt(newClass.numStudents) || 0,
         academic_year: selectedAcademicYear,
       };
@@ -253,7 +256,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
         id: res?.data?.id || res?.id || Date.now(),
         school_id: selectedSchool,
         class: newClass.class,
-        section: newClass.section,
+        section,
         foundation: newClass.foundation || "-",
         program: newClass.program || "-",
         group: newClass.group || "-",
@@ -342,20 +345,54 @@ export default function ClassTeacherRegistration({ schools = [] }) {
       return;
     }
 
+    if (!assignment.teacherId) {
+      setError("Please select a teacher.");
+      return;
+    }
+
+    const assignmentRows = assignment.rows.map((row) => ({
+      class: row.class,
+      section: row.section,
+      subject: row.subject,
+    }));
+
+    const hasIncompleteRow = assignmentRows.some(
+      (row) => !row.class || !row.section || !row.subject,
+    );
+
+    if (hasIncompleteRow) {
+      setError("Please complete class, section, and subject for every row.");
+      return;
+    }
+
+    const rowKeys = assignmentRows.map(
+      (row) => `${row.class}||${row.section}||${row.subject}`,
+    );
+    const hasDuplicateRows = rowKeys.some(
+      (key, index) => rowKeys.indexOf(key) !== index,
+    );
+
+    if (hasDuplicateRows) {
+      setError("Please remove duplicate class-section-subject rows.");
+      return;
+    }
+
     // ✅ Duplicate assignment validation
     const targetTeacher = schoolData?.teachers?.find(
       (t) => t.teacher_id === assignment.teacherId,
     );
-    const isDuplicateAsgn = targetTeacher?.teacher_assignments?.some(
-      (a) =>
-        a.class === assignment.class &&
-        a.section === assignment.section &&
-        a.subject === assignment.subject,
+    const duplicateAssignment = assignmentRows.find((row) =>
+      targetTeacher?.teacher_assignments?.some(
+        (a) =>
+          a.class === row.class &&
+          a.section === row.section &&
+          a.subject === row.subject,
+      ),
     );
 
-    if (isDuplicateAsgn) {
+    if (duplicateAssignment) {
       setError(
-        `Teacher "${targetTeacher?.name || assignment.teacherId}" is already assigned to ${assignment.subject} for ${assignment.class}-${assignment.section}.`,
+        `Teacher "${targetTeacher?.name || assignment.teacherId}" is already assigned to ${duplicateAssignment.subject} for ${duplicateAssignment.class}-${duplicateAssignment.section}.`,
       );
       return;
     }
@@ -365,23 +402,28 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     setSuccess("");
 
     try {
-      const payload = {
-        school_id: selectedSchool,
-        teacher_id: assignment.teacherId,
-        class: assignment.class,
-        section: assignment.section,
-        subject: assignment.subject,
-      };
-
-      const res = await assignTeacherToClass(payload);
+      const savedAssignments = await Promise.all(
+        assignmentRows.map((row) =>
+          assignTeacherToClass({
+            school_id: selectedSchool,
+            teacher_id: assignment.teacherId,
+            class: row.class,
+            section: row.section,
+            subject: row.subject,
+          }),
+        ),
+      );
 
       // ⚡ Optimistic Instant State Update
-      const addedAssignment = {
-        id: res?.data?.id || res?.id || Date.now(),
-        class: assignment.class,
-        section: assignment.section,
-        subject: assignment.subject,
-      };
+      const addedAssignments = assignmentRows.map((row, index) => ({
+        id:
+          savedAssignments[index]?.data?.id ||
+          savedAssignments[index]?.id ||
+          Date.now() + index,
+        class: row.class,
+        section: row.section,
+        subject: row.subject,
+      }));
 
       setSchoolData((prev) => ({
         ...prev,
@@ -391,15 +433,17 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                 ...t,
                 teacher_assignments: [
                   ...(t.teacher_assignments || []),
-                  addedAssignment,
+                  ...addedAssignments,
                 ],
               }
             : t,
         ),
       }));
 
-      setSuccess("Teacher assigned to class successfully!");
-      setAssignment({ teacherId: "", class: "", section: "", subject: "" });
+      setSuccess(
+        `${addedAssignments.length} assignment${addedAssignments.length > 1 ? "s" : ""} added successfully!`,
+      );
+      setAssignment({ teacherId: "", rows: [{ ...EMPTY_ASSIGNMENT_ROW }] });
       goSubTab("overview");
 
       // 🔄 Silent background sync
@@ -427,16 +471,47 @@ export default function ClassTeacherRegistration({ schools = [] }) {
     setNewTeacher({ ...newTeacher, [e.target.name]: e.target.value });
   };
 
-  const handleAssignmentChange = (e) => {
-    const { name, value } = e.target;
-    setAssignment((prev) => ({ ...prev, [name]: value }));
+  const handleAssignmentTeacherChange = (e) => {
+    setAssignment((prev) => ({ ...prev, teacherId: e.target.value }));
+  };
 
-    if (name === "class" && schoolData?.classes) {
-      const selectedClass = schoolData.classes.find(
-        (cls) => cls.class === value,
-      );
-      setSelectedClassFoundation(selectedClass?.foundation || "");
-    }
+  const handleAssignmentRowChange = (index, e) => {
+    const { name, value } = e.target;
+
+    setAssignment((prev) => ({
+      ...prev,
+      rows: prev.rows.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+
+        const updated = { ...row, [name]: value };
+        if (name === "class") {
+          updated.section = "";
+          updated.subject = "";
+        }
+        if (name === "section") {
+          updated.subject = "";
+        }
+
+        return updated;
+      }),
+    }));
+  };
+
+  const handleAddAssignmentRow = () => {
+    setAssignment((prev) => ({
+      ...prev,
+      rows: [...prev.rows, { ...EMPTY_ASSIGNMENT_ROW }],
+    }));
+  };
+
+  const handleRemoveAssignmentRow = (index) => {
+    setAssignment((prev) => ({
+      ...prev,
+      rows:
+        prev.rows.length > 1
+          ? prev.rows.filter((_, rowIndex) => rowIndex !== index)
+          : [{ ...EMPTY_ASSIGNMENT_ROW }],
+    }));
   };
 
   const handleDeleteClass = async (classId, className, section) => {
@@ -525,6 +600,28 @@ export default function ClassTeacherRegistration({ schools = [] }) {
       setError(err.message || "Failed to delete assignment");
       fetchSchoolData(false); // rollback on error
     }
+  };
+
+  const getUniqueClassOptions = () => [
+    ...new Set((schoolData?.classes || []).map((cls) => cls.class)),
+  ];
+
+  const getSectionOptionsForClass = (className) => [
+    ...new Set(
+      (schoolData?.classes || [])
+        .filter((cls) => cls.class === className)
+        .map((cls) => cls.section),
+    ),
+  ];
+
+  const getFoundationForAssignmentRow = (row) => {
+    const selectedClass =
+      schoolData?.classes?.find(
+        (cls) => cls.class === row.class && cls.section === row.section,
+      ) ||
+      schoolData?.classes?.find((cls) => cls.class === row.class);
+
+    return selectedClass?.foundation || "";
   };
 
   // Metric totals calculations
@@ -902,20 +999,15 @@ export default function ClassTeacherRegistration({ schools = [] }) {
 
                   <div className="form-field">
                     <label className="form-label">Section *</label>
-                    <select
+                    <input
+                      type="text"
                       className="form-input"
                       name="section"
                       value={newClass.section}
                       onChange={handleClassChange}
+                      placeholder="Enter Section"
                       required
-                    >
-                      <option value="">-- Select Section --</option>
-                      {SECTION_OPTIONS.map((sec) => (
-                        <option key={sec} value={sec}>
-                          {sec}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="form-field">
@@ -1114,7 +1206,7 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                       className="form-input"
                       name="teacherId"
                       value={assignment.teacherId}
-                      onChange={handleAssignmentChange}
+                      onChange={handleAssignmentTeacherChange}
                       required
                     >
                       <option value="">-- Select Teacher --</option>
@@ -1126,70 +1218,95 @@ export default function ClassTeacherRegistration({ schools = [] }) {
                         ))}
                     </select>
                   </div>
+                </div>
 
-                  <div className="form-field">
-                    <label className="form-label">Select Class *</label>
-                    <select
-                      className="form-input"
-                      name="class"
-                      value={assignment.class}
-                      onChange={handleAssignmentChange}
-                      required
-                    >
-                      <option value="">-- Select Class --</option>
-                      {schoolData.classes &&
-                        schoolData.classes.map((cls) => (
-                          <option
-                            key={`${cls.class}-${cls.section}`}
-                            value={cls.class}
-                          >
-                            {cls.class}
+                {assignment.rows.map((row, index) => (
+                  <div
+                    className="form-grid-2"
+                    key={index}
+                    style={{ marginTop: index === 0 ? 16 : 20 }}
+                  >
+                    <div className="form-field">
+                      <label className="form-label">Select Class *</label>
+                      <select
+                        className="form-input"
+                        name="class"
+                        value={row.class}
+                        onChange={(e) => handleAssignmentRowChange(index, e)}
+                        required
+                      >
+                        <option value="">-- Select Class --</option>
+                        {getUniqueClassOptions().map((className) => (
+                          <option key={className} value={className}>
+                            {className}
                           </option>
                         ))}
-                    </select>
-                  </div>
+                      </select>
+                    </div>
 
-                  <div className="form-field">
-                    <label className="form-label">Select Section *</label>
-                    <select
-                      className="form-input"
-                      name="section"
-                      value={assignment.section}
-                      onChange={handleAssignmentChange}
-                      required
-                    >
-                      <option value="">-- Select Section --</option>
-                      {schoolData.classes &&
-                        schoolData.classes.map((cls) => (
-                          <option
-                            key={`${cls.class}-${cls.section}`}
-                            value={cls.section}
-                          >
-                            {cls.section}
+                    <div className="form-field">
+                      <label className="form-label">Select Section *</label>
+                      <select
+                        className="form-input"
+                        name="section"
+                        value={row.section}
+                        onChange={(e) => handleAssignmentRowChange(index, e)}
+                        required
+                        disabled={!row.class}
+                      >
+                        <option value="">-- Select Section --</option>
+                        {getSectionOptionsForClass(row.class).map((section) => (
+                          <option key={section} value={section}>
+                            {section}
                           </option>
                         ))}
-                    </select>
-                  </div>
+                      </select>
+                    </div>
 
-                  <div className="form-field">
-                    <label className="form-label">Select Subject *</label>
-                    <select
-                      className="form-input"
-                      name="subject"
-                      value={assignment.subject}
-                      onChange={handleAssignmentChange}
-                      required
-                    >
-                      <option value="">-- Select Subject --</option>
-                      {getSubjectOptions(selectedClassFoundation).map(
-                        (subject) => (
+                    <div className="form-field">
+                      <label className="form-label">Select Subject *</label>
+                      <select
+                        className="form-input"
+                        name="subject"
+                        value={row.subject}
+                        onChange={(e) => handleAssignmentRowChange(index, e)}
+                        required
+                        disabled={!row.class || !row.section}
+                      >
+                        <option value="">-- Select Subject --</option>
+                        {getSubjectOptions(
+                          getFoundationForAssignmentRow(row),
+                        ).map((subject) => (
                           <option key={subject} value={subject}>
                             {subject}
                           </option>
-                        ),
-                      )}
-                    </select>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-field" style={{ justifyContent: "end" }}>
+                      <label className="form-label">&nbsp;</label>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => handleRemoveAssignmentRow(index)}
+                        disabled={actionLoading}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
+                ))}
+
+                <div className="form-actions" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleAddAssignmentRow}
+                    disabled={actionLoading}
+                  >
+                    Add More
+                  </button>
                 </div>
 
                 <div className="form-actions" style={{ marginTop: 20 }}>
