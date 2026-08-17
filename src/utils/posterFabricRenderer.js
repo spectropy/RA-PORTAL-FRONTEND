@@ -48,8 +48,8 @@ function createTextObject(element, value) {
 async function createImageObject(element, value) {
   const style = element.style || {};
   const frame = new fabric.Rect({
-    left: element.x,
-    top: element.y,
+    left: element.x - element.width / 2,
+    top: element.y - element.height / 2,
     width: element.width,
     height: element.height,
     fill: style.backgroundColor || "rgba(251, 0, 0, 1)",
@@ -62,16 +62,7 @@ async function createImageObject(element, value) {
     selectable: false,
     evented: false,
   });
-  console.log("frame raw", {
-    left: frame.left,
-    top: frame.top,
-    width: frame.width,
-    height: frame.height,
-    originX: frame.originX,
-    originY: frame.originY,
-  });
 
-  console.log("frame bounds", frame.getBoundingRect());
   frame.set({
     posterElementId: element.id,
     binding: element.binding,
@@ -98,8 +89,8 @@ async function createImageObject(element, value) {
 
     if (scale == null) {
       image.set({
-        left: element.x + element.width / 2,
-        top: element.y + element.height / 2,
+        left: element.x,
+        top: element.y,
         scaleX: availableWidth / image.width,
         scaleY: availableHeight / image.height,
         originX: "center",
@@ -107,31 +98,19 @@ async function createImageObject(element, value) {
       });
     } else {
       image.set({
-        left: element.x + element.width / 2,
-        top: element.y + element.height / 2,
+        left: element.x,
+        top: element.y,
         scaleX: scale,
         scaleY: scale,
         originX: "center",
         originY: "center",
       });
     }
-    console.log("image raw", {
-      left: image.left,
-      top: image.top,
-      width: image.width,
-      height: image.height,
-      scaleX: image.scaleX,
-      scaleY: image.scaleY,
-      originX: image.originX,
-      originY: image.originY,
-    });
-
-    console.log("image bounds", image.getBoundingRect());
 
     image.set({ selectable: false, evented: false });
     objects.push(image);
   }
-  console.log("objec:,", objects);
+
   return objects;
 }
 
