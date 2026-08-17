@@ -21,6 +21,7 @@ import {
   Download,
   FileText,
   GraduationCap,
+  Images,
   LayoutDashboard,
   Loader2,
   Search,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import StudentDashboard from "./StudentDashboard"; // adjust path as needed
 import TeacherDashboard from "./TeacherDashboard";
+import TopStudentsPosterGenerator from "./PosterGenerator/TopStudentsPosterGenerator.jsx";
 import certificateTemplate from "../assets/certificate.png";
 import spectropyLogoUrl from "../assets/logo.png";
 import physicsicon from "../assets/icons/physics.png";
@@ -58,6 +60,12 @@ const OWNER_TABS = [
     path: "student",
     icon: GraduationCap,
     label: "Student Wise",
+  },
+  {
+    id: "top-students-poster",
+    path: "top-students-poster",
+    icon: Images,
+    label: "Top Posters",
   },
 ];
 
@@ -7792,6 +7800,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
       setView("student");
     } else if (tabId === "teacher") {
       setView("teacher");
+    } else if (tabId === "top-students-poster") {
+      setView("top-students-poster");
     }
   };
 
@@ -7904,6 +7914,24 @@ export default function SchoolOwnerDashboard({ onBack }) {
           />
           <Route path="student" element={renderStudentWiseView()} />
           <Route path="teacher" element={renderTeacherWiseView()} />
+          <Route
+            path="top-students-poster"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Top Students Poster</h1>
+                    <p className="page-header-subtitle">
+                      Generate poster downloads for your school.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <TopStudentsPosterGenerator mode="school" school={school} />
+                </div>
+              </div>
+            }
+          />
           <Route path="*" element={<Navigate to="overview" replace />} />
         </Routes>
       </div>

@@ -303,3 +303,156 @@ export const deleteAssignmentById = async (id) => {
   if (!res.ok) throw new Error(await parseAndFormatError(res));
   return res.json();
 };
+
+// ========================
+// POSTER TEMPLATES
+// ========================
+
+const POSTER_TEMPLATE_STORE = "sp_poster_templates";
+
+function readLocalPosterTemplates() {
+  try {
+    return JSON.parse(localStorage.getItem(POSTER_TEMPLATE_STORE) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeLocalPosterTemplates(templates) {
+  localStorage.setItem(POSTER_TEMPLATE_STORE, JSON.stringify(templates));
+}
+
+function normalizeTemplate(template) {
+  return {
+    ...template,
+    canvas_width: template.canvas_width || template.canvasWidth || 1080,
+    canvas_height: template.canvas_height || template.canvasHeight || 1350,
+    layout_json: template.layout_json || template.layoutJson || {
+      version: 1,
+      category: "top_students",
+      canvas: {
+        width: template.canvas_width || 1080,
+        height: template.canvas_height || 1350,
+        backgroundUrl: template.background_url || "",
+      },
+      elements: [],
+    },
+  };
+}
+
+async function requestJson(url, options = {}) {
+  const r = await fetch(url, options);
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
+  return r.json();
+}
+
+export async function getPosterTemplates(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  try {
+    const json = await requestJson(
+      `${API_BASE}/api/poster-templates${query ? `?${query}` : ""}`,
+    );
+    return json.data || json.templates || json || [];
+  } catch (e) {
+    let rows = readLocalPosterTemplates();
+    if (params.category) rows = rows.filter((row) => row.category === params.category);
+    if (params.status) rows = rows.filter((row) => row.status === params.status);
+    return rows.map(normalizeTemplate);
+  }
+}
+
+export async function getPosterTemplate(id) {
+  try {
+    const json = await requestJson(`${API_BASE}/api/poster-templates/${id}`);
+    return normalizeTemplate(json.data || json.template || json);
+  } catch (e) {
+    const found = readLocalPosterTemplates().find((row) => row.id === id);
+    if (!found) throw e;
+    return normalizeTemplate(found);
+  }
+}
+
+export async function createPosterTemplate(payload) {
+  try {
+    const json = await requestJson(`${API_BASE}/api/poster-templates`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return normalizeTemplate(json.data || json.template || json);
+  } catch (e) {
+    const templates = readLocalPosterTemplates();
+    const now = new Date().toISOString();
+    const template = normalizeTemplate({
+      id: crypto.randomUUID(),
+      category: "top_students",
+      status: "draft",
+      created_at: now,
+      updated_at: now,
+      ...payload,
+    });
+    templates.unshift(template);
+    writeLocalPosterTemplates(templates);
+    return template;
+  }
+}
+
+export async function updatePosterTemplate(id, payload) {
+  try {
+    const json = await requestJson(`${API_BASE}/api/poster-templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return normalizeTemplate(json.data || json.template || json);
+  } catch (e) {
+    const templates = readLocalPosterTemplates();
+    const index = templates.findIndex((row) => row.id === id);
+    if (index === -1) throw e;
+    const next = normalizeTemplate({
+      ...templates[index],
+      ...payload,
+      updated_at: new Date().toISOString(),
+    });
+    templates[index] = next;
+    writeLocalPosterTemplates(templates);
+    return next;
+  }
+}
+
+export async function duplicatePosterTemplate(id) {
+  try {
+    const json = await requestJson(
+      `${API_BASE}/api/poster-templates/${id}/duplicate`,
+      { method: "POST" },
+    );
+    return normalizeTemplate(json.data || json.template || json);
+  } catch (e) {
+    const source = readLocalPosterTemplates().find((row) => row.id === id);
+    if (!source) throw e;
+    return createPosterTemplate({
+      ...source,
+      id: undefined,
+      name: `${source.name || "Poster Template"} Copy`,
+      status: "draft",
+    });
+  }
+}
+
+export async function deletePosterTemplate(id) {
+  try {
+    return await requestJson(`${API_BASE}/api/poster-templates/${id}`, {
+      method: "DELETE",
+    });
+  } catch (e) {
+    writeLocalPosterTemplates(
+      readLocalPosterTemplates().filter((row) => row.id !== id),
+    );
+    return { success: true };
+  }
+}
+
+export async function getTopStudentsPosterData(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return requestJson(`${API_BASE}/api/top-students${query ? `?${query}` : ""}`);
+}

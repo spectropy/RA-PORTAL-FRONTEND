@@ -17,10 +17,14 @@ import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
 import TopStudentsSchool from "./components/TopStudentsSchool.jsx";
+import PosterTemplateList from "./components/PosterTemplates/PosterTemplateList.jsx";
+import PosterTemplateEditor from "./components/PosterTemplates/PosterTemplateEditor.jsx";
+import TopStudentsPosterGenerator from "./components/PosterGenerator/TopStudentsPosterGenerator.jsx";
 import {
   BookOpenCheck,
   ClipboardList,
   GraduationCap,
+  Images,
   LogOut,
   MessageCircleQuestion,
   School,
@@ -71,6 +75,12 @@ const TABS = [
     path: "top-students",
     icon: <Trophy size={18} strokeWidth={2.2} />,
     label: "Top Students",
+  },
+  {
+    id: "poster-templates",
+    path: "poster-templates",
+    icon: <Images size={18} strokeWidth={2.2} />,
+    label: "Poster Templates",
   },
 ];
 
@@ -447,6 +457,74 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
                 <div className="page-content">
                   <TopStudentsSchool />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="top-students/poster"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Top Students Poster</h1>
+                    <p className="page-header-subtitle">
+                      Select a template and export posters for top 5 students.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <TopStudentsPosterGenerator mode="admin" schools={schools} />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="poster-templates"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Poster Templates</h1>
+                    <p className="page-header-subtitle">
+                      Manage reusable poster backgrounds and dynamic fields.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <PosterTemplateList />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="poster-templates/new"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">New Poster Template</h1>
+                    <p className="page-header-subtitle">
+                      Upload a background and configure dynamic poster fields.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <PosterTemplateEditor />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="poster-templates/:id/edit"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-content">
+                  <PosterTemplateEditor />
                 </div>
               </div>
             }

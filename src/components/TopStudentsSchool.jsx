@@ -1,10 +1,12 @@
 // src/components/TopStudentsSchool.jsx
 import React, { useState, useEffect } from "react";
 import { getSchools } from "../api.js"; // Adjust path if needed
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 const TopStudentsSchool = () => {
+  const navigate = useNavigate();
   // State
   const [schools, setSchools] = useState([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
@@ -157,6 +159,14 @@ const TopStudentsSchool = () => {
     document.body.removeChild(a);
   };
 
+  const openPosterGenerator = (cls = "", sec = "") => {
+    const params = new URLSearchParams();
+    if (selectedSchoolId) params.set("school_id", selectedSchoolId);
+    if (cls) params.set("class", cls);
+    if (sec) params.set("section", sec);
+    navigate(`/admin/top-students/poster?${params.toString()}`);
+  };
+
   // Render
   return (
     <div style={{ margin: "0 auto" }}>
@@ -199,7 +209,7 @@ const TopStudentsSchool = () => {
 
       {/* Export Button */}
       {selectedSchoolId && Object.keys(topStudentsByClass).length > 0 && (
-        <div style={{ marginBottom: "20px" }}>
+        <div style={{ marginBottom: "20px", display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
             onClick={downloadCSV}
             style={{
@@ -214,6 +224,13 @@ const TopStudentsSchool = () => {
             }}
           >
             Download CSV
+          </button>
+          <button
+            onClick={() => openPosterGenerator()}
+            className="btn-link-primary"
+            style={{ minHeight: 40 }}
+          >
+            Download Poster
           </button>
         </div>
       )}
@@ -263,6 +280,14 @@ const TopStudentsSchool = () => {
                   <h3 style={{ margin: "0 0 16px 0", color: "#1e293b" }}>
                     Class {cls} - Section {sec}
                   </h3>
+                  <button
+                    type="button"
+                    className="poster-secondary-btn"
+                    onClick={() => openPosterGenerator(cls, sec)}
+                    style={{ marginBottom: 12 }}
+                  >
+                    Generate Poster
+                  </button>
                   <table
                     style={{
                       width: "100%",
