@@ -13,6 +13,7 @@ export default function PosterCanvas({
   activeCanvas,
   onCanvasReady,
   onSelectionChange,
+  onCanvasChanged,
 }) {
   const canvasEl = useRef(null);
   const wrapRef = useRef(null);
@@ -105,11 +106,17 @@ export default function PosterCanvas({
             top: element.y,
             width: element.width,
             height: element.height,
-            fill: "rgba(239,246,255,0.72)",
-            stroke: element.style?.borderColor ?? "#2563eb",
+            fill:
+              element.style?.backgroundColor === undefined
+                ? "rgba(239,246,255,0.72)"
+                : element.style.backgroundColor,
+            stroke:
+              (element.style?.borderWidth ?? 0) > 0
+                ? element.style?.borderColor || "#000000"
+                : undefined,
             strokeWidth: element.style?.borderWidth ?? 0,
-            rx: element.style?.borderRadius || 8,
-            ry: element.style?.borderRadius || 8,
+            rx: element.style?.borderRadius ?? 8,
+            ry: element.style?.borderRadius ?? 8,
           });
           rect.set({
             posterElementId: element.id,
@@ -157,10 +164,14 @@ export default function PosterCanvas({
 
     const selectionHandler = () =>
       onSelectionChange(canvas.getActiveObject() || null);
+    const changeHandler = () => onCanvasChanged?.(canvas);
     canvas.on("selection:created", selectionHandler);
     canvas.on("selection:updated", selectionHandler);
     canvas.on("selection:cleared", () => onSelectionChange(null));
     canvas.on("object:modified", selectionHandler);
+    canvas.on("object:modified", changeHandler);
+    canvas.on("object:added", changeHandler);
+    canvas.on("object:removed", changeHandler);
     canvas.on("object:moving", selectionHandler);
     canvas.on("object:scaling", selectionHandler);
     canvas.on("mouse:wheel", handleWheelZoom);
@@ -175,6 +186,9 @@ export default function PosterCanvas({
       canvas.off("mouse:down", handleMouseDown);
       canvas.off("mouse:move", handleMouseMove);
       canvas.off("mouse:up", stopPanning);
+      canvas.off("object:modified", changeHandler);
+      canvas.off("object:added", changeHandler);
+      canvas.off("object:removed", changeHandler);
       if (activeCanvas === canvas) onCanvasReady(null);
       canvas.dispose();
     };

@@ -372,15 +372,31 @@ export async function getPosterTemplate(id) {
   }
 }
 
-export async function createPosterTemplate(payload) {
+export async function createPosterTemplate(payload, options = {}) {
   try {
+    const { file, ...fields } = payload || {};
+    const body =
+      file instanceof File
+        ? Object.entries(fields).reduce((formData, [key, value]) => {
+            if (value === undefined) return formData;
+            formData.append(
+              key,
+              key === "layout_json" ? JSON.stringify(value) : value ?? "",
+            );
+            return formData;
+          }, new FormData())
+        : JSON.stringify(payload);
+
+    if (file instanceof File) body.append("file", file);
+
     const json = await requestJson(`${API_BASE}/api/poster-templates`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      ...(file instanceof File ? {} : { headers: { "Content-Type": "application/json" } }),
+      body,
     });
     return normalizeTemplate(json.data || json.template || json);
   } catch (e) {
+    if (options.remoteOnly) throw e;
     const templates = readLocalPosterTemplates();
     const now = new Date().toISOString();
     const template = normalizeTemplate({
@@ -420,6 +436,24 @@ export async function updatePosterTemplate(id, payload) {
   }
 }
 
+async function uploadPosterTemplateImage(id, file, kind) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const json = await requestJson(`${API_BASE}/api/poster-templates/${id}/${kind}`, {
+    method: "POST",
+    body: formData,
+  });
+  return normalizeTemplate(json.data || json.template || json);
+}
+
+export async function uploadPosterTemplateBackground(id, file) {
+  return uploadPosterTemplateImage(id, file, "background");
+}
+
+export async function uploadPosterTemplateThumbnail(id, file) {
+  return uploadPosterTemplateImage(id, file, "thumbnail");
+}
+
 export async function duplicatePosterTemplate(id) {
   try {
     const json = await requestJson(
@@ -442,6 +476,19 @@ export async function duplicatePosterTemplate(id) {
 export async function deletePosterTemplate(id) {
   try {
     return await requestJson(`${API_BASE}/api/poster-templates/${id}`, {
+      method: "DELETE",
+    });
+  } catch (e) {
+    writeLocalPosterTemplates(
+      readLocalPosterTemplates().filter((row) => row.id !== id),
+    );
+    return { success: true };
+  }
+}
+
+export async function permanentlyDeletePosterTemplate(id) {
+  try {
+    return await requestJson(`${API_BASE}/api/poster-templates/${id}/permanent`, {
       method: "DELETE",
     });
   } catch (e) {

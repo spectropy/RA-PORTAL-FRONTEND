@@ -14,25 +14,31 @@ export default function TemplateUpload({ onCreate, busy }) {
       return;
     }
     if (!file) {
-      setError("Upload a PNG or JPG poster background.");
+      setError("Upload a PNG, JPG, or SVG poster background.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
       const image = new Image();
       image.onload = () => {
         onCreate({
           name: name.trim(),
-          background_url: reader.result,
-          thumbnail_url: reader.result,
+          file,
           canvas_width: image.naturalWidth,
           canvas_height: image.naturalHeight,
         });
+        URL.revokeObjectURL(objectUrl);
       };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        setError("Could not read image dimensions.");
+      };
+      image.src = objectUrl;
+    } catch (err) {
+      URL.revokeObjectURL(objectUrl);
+      setError("Could not read image dimensions.");
+    }
   };
 
   return (
@@ -48,10 +54,10 @@ export default function TemplateUpload({ onCreate, busy }) {
       <label className="poster-file-drop">
         <UploadCloud size={22} />
         <strong>{file ? file.name : "Upload poster background"}</strong>
-        <span>PNG or JPG recommended</span>
+        <span>PNG, JPG, or SVG supported</span>
         <input
           type="file"
-          accept="image/png,image/jpeg"
+          accept="image/png,image/jpeg,image/svg+xml,.svg"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
         />
       </label>
@@ -62,4 +68,3 @@ export default function TemplateUpload({ onCreate, busy }) {
     </form>
   );
 }
-

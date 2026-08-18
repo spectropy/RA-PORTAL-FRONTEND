@@ -45,10 +45,13 @@ export function serializeFabricCanvas(canvas, template) {
           lineHeight: object.lineHeight || 1.16,
           textAlign: object.textAlign || "center",
           verticalAlign: object.verticalAlign || "middle",
-          borderWidth: object.strokeWidth || 0,
+          borderWidth: object.strokeWidth ?? 0,
           borderColor: object.stroke || "#000000",
-          borderRadius: object.borderRadius || object.rx || 0,
-          backgroundColor: object.backgroundColor || "transparent",
+          borderRadius: object.borderRadius ?? object.rx ?? 0,
+          backgroundColor:
+            elementType === "image"
+              ? object.fill || "transparent"
+              : object.backgroundColor || "transparent",
           padding: object.padding ?? (elementType === "image" ? 0 : 8),
           objectFit: object.objectFit || "contain",
         },

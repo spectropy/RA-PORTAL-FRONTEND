@@ -2,16 +2,22 @@ export function resolveBinding(data, binding) {
   if (!binding) return "";
 
   if (binding === "class.name") {
-    return data?.className ? `Class ${data.className}` : "";
+    return data?.className ? String(data.className).toUpperCase() : "";
   }
 
-  return String(binding)
+  const value = String(binding)
     .split(".")
-    .reduce((value, key) => {
-      if (value == null) return "";
-      if (/^\d+$/.test(key)) return value[Number(key)];
-      return value[key];
+    .reduce((current, key) => {
+      if (current == null) return "";
+      if (/^\d+$/.test(key)) return current[Number(key)];
+      return current[key];
     }, data);
+
+  if (binding === "school.name" || /^students\.\d+\.name$/.test(binding)) {
+    return String(value || "").toUpperCase();
+  }
+
+  return value;
 }
 
 export function buildPosterData({ school, className, sectionName, students }) {

@@ -1,5 +1,5 @@
 import React from "react";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Trash2, Undo2 } from "lucide-react";
 
 export default function PosterToolbar({
   template,
@@ -7,6 +7,8 @@ export default function PosterToolbar({
   onStatusChange,
   onSave,
   onDeleteSelected,
+  onUndo,
+  canUndo,
   saving,
 }) {
   return (
@@ -23,6 +25,15 @@ export default function PosterToolbar({
           <option value="active">Active</option>
           <option value="archived">Archived</option>
         </select>
+        <button
+          className="poster-secondary-btn"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Undo last canvas change"
+        >
+          <Undo2 size={15} />
+          Undo
+        </button>
         <button className="poster-secondary-btn" onClick={onDeleteSelected}>
           <Trash2 size={15} />
           Delete Selected
@@ -35,4 +46,3 @@ export default function PosterToolbar({
     </div>
   );
 }
-

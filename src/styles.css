@@ -7767,6 +7767,17 @@ textarea {
   background: var(--primary-50);
 }
 
+.poster-secondary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.poster-secondary-btn:disabled:hover {
+  border-color: var(--color-border);
+  color: var(--color-text-main);
+  background: #ffffff;
+}
+
 .poster-danger-btn {
   width: 100%;
   margin-top: 12px;
@@ -8162,6 +8173,170 @@ textarea {
   border-top: 1px solid var(--color-border);
 }
 
+.poster-download-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.poster-download-dialog {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(320px, 100%);
+  padding: 24px 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
+  text-align: center;
+}
+
+.poster-download-dialog strong {
+  color: var(--color-text-main);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.poster-download-dialog p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.poster-download-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(37, 99, 235, 0.18);
+  border-top-color: var(--primary-600);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.poster-size-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
+}
+
+.poster-size-dialog__head h3,
+.poster-size-dialog__head p {
+  margin: 0;
+}
+
+.poster-size-dialog__head h3 {
+  color: var(--color-text-main);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.poster-size-dialog__head p {
+  margin-top: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.poster-size-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.poster-size-options button {
+  display: grid;
+  gap: 4px;
+  min-height: 66px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--color-text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.poster-size-options button:hover {
+  border-color: var(--primary-300);
+  background: var(--primary-50);
+}
+
+.poster-size-options strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.poster-size-options span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.poster-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.poster-delete-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
+  text-align: center;
+}
+
+.poster-delete-dialog h3,
+.poster-delete-dialog p {
+  margin: 0;
+}
+
+.poster-delete-dialog h3 {
+  color: var(--color-text-main);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.poster-delete-dialog p {
+  margin: 10px auto 0;
+  max-width: 330px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.poster-delete-dialog__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.poster-delete-dialog__actions button {
+  min-height: 38px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .poster-editor-grid,
   .poster-generator-grid {
@@ -8191,6 +8366,22 @@ textarea {
   }
 
   .poster-props-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-size-dialog {
+    padding: 18px;
+  }
+
+  .poster-size-options {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-delete-dialog {
+    padding: 18px;
+  }
+
+  .poster-delete-dialog__actions {
     grid-template-columns: 1fr;
   }
 }

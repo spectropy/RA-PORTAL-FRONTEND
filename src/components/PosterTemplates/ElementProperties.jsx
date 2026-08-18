@@ -12,6 +12,11 @@ const FONT_FAMILIES = [
   "Poppins",
   "Montserrat",
 ];
+const IMAGE_FIT_OPTIONS = ["contain", "cover", "fill"];
+
+function colorInputValue(value, fallback = "#ffffff") {
+  return /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
+}
 
 export default function ElementProperties({ selected, onChange, onDelete }) {
   if (!selected) {
@@ -26,6 +31,16 @@ export default function ElementProperties({ selected, onChange, onDelete }) {
   }
 
   const isText = selected.type === "textbox" || selected.elementType === "text";
+  const isImageContainer = selected.elementType === "image";
+  const selectedWidth = Math.round(
+    selected.getScaledWidth?.() || selected.width || 0,
+  );
+  const selectedHeight = Math.round(
+    selected.getScaledHeight?.() || selected.height || 0,
+  );
+  const maxBorderRadius = Math.floor(Math.min(selectedWidth, selectedHeight) / 2);
+  const borderRadius = Math.round(selected.rx ?? selected.ry ?? 0);
+  const imageFill = selected.fill || "transparent";
 
   return (
     <aside className="poster-side-panel">
@@ -51,7 +66,7 @@ export default function ElementProperties({ selected, onChange, onDelete }) {
           Width
           <input
             type="number"
-            value={Math.round(selected.getScaledWidth?.() || selected.width || 0)}
+            value={selectedWidth}
             onChange={(e) => onChange({ width: Number(e.target.value), scaleX: 1 })}
           />
         </label>
@@ -59,7 +74,7 @@ export default function ElementProperties({ selected, onChange, onDelete }) {
           Height
           <input
             type="number"
-            value={Math.round(selected.getScaledHeight?.() || selected.height || 0)}
+            value={selectedHeight}
             onChange={(e) => onChange({ height: Number(e.target.value), scaleY: 1 })}
           />
         </label>
@@ -165,8 +180,15 @@ export default function ElementProperties({ selected, onChange, onDelete }) {
           Border
           <input
             type="number"
-            value={selected.strokeWidth || 0}
-            onChange={(e) => onChange({ strokeWidth: Number(e.target.value) })}
+            min="0"
+            value={selected.strokeWidth ?? 0}
+            onChange={(e) => {
+              const strokeWidth = Number(e.target.value);
+              onChange({
+                strokeWidth,
+                stroke: strokeWidth > 0 ? selected.stroke || "#000000" : undefined,
+              });
+            }}
           />
         </label>
         <label>
@@ -177,6 +199,58 @@ export default function ElementProperties({ selected, onChange, onDelete }) {
             onChange={(e) => onChange({ stroke: e.target.value })}
           />
         </label>
+        {isImageContainer && (
+          <>
+            <label className="poster-prop-wide">
+              Image Fit
+              <select
+                value={selected.objectFit || "contain"}
+                onChange={(e) => onChange({ objectFit: e.target.value })}
+              >
+                {IMAGE_FIT_OPTIONS.map((fit) => (
+                  <option key={fit} value={fit}>
+                    {fit}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Fill
+              <input
+                type="color"
+                value={colorInputValue(imageFill)}
+                onChange={(e) => onChange({ fill: e.target.value })}
+              />
+            </label>
+            <label>
+              Transparent
+              <select
+                value={imageFill === "transparent" ? "yes" : "no"}
+                onChange={(e) =>
+                  onChange({
+                    fill: e.target.value === "yes" ? "transparent" : "#ffffff",
+                  })
+                }
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+            <label className="poster-prop-wide">
+              Border Radius
+              <input
+                type="range"
+                min="0"
+                max={maxBorderRadius}
+                value={Math.min(borderRadius, maxBorderRadius)}
+                onChange={(e) => {
+                  const radius = Number(e.target.value);
+                  onChange({ rx: radius, ry: radius, borderRadius: radius });
+                }}
+              />
+            </label>
+          </>
+        )}
       </div>
       <button className="poster-danger-btn" type="button" onClick={onDelete}>
         Delete Element

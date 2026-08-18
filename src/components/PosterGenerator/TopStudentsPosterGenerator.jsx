@@ -5,7 +5,10 @@ import {
   getSchoolById,
   getTopStudentsPosterData,
 } from "../../api.js";
-import { buildPosterData, normalizeTopStudentsResponse } from "../../utils/posterBindings.js";
+import {
+  buildPosterData,
+  normalizeTopStudentsResponse,
+} from "../../utils/posterBindings.js";
 import PosterDownloadOptions from "./PosterDownloadOptions.jsx";
 import PosterPreview from "./PosterPreview.jsx";
 import TemplateSelector from "./TemplateSelector.jsx";
@@ -33,7 +36,9 @@ function calculateTopStudents(exams, school, className, sectionName) {
 
   const students = Object.values(grouped)
     .map((student) => {
-      const avg = student.scores.reduce((sum, value) => sum + value, 0) / student.scores.length;
+      const avg =
+        student.scores.reduce((sum, value) => sum + value, 0) /
+        student.scores.length;
       return {
         ...student,
         cumulative_percentage: Number(avg.toFixed(2)),
@@ -46,14 +51,22 @@ function calculateTopStudents(exams, school, className, sectionName) {
   return buildPosterData({ school, className, sectionName, students });
 }
 
-export default function TopStudentsPosterGenerator({ mode = "admin", schools = [], school }) {
+export default function TopStudentsPosterGenerator({
+  mode = "admin",
+  schools = [],
+  school,
+}) {
   const [searchParams] = useSearchParams();
   const [selectedSchoolId, setSelectedSchoolId] = useState(
-    mode === "school" ? school?.school_id || "" : searchParams.get("school_id") || "",
+    mode === "school"
+      ? school?.school_id || ""
+      : searchParams.get("school_id") || "",
   );
   const [schoolDetail, setSchoolDetail] = useState(school || null);
   const [classValue, setClassValue] = useState(searchParams.get("class") || "");
-  const [sectionValue, setSectionValue] = useState(searchParams.get("section") || "");
+  const [sectionValue, setSectionValue] = useState(
+    searchParams.get("section") || "",
+  );
   const [templates, setTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [posterData, setPosterData] = useState(null);
@@ -62,10 +75,12 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getPosterTemplates({ category: "top_students", status: "active" }).then((rows) => {
-      setTemplates(rows);
-      setSelectedTemplateId((current) => current || rows[0]?.id || "");
-    });
+    getPosterTemplates({ category: "top_students", status: "active" }).then(
+      (rows) => {
+        setTemplates(rows);
+        setSelectedTemplateId((current) => current || rows[0]?.id || "");
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -86,15 +101,18 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
         });
       })
       .catch(() => {
-        const fallback = schools.find((row) => row.school_id === selectedSchoolId);
+        const fallback = schools.find(
+          (row) => row.school_id === selectedSchoolId,
+        );
         setSchoolDetail(fallback || null);
       });
   }, [selectedSchoolId, school, mode]);
 
   const classOptions = useMemo(() => {
     const rows = schoolDetail?.classes || [];
-    return [...new Set(rows.map((row) => row.class).filter(Boolean))].sort((a, b) =>
-      String(a).localeCompare(String(b), undefined, { numeric: true }),
+    return [...new Set(rows.map((row) => row.class).filter(Boolean))].sort(
+      (a, b) =>
+        String(a).localeCompare(String(b), undefined, { numeric: true }),
     );
   }, [schoolDetail]);
 
@@ -152,7 +170,9 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
     loadData();
   }, [selectedSchoolId, classValue, sectionValue, schoolDetail]);
 
-  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const selectedTemplate = templates.find(
+    (template) => template.id === selectedTemplateId,
+  );
   const filename = `Top_Students_${selectedSchoolId || "School"}_${classValue || "Class"}_${sectionValue || "Section"}`;
 
   return (
@@ -188,11 +208,14 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
           )}
           <label>
             Class
-            <select value={classValue} onChange={(e) => setClassValue(e.target.value)}>
+            <select
+              value={classValue}
+              onChange={(e) => setClassValue(e.target.value)}
+            >
               <option value="">Choose a class</option>
               {classOptions.map((value) => (
                 <option key={value} value={value}>
-                  Class {value}
+                  {value}
                 </option>
               ))}
               {classValue && !classOptions.includes(classValue) && (
@@ -202,7 +225,10 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
           </label>
           <label>
             Section
-            <select value={sectionValue} onChange={(e) => setSectionValue(e.target.value)}>
+            <select
+              value={sectionValue}
+              onChange={(e) => setSectionValue(e.target.value)}
+            >
               <option value="">Choose a section</option>
               {sectionOptions.map((value) => (
                 <option key={value} value={value}>
@@ -223,8 +249,14 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
         </section>
 
         <section>
-          {error && <div className="alert-banner alert-banner--error">{error}</div>}
-          {loading && <div className="poster-empty poster-empty--compact">Loading top students...</div>}
+          {error && (
+            <div className="alert-banner alert-banner--error">{error}</div>
+          )}
+          {loading && (
+            <div className="poster-empty poster-empty--compact">
+              Loading top students...
+            </div>
+          )}
           <PosterPreview
             template={selectedTemplate}
             posterData={posterData}
@@ -235,4 +267,3 @@ export default function TopStudentsPosterGenerator({ mode = "admin", schools = [
     </div>
   );
 }
-

@@ -9,15 +9,67 @@ export function downloadDataUrl(dataUrl, filename) {
   document.body.removeChild(link);
 }
 
-export function exportCanvas(canvas, { format = "png", filename = "poster" }) {
+function waitForPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
+async function frameDataUrl(dataUrl, sourceWidth, sourceHeight, targetSize, format) {
+  if (!targetSize?.width || !targetSize?.height) return dataUrl;
+
+  const image = await loadImageFromDataUrl(dataUrl);
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = targetSize.width;
+  outputCanvas.height = targetSize.height;
+
+  const context = outputCanvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+  const scale = Math.min(
+    outputCanvas.width / sourceWidth,
+    outputCanvas.height / sourceHeight,
+  );
+  const drawWidth = Math.round(sourceWidth * scale);
+  const drawHeight = Math.round(sourceHeight * scale);
+  const drawX = Math.round((outputCanvas.width - drawWidth) / 2);
+  const drawY = Math.round((outputCanvas.height - drawHeight) / 2);
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  return outputCanvas.toDataURL(
+    format === "jpg" ? "image/jpeg" : "image/png",
+    format === "jpg" ? 0.92 : undefined,
+  );
+}
+
+export async function exportCanvas(
+  canvas,
+  { format = "png", filename = "poster", targetSize = null } = {},
+) {
   if (!canvas) return;
-  const isFabricCanvas = typeof canvas.toDataURL === "function" && canvas.lowerCanvasEl;
+  await waitForPaint();
+
+  const isFabricCanvas =
+    typeof canvas.toDataURL === "function" && canvas.lowerCanvasEl;
   const width = isFabricCanvas ? canvas.getWidth() : canvas.width;
   const height = isFabricCanvas ? canvas.getHeight() : canvas.height;
 
   if (format === "pdf") {
     const dataUrl = isFabricCanvas
-      ? canvas.toDataURL({ format: "png", multiplier: 1 })
+      ? canvas.toDataURL({ format: "png", multiplier: 3 })
       : canvas.toDataURL("image/png");
     const orientation = width >= height ? "landscape" : "portrait";
     const doc = new jsPDF({
@@ -34,11 +86,15 @@ export function exportCanvas(canvas, { format = "png", filename = "poster" }) {
     ? canvas.toDataURL({
         format: format === "jpg" ? "jpeg" : "png",
         quality: format === "jpg" ? 0.92 : 1,
-        multiplier: 1,
+        multiplier: 3,
       })
     : canvas.toDataURL(
         format === "jpg" ? "image/jpeg" : "image/png",
         format === "jpg" ? 0.92 : undefined,
       );
-  downloadDataUrl(dataUrl, `${filename}.${format}`);
+  const finalDataUrl = await frameDataUrl(dataUrl, width, height, targetSize, format);
+  const suffix = targetSize?.label
+    ? `_${targetSize.label.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}`
+    : "";
+  downloadDataUrl(finalDataUrl, `${filename}${suffix}.${format}`);
 }

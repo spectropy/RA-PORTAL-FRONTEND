@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as fabric from "fabric";
@@ -62,6 +62,70 @@ export default function PosterTemplateEditor() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [, refreshProperties] = useState(0);
+  const canvasRef = useRef(null);
+  const historyRef = useRef([]);
+  const restoringHistoryRef = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
+
+  const makeCanvasSnapshot = useCallback((fabricCanvas) => {
+    return JSON.stringify(
+      fabricCanvas.toDatalessJSON([
+        "posterElementId",
+        "binding",
+        "elementType",
+        "verticalAlign",
+        "objectFit",
+      ]),
+    );
+  }, []);
+
+  const pushHistory = useCallback(
+    (fabricCanvas = canvasRef.current) => {
+      if (!fabricCanvas || restoringHistoryRef.current) return;
+
+      const snapshot = makeCanvasSnapshot(fabricCanvas);
+      const history = historyRef.current;
+      if (history[history.length - 1] === snapshot) return;
+
+      history.push(snapshot);
+      if (history.length > 50) history.shift();
+      setCanUndo(history.length > 1);
+    },
+    [makeCanvasSnapshot],
+  );
+
+  const handleCanvasReady = useCallback(
+    (fabricCanvas) => {
+      canvasRef.current = fabricCanvas;
+      setCanvas(fabricCanvas);
+      setSelected(null);
+      historyRef.current = [];
+
+      if (fabricCanvas) {
+        pushHistory(fabricCanvas);
+      } else {
+        setCanUndo(false);
+      }
+    },
+    [pushHistory],
+  );
+
+  const undoLastChange = useCallback(async () => {
+    const fabricCanvas = canvasRef.current;
+    if (!fabricCanvas || historyRef.current.length <= 1) return;
+
+    restoringHistoryRef.current = true;
+    historyRef.current.pop();
+    const previousSnapshot = historyRef.current[historyRef.current.length - 1];
+
+    await Promise.resolve(fabricCanvas.loadFromJSON(previousSnapshot));
+    fabricCanvas.discardActiveObject();
+    fabricCanvas.renderAll();
+    setSelected(null);
+    setCanUndo(historyRef.current.length > 1);
+    restoringHistoryRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (isNew) return;
@@ -88,8 +152,10 @@ export default function PosterTemplateEditor() {
         ...payload,
         category: "top_students",
         status: "draft",
+        background_url: "",
+        thumbnail_url: null,
         layout_json: emptyPosterLayout(payload),
-      });
+      }, { remoteOnly: true });
       navigate(`/admin/poster-templates/${created.id}/edit`, { replace: true });
     } catch (e) {
       setError(e.message || "Failed to create template");
@@ -116,8 +182,8 @@ export default function PosterTemplateEditor() {
         width: imageSize.width,
         height: imageSize.height,
         fill: "rgba(239,246,255,0.78)",
-        stroke: "#2563eb",
-        strokeWidth: 2,
+        stroke: undefined,
+        strokeWidth: 0,
         rx: 12,
         ry: 12,
       });
@@ -165,6 +231,7 @@ export default function PosterTemplateEditor() {
 
     canvas.renderAll();
     setSelected(canvas.getActiveObject());
+    pushHistory(canvas);
   };
 
   const updateSelected = (patch) => {
@@ -172,16 +239,73 @@ export default function PosterTemplateEditor() {
     selected.set(patch);
     selected.setCoords();
     canvas.renderAll();
-    setSelected({ ...selected });
+    setSelected(selected);
+    refreshProperties((version) => version + 1);
+    pushHistory(canvas);
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = useCallback(() => {
     if (!selected || !canvas) return;
     canvas.remove(selected);
     canvas.discardActiveObject();
     canvas.renderAll();
     setSelected(null);
-  };
+    pushHistory(canvas);
+  }, [canvas, pushHistory, selected]);
+
+  useEffect(() => {
+    const isEditableTarget = (target) => {
+      const tagName = target?.tagName?.toLowerCase();
+      return (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable
+      );
+    };
+
+    const handleKeyDown = (event) => {
+      if (isEditableTarget(event.target)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        undoLastChange();
+        return;
+      }
+
+      if (!selected || !canvas || selected.isEditing) return;
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteSelected();
+        return;
+      }
+
+      const moveByKey = {
+        ArrowLeft: { left: -1, top: 0 },
+        ArrowRight: { left: 1, top: 0 },
+        ArrowUp: { left: 0, top: -1 },
+        ArrowDown: { left: 0, top: 1 },
+      }[event.key];
+
+      if (!moveByKey) return;
+
+      event.preventDefault();
+      const step = event.shiftKey ? 10 : 1;
+      selected.set({
+        left: Math.round((selected.left || 0) + moveByKey.left * step),
+        top: Math.round((selected.top || 0) + moveByKey.top * step),
+      });
+      selected.setCoords();
+      canvas.renderAll();
+      setSelected(selected);
+      refreshProperties((version) => version + 1);
+      pushHistory(canvas);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canvas, deleteSelected, pushHistory, selected, undoLastChange]);
 
   const saveTemplate = async () => {
     if (!template || !canvas) return;
@@ -243,6 +367,8 @@ export default function PosterTemplateEditor() {
         onStatusChange={setStatus}
         onSave={saveTemplate}
         onDeleteSelected={deleteSelected}
+        onUndo={undoLastChange}
+        canUndo={canUndo}
         saving={saving}
       />
       <div className="poster-editor-grid">
@@ -251,8 +377,9 @@ export default function PosterTemplateEditor() {
           key={template.id}
           template={template}
           activeCanvas={canvas}
-          onCanvasReady={setCanvas}
+          onCanvasReady={handleCanvasReady}
           onSelectionChange={setSelected}
+          onCanvasChanged={pushHistory}
         />
         <ElementProperties
           selected={selected}

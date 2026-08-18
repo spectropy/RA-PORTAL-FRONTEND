@@ -5,6 +5,7 @@ import {
   deletePosterTemplate,
   duplicatePosterTemplate,
   getPosterTemplates,
+  permanentlyDeletePosterTemplate,
 } from "../../api.js";
 import PosterTemplateCard from "./PosterTemplateCard.jsx";
 
@@ -13,6 +14,7 @@ export default function PosterTemplateList() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -35,9 +37,17 @@ export default function PosterTemplateList() {
     await loadTemplates();
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this poster template?")) return;
-    await deletePosterTemplate(id);
+  const handleArchiveDelete = async () => {
+    if (!deleteTarget) return;
+    await deletePosterTemplate(deleteTarget.id);
+    setDeleteTarget(null);
+    await loadTemplates();
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!deleteTarget) return;
+    await permanentlyDeletePosterTemplate(deleteTarget.id);
+    setDeleteTarget(null);
     await loadTemplates();
   };
 
@@ -81,12 +91,33 @@ export default function PosterTemplateList() {
               template={template}
               onEdit={() => navigate(`/admin/poster-templates/${template.id}/edit`)}
               onDuplicate={() => handleDuplicate(template.id)}
-              onDelete={() => handleDelete(template.id)}
+              onDelete={() => setDeleteTarget(template)}
             />
           ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="poster-modal-backdrop" role="presentation">
+          <div className="poster-delete-dialog" role="dialog" aria-modal="true">
+            <h3>Delete Poster Template</h3>
+            <p>
+              Choose how to delete <strong>{deleteTarget.name || "this template"}</strong>.
+            </p>
+            <div className="poster-delete-dialog__actions">
+              <button type="button" className="poster-secondary-btn" onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </button>
+              <button type="button" className="poster-secondary-btn" onClick={handleArchiveDelete}>
+                Delete
+              </button>
+              <button type="button" className="poster-danger-btn" onClick={handlePermanentDelete}>
+                Permanent Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
-

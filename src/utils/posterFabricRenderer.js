@@ -47,16 +47,18 @@ function createTextObject(element, value) {
 
 async function createImageObject(element, value) {
   const style = element.style || {};
+  const frameLeft = element.x - element.width / 2;
+  const frameTop = element.y - element.height / 2;
   const frame = new fabric.Rect({
-    left: element.x - element.width / 2,
-    top: element.y - element.height / 2,
+    left: frameLeft,
+    top: frameTop,
     width: element.width,
     height: element.height,
-    fill: style.backgroundColor || "rgba(251, 0, 0, 1)",
+    fill: style.backgroundColor || "rgba(255,255,255,0)",
     stroke: style.borderWidth ? style.borderColor || "#000000" : undefined,
     strokeWidth: style.borderWidth || 0,
-    rx: style.borderRadius || 0,
-    ry: style.borderRadius || 0,
+    rx: style.borderRadius ?? 0,
+    ry: style.borderRadius ?? 0,
     originX: "left",
     originY: "top",
     selectable: false,
@@ -107,7 +109,21 @@ async function createImageObject(element, value) {
       });
     }
 
-    image.set({ selectable: false, evented: false });
+    image.set({
+      clipPath: new fabric.Rect({
+        left: frameLeft,
+        top: frameTop,
+        width: element.width,
+        height: element.height,
+        rx: style.borderRadius ?? 0,
+        ry: style.borderRadius ?? 0,
+        originX: "left",
+        originY: "top",
+        absolutePositioned: true,
+      }),
+      selectable: false,
+      evented: false,
+    });
     objects.push(image);
   }
 
