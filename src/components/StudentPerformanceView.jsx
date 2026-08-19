@@ -2101,9 +2101,10 @@ const DASHBOARD_CSS = `
 
   /* Reference-led professional results and analysis theme */
   .sp-page-action {
-    max-width: 1320px;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
     padding: 18px 24px 0;
   }
 
@@ -2117,9 +2118,10 @@ const DASHBOARD_CSS = `
     --sp-slate-100: #edf1f6;
     --sp-slate-50: #f7f9fc;
     --sp-blue: #1e478f;
-    max-width: 1320px;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
     padding: 18px 24px 32px;
     color: #111827;
     background: #f7f9fc;
