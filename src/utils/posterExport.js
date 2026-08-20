@@ -64,12 +64,18 @@ export async function exportCanvas(
 
   const isFabricCanvas =
     typeof canvas.toDataURL === "function" && canvas.lowerCanvasEl;
+  if (isFabricCanvas && typeof canvas.renderAll === "function") {
+    // Capture the fully rendered Fabric canvas. Do not use a large Fabric
+    // multiplier here; Fabric 7 can export a blank/transparent bitmap when
+    // background images and clip paths are scaled during toDataURL().
+    canvas.renderAll();
+  }
   const width = isFabricCanvas ? canvas.getWidth() : canvas.width;
   const height = isFabricCanvas ? canvas.getHeight() : canvas.height;
 
   if (format === "pdf") {
     const dataUrl = isFabricCanvas
-      ? canvas.toDataURL({ format: "png", multiplier: 3 })
+      ? canvas.toDataURL({ format: "png", multiplier: 1 })
       : canvas.toDataURL("image/png");
     const orientation = width >= height ? "landscape" : "portrait";
     const doc = new jsPDF({
@@ -86,7 +92,7 @@ export async function exportCanvas(
     ? canvas.toDataURL({
         format: format === "jpg" ? "jpeg" : "png",
         quality: format === "jpg" ? 0.92 : 1,
-        multiplier: 3,
+        multiplier: 1,
       })
     : canvas.toDataURL(
         format === "jpg" ? "image/jpeg" : "image/png",

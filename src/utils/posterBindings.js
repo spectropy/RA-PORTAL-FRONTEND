@@ -17,6 +17,12 @@ export function resolveBinding(data, binding) {
     return String(value || "").toUpperCase();
   }
 
+  if (/^students\.\d+\.cumulative_percentage$/.test(binding)) {
+    if (value == null || value === "") return "";
+    const text = String(value);
+    return text.includes("%") ? text : `${text}%`;
+  }
+
   return value;
 }
 

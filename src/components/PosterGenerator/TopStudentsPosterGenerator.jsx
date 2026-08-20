@@ -245,7 +245,14 @@ export default function TopStudentsPosterGenerator({
             selectedId={selectedTemplateId}
             onSelect={setSelectedTemplateId}
           />
-          <PosterDownloadOptions canvas={previewCanvas} filename={filename} />
+          <PosterDownloadOptions
+            canvas={previewCanvas}
+            filename={filename}
+            posterData={posterData}
+            schoolDetail={schoolDetail}
+            className={classValue}
+            sectionName={sectionValue}
+          />
         </section>
 
         <section>

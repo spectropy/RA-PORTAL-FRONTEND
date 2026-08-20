@@ -13,12 +13,22 @@ export default function PosterRenderer({ template, posterData, onCanvasReady }) 
       renderOnAddRemove: false,
     });
     fabricCanvasRef.current = fabricCanvas;
+    let cancelled = false;
 
-    renderPosterToFabricCanvas(fabricCanvas, template, posterData).then(() => {
-      onCanvasReady?.(fabricCanvas);
-    });
+    renderPosterToFabricCanvas(fabricCanvas, template, posterData)
+      .then(() => {
+        if (!cancelled && fabricCanvasRef.current === fabricCanvas) {
+          onCanvasReady?.(fabricCanvas);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to render poster:", error);
+        onCanvasReady?.(null);
+      });
 
     return () => {
+      cancelled = true;
       onCanvasReady?.(null);
       fabricCanvas.dispose();
       fabricCanvasRef.current = null;
