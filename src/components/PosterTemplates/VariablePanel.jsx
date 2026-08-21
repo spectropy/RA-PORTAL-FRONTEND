@@ -1,13 +1,14 @@
 import React from "react";
 import { Image, Type } from "lucide-react";
-import { POSTER_VARIABLES } from "../../config/posterVariables.js";
+import { getPosterVariables } from "../../config/posterVariables.js";
 
-export default function VariablePanel({ onAddVariable }) {
+export default function VariablePanel({ onAddVariable, type = "cumulative" }) {
+  const variables = getPosterVariables(type);
   return (
     <aside className="poster-side-panel">
-      <h3>Variables</h3>
+      <h3>{type === "exam_wise" ? "Exam-wise Variables" : "Cumulative Variables"}</h3>
       <div className="poster-variable-list">
-        {POSTER_VARIABLES.map((variable) => {
+        {variables.map((variable) => {
           const Icon = variable.type === "image" ? Image : Type;
           return (
             <button

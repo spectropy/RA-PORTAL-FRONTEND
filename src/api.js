@@ -503,3 +503,10 @@ export async function getTopStudentsPosterData(params = {}) {
   const query = new URLSearchParams(params).toString();
   return requestJson(`${API_BASE}/api/top-students${query ? `?${query}` : ""}`);
 }
+
+export async function getExamWiseTopStudentsPosterData(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return requestJson(
+    `${API_BASE}/api/top-students-exam-wise${query ? `?${query}` : ""}`,
+  );
+}

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
 import { exportCanvas } from "../../utils/posterExport.js";
 import {
+  buildExamWiseTopStudentsMessage,
   buildTopStudentsMessage,
   downloadTextFile,
 } from "../../utils/posterMessage.js";
@@ -75,11 +76,17 @@ export default function PosterDownloadOptions({
       schoolDetail?.address ||
       "";
 
-    return buildTopStudentsMessage({
+    const messageBuilder = posterData.exam
+      ? buildExamWiseTopStudentsMessage
+      : buildTopStudentsMessage;
+
+    return messageBuilder({
       className: resolvedClassName,
       section: resolvedSection,
       schoolName: resolvedSchoolName,
       schoolArea: resolvedSchoolArea,
+      examName: posterData.exam?.name || posterData.exam?.pattern || "",
+      examDate: posterData.exam?.date || "",
     });
   };
 

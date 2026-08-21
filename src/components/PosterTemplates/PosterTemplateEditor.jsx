@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import * as fabric from "fabric";
 import {
   createPosterTemplate,
@@ -54,6 +54,8 @@ function getVisibleInsertPoint(canvas, template, width, height) {
 export default function PosterTemplateEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const templateType = searchParams.get("type") === "exam_wise" ? "exam_wise" : "cumulative";
   const isNew = !id;
   const [template, setTemplate] = useState(null);
   const [canvas, setCanvas] = useState(null);
@@ -67,6 +69,10 @@ export default function PosterTemplateEditor() {
   const historyRef = useRef([]);
   const restoringHistoryRef = useRef(false);
   const [canUndo, setCanUndo] = useState(false);
+  const editorTemplateType = template?.description?.includes("poster_type:exam_wise") ||
+    /exam/i.test(template?.name || "")
+    ? "exam_wise"
+    : templateType;
 
   const makeCanvasSnapshot = useCallback((fabricCanvas) => {
     return JSON.stringify(
@@ -151,6 +157,7 @@ export default function PosterTemplateEditor() {
       const created = await createPosterTemplate({
         ...payload,
         category: "top_students",
+        description: `poster_type:${templateType}`,
         status: "draft",
         background_url: "",
         thumbnail_url: null,
@@ -372,7 +379,7 @@ export default function PosterTemplateEditor() {
         saving={saving}
       />
       <div className="poster-editor-grid">
-        <VariablePanel onAddVariable={addVariable} />
+        <VariablePanel onAddVariable={addVariable} type={editorTemplateType} />
         <PosterCanvas
           key={template.id}
           template={template}

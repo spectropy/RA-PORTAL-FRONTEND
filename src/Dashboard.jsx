@@ -17,9 +17,11 @@ import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
 import TopStudentsSchool from "./components/TopStudentsSchool.jsx";
+import ExamWiseTopStudents from "./components/ExamWiseTopStudents.jsx";
 import PosterTemplateList from "./components/PosterTemplates/PosterTemplateList.jsx";
 import PosterTemplateEditor from "./components/PosterTemplates/PosterTemplateEditor.jsx";
 import TopStudentsPosterGenerator from "./components/PosterGenerator/TopStudentsPosterGenerator.jsx";
+import ExamWiseTopStudentsPosterGenerator from "./components/PosterGenerator/ExamWiseTopStudentsPosterGenerator.jsx";
 import {
   BookOpenCheck,
   ClipboardList,
@@ -77,6 +79,12 @@ const TABS = [
     label: "Top Students",
   },
   {
+    id: "top-students-exam-wise",
+    path: "top-students-exam-wise",
+    icon: <Trophy size={18} strokeWidth={2.2} />,
+    label: "Top Students by Exam",
+  },
+  {
     id: "poster-templates",
     path: "poster-templates",
     icon: <Images size={18} strokeWidth={2.2} />,
@@ -117,6 +125,7 @@ export default function Dashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [schoolMobileDetailOpen, setSchoolMobileDetailOpen] = useState(false);
+  const [posterTemplateMode, setPosterTemplateMode] = useState("cumulative");
 
   //  Data
   const refresh = useCallback(async () => {
@@ -473,9 +482,50 @@ export default function Dashboard({ user, onLogout }) {
                       Select a template and export posters for top 5 students.
                     </p>
                   </div>
+                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
+                    ← Back to Top 5 Students by Class &amp; Section
+                  </button>
                 </div>
                 <div className="page-content">
                   <TopStudentsPosterGenerator mode="admin" schools={schools} />
+                </div>
+              </div>
+            }
+          />
+
+          <Route
+            path="top-students-exam-wise"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Top Students by Exam-wise</h1>
+                    <p className="page-header-subtitle">
+                      Generate posters for the top five students in each exam.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <ExamWiseTopStudents mode="admin" schools={schools} />
+                </div>
+              </div>
+            }
+          />
+          <Route
+            path="top-students-exam-wise/poster"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Exam-wise Top Students Poster</h1>
+                    <p className="page-header-subtitle">Select a template and export the selected exam poster.</p>
+                  </div>
+                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
+                    ← Back to Top 5 Students by Exam
+                  </button>
+                </div>
+                <div className="page-content">
+                  <ExamWiseTopStudentsPosterGenerator mode="admin" schools={schools} />
                 </div>
               </div>
             }
@@ -492,9 +542,28 @@ export default function Dashboard({ user, onLogout }) {
                       Manage reusable poster backgrounds and dynamic fields.
                     </p>
                   </div>
+                  <div className="poster-toolbar-actions poster-template-header-actions">
+                    <button
+                      type="button"
+                      className={posterTemplateMode === "cumulative" ? "btn-link-primary" : "poster-secondary-btn"}
+                      onClick={() => setPosterTemplateMode("cumulative")}
+                    >
+                      Cumulative Percentage
+                    </button>
+                    <button
+                      type="button"
+                      className={posterTemplateMode === "exam_wise" ? "btn-link-primary" : "poster-secondary-btn"}
+                      onClick={() => setPosterTemplateMode("exam_wise")}
+                    >
+                      Exam-wise Percentage
+                    </button>
+                  </div>
                 </div>
                 <div className="page-content">
-                  <PosterTemplateList />
+                  <PosterTemplateList
+                    templateMode={posterTemplateMode}
+                    onTemplateModeChange={setPosterTemplateMode}
+                  />
                 </div>
               </div>
             }

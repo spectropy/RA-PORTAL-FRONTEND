@@ -9,7 +9,7 @@ import {
 } from "../../api.js";
 import PosterTemplateCard from "./PosterTemplateCard.jsx";
 
-export default function PosterTemplateList() {
+export default function PosterTemplateList({ templateMode = "cumulative" }) {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +32,16 @@ export default function PosterTemplateList() {
     loadTemplates();
   }, []);
 
+  const isExamWiseTemplate = (template) =>
+    String(template.description || "").includes("poster_type:exam_wise") ||
+    /exam/i.test(template.name || "");
+
+  const visibleTemplates = templates.filter((template) =>
+    templateMode === "exam_wise"
+      ? isExamWiseTemplate(template)
+      : !isExamWiseTemplate(template),
+  );
+
   const handleDuplicate = async (id) => {
     await duplicatePosterTemplate(id);
     await loadTemplates();
@@ -53,10 +63,10 @@ export default function PosterTemplateList() {
 
   return (
     <div className="poster-page">
-      <div className="poster-page-toolbar">
+      <div className="poster-page-toolbar poster-template-subtoolbar">
         <div>
-          <h2>Poster Templates</h2>
-          <p>Create reusable layouts for top-student announcements.</p>
+          <strong>{templateMode === "exam_wise" ? "Exam-wise Percentage Templates" : "Cumulative Percentage Templates"}</strong>
+          <p>{templateMode === "exam_wise" ? "Use exam name and individual exam percentages." : "Use cumulative student performance percentages."}</p>
         </div>
         <div className="poster-toolbar-actions">
           <button className="poster-secondary-btn" onClick={loadTemplates}>
@@ -65,10 +75,10 @@ export default function PosterTemplateList() {
           </button>
           <button
             className="btn-link-primary"
-            onClick={() => navigate("/admin/poster-templates/new")}
+            onClick={() => navigate(`/admin/poster-templates/new?type=${templateMode}`)}
           >
             <ImagePlus size={16} />
-            Upload Poster Template
+            Create Template
           </button>
         </div>
       </div>
@@ -76,16 +86,16 @@ export default function PosterTemplateList() {
       {error && <div className="alert-banner alert-banner--error">{error}</div>}
       {loading && <div className="poster-empty">Loading poster templates...</div>}
 
-      {!loading && templates.length === 0 && (
+      {!loading && visibleTemplates.length === 0 && (
         <div className="poster-empty">
-          <strong>No poster templates yet.</strong>
+          <strong>No {templateMode === "exam_wise" ? "exam-wise" : "cumulative"} templates yet.</strong>
           <span>Upload a background image to create the first template.</span>
         </div>
       )}
 
-      {!loading && templates.length > 0 && (
+      {!loading && visibleTemplates.length > 0 && (
         <div className="poster-card-grid">
-          {templates.map((template) => (
+          {visibleTemplates.map((template) => (
             <PosterTemplateCard
               key={template.id}
               template={template}

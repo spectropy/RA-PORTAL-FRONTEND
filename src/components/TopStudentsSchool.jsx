@@ -170,10 +170,6 @@ const TopStudentsSchool = () => {
   // Render
   return (
     <div style={{ margin: "0 auto" }}>
-      <h2 style={{ marginBottom: "20px", color: "#1e293b" }}>
-        Top 5 Students by Class & Section
-      </h2>
-
       {/* School Dropdown */}
       <div style={{ marginBottom: "20px" }}>
         <label

@@ -31,6 +31,7 @@ import {
 import StudentDashboard from "./StudentDashboard"; // adjust path as needed
 import TeacherDashboard from "./TeacherDashboard";
 import TopStudentsPosterGenerator from "./PosterGenerator/TopStudentsPosterGenerator.jsx";
+import ExamWiseTopStudentsPosterGenerator from "./PosterGenerator/ExamWiseTopStudentsPosterGenerator.jsx";
 import certificateTemplate from "../assets/certificate.png";
 import spectropyLogoUrl from "../assets/logo.png";
 import physicsicon from "../assets/icons/physics.png";
@@ -66,6 +67,12 @@ const OWNER_TABS = [
     path: "top-students-poster",
     icon: Images,
     label: "Top Posters",
+  },
+  {
+    id: "top-students-exam-wise",
+    path: "top-students-exam-wise",
+    icon: Images,
+    label: "Top Posters by Exam",
   },
 ];
 
@@ -7802,6 +7809,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
       setView("teacher");
     } else if (tabId === "top-students-poster") {
       setView("top-students-poster");
+    } else if (tabId === "top-students-exam-wise") {
+      setView("top-students-exam-wise");
     }
   };
 
@@ -7925,9 +7934,49 @@ export default function SchoolOwnerDashboard({ onBack }) {
                       Generate poster downloads for your school.
                     </p>
                   </div>
+                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
+                    ← Back to Top Students
+                  </button>
                 </div>
                 <div className="page-content">
                   <TopStudentsPosterGenerator mode="school" school={school} />
+                </div>
+              </div>
+            }
+          />
+          <Route
+            path="top-students-exam-wise"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Exam-wise Top Students Poster</h1>
+                    <p className="page-header-subtitle">
+                      Select a template and export the selected exam poster.
+                    </p>
+                  </div>
+                </div>
+                <div className="page-content">
+                  <ExamWiseTopStudentsPosterGenerator mode="school" school={school} />
+                </div>
+              </div>
+            }
+          />
+          <Route
+            path="top-students-exam-wise/poster"
+            element={
+              <div className="animate-fade-in">
+                <div className="page-header">
+                  <div className="page-header-left">
+                    <h1 className="page-header-title">Exam-wise Top Students Poster</h1>
+                    <p className="page-header-subtitle">Select a template and export the selected exam poster.</p>
+                  </div>
+                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
+                    ← Back to Top Students by Exam
+                  </button>
+                </div>
+                <div className="page-content">
+                  <ExamWiseTopStudentsPosterGenerator mode="school" school={school} />
                 </div>
               </div>
             }

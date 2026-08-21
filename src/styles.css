@@ -8236,6 +8236,39 @@ textarea {
   margin: 0;
 }
 
+.poster-template-mode-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 6px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.poster-template-mode-tabs > button {
+  flex: 1;
+  justify-content: center;
+}
+
+.poster-template-subtoolbar {
+  margin-bottom: 16px;
+}
+
+.poster-template-subtoolbar strong {
+  display: block;
+  color: #172033;
+}
+
+.poster-template-subtoolbar p {
+  margin: 4px 0 0;
+}
+
+.poster-template-header-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .poster-size-dialog__head {
   display: flex;
   align-items: flex-start;

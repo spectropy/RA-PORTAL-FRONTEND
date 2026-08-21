@@ -17,7 +17,11 @@ export function resolveBinding(data, binding) {
     return String(value || "").toUpperCase();
   }
 
-  if (/^students\.\d+\.cumulative_percentage$/.test(binding)) {
+  if (binding === "exam.name") {
+    return String(value || "").toUpperCase();
+  }
+
+  if (/^students\.\d+\.(cumulative_percentage|percentage)$/.test(binding)) {
     if (value == null || value === "") return "";
     const text = String(value);
     return text.includes("%") ? text : `${text}%`;
@@ -26,7 +30,7 @@ export function resolveBinding(data, binding) {
   return value;
 }
 
-export function buildPosterData({ school, className, sectionName, students }) {
+export function buildPosterData({ school, className, sectionName, students, exam }) {
   return {
     school: {
       school_id: school?.school_id || school?.id || "",
@@ -35,6 +39,7 @@ export function buildPosterData({ school, className, sectionName, students }) {
     },
     className: className || "",
     sectionName: sectionName || "",
+    exam: exam || { name: "" },
     students: Array.isArray(students) ? students.slice(0, 5) : [],
   };
 }

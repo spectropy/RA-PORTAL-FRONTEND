@@ -15,6 +15,10 @@ import TemplateSelector from "./TemplateSelector.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+const isExamWiseTemplate = (template) =>
+  String(template.description || "").includes("poster_type:exam_wise") ||
+  /exam/i.test(template.name || "");
+
 function calculateTopStudents(exams, school, className, sectionName) {
   const grouped = {};
   exams.forEach((exam) => {
@@ -77,8 +81,9 @@ export default function TopStudentsPosterGenerator({
   useEffect(() => {
     getPosterTemplates({ category: "top_students", status: "active" }).then(
       (rows) => {
-        setTemplates(rows);
-        setSelectedTemplateId((current) => current || rows[0]?.id || "");
+        const cumulativeRows = rows.filter((row) => !isExamWiseTemplate(row));
+        setTemplates(cumulativeRows);
+        setSelectedTemplateId((current) => current || cumulativeRows[0]?.id || "");
       },
     );
   }, []);
@@ -177,13 +182,6 @@ export default function TopStudentsPosterGenerator({
 
   return (
     <div className="poster-page poster-generator-page">
-      <div className="poster-page-toolbar">
-        <div>
-          <h2>Top Students Poster</h2>
-          <p>Generate social-ready posters from the existing top 5 results.</p>
-        </div>
-      </div>
-
       <div className="poster-generator-grid">
         <section className="poster-control-panel">
           {mode === "admin" && (

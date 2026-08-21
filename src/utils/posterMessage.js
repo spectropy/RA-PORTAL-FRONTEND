@@ -35,3 +35,28 @@ export function downloadTextFile(text, filename) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export function buildExamWiseTopStudentsMessage({
+  className = "",
+  section = "",
+  examName = "",
+  examDate = "",
+  schoolName = "",
+  schoolArea = "",
+} = {}) {
+  return `🎉 **Celebrating Excellence!** 🎉
+
+Congratulations to **our students** for securing **top ranks** in **${className} – ${section}**! 🏆
+📝 **Exam:** ${examName}
+📅 **Exam Date:** ${examDate}
+📍 **${schoolName}**
+📌 **${schoolArea}**
+
+Your dedication, hard work, and commitment to learning have made this achievement possible. 🌟
+Let's celebrate this wonderful accomplishment and inspire many more students to aim higher! 🚀
+**Powered by SPECTROPY**
+#Top5Students #StudentAchievement #AcademicExcellence #StudentSuccess #SPECTROPY
+#PoweredBySPECTROPY #SPECTROPYEducation #SPECTROPYResults #SPECTROPYAnalytics #SPECTROPYSuccess #SPECTROPYSchools
+#SPECTROPYAchievers #SPECTROPYTopStudents #SPECTROPYExcellence #Top5Students #StudentAchievement #AcademicExcellence
+#StudentSuccess #SchoolExcellence`;
+}
