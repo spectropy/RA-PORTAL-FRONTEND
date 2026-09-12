@@ -2272,10 +2272,12 @@ body {
 }
 
 .exam-results-header-actions {
-  display: grid;
-  justify-items: end;
-  gap: 8px;
-  min-width: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 520px;
 }
 
 .exam-results-header-download {
@@ -2298,6 +2300,7 @@ body {
 .exam-results-header-download--student {
   border-color: #2563eb;
   background: #2563eb;
+  color: #fff;
 }
 
 .exam-results-header-download:disabled {
