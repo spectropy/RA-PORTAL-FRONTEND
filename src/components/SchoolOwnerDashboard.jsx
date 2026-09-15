@@ -9630,9 +9630,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
       };
     });
     const subjectSkillChart = {
-      width: 500,
-      height: 245,
-      padding: { top: 18, right: 8, bottom: 50, left: 46 },
+      width: 690,
+      height: 285,
+      padding: { top: 18, right: 10, bottom: 58, left: 56 },
     };
     subjectSkillChart.plotWidth =
       subjectSkillChart.width -
@@ -9646,8 +9646,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
       subjectSkillChart.plotWidth /
       Math.max(subjectBloomSkillPerformance.length, 1);
     subjectSkillChart.barWidth = Math.min(
-      18,
-      Math.max(10, subjectSkillChart.groupWidth / 10),
+      20,
+      Math.max(12, subjectSkillChart.groupWidth / 9),
     );
     subjectSkillChart.yForValue = (value) =>
       subjectSkillChart.padding.top +
@@ -9924,14 +9924,14 @@ export default function SchoolOwnerDashboard({ onBack }) {
           >
             Subject-wise Performance by Bloom&apos;s Skill
           </h3>
-          <div style={{ width: "100%", overflowX: "auto", marginLeft: "-6px" }}>
+          <div style={{ width: "100%", overflowX: "auto" }}>
             <svg
-              width="96%"
-              height="245"
+              width="100%"
+              height="285"
               viewBox={`0 0 ${subjectSkillChart.width} ${subjectSkillChart.height}`}
               role="img"
               aria-label="Subject-wise performance by Bloom skill"
-              style={{ minWidth: "440px", display: "block" }}
+              style={{ minWidth: "620px", display: "block" }}
             >
               {[100, 80, 60, 40, 20, 0].map((value) => {
                 const y = subjectSkillChart.yForValue(value);
@@ -9975,12 +9975,12 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 strokeWidth="1"
               />
               <text
-                x="14"
-                y="128"
+                x="16"
+                y={subjectSkillChart.padding.top + subjectSkillChart.plotHeight / 2}
                 fill="#30507f"
                 fontSize="12"
                 fontWeight="800"
-                transform="rotate(-90 14 128)"
+                transform={`rotate(-90 16 ${subjectSkillChart.padding.top + subjectSkillChart.plotHeight / 2})`}
                 textAnchor="middle"
               >
                 Accuracy (%)
@@ -9992,14 +9992,14 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 const groupCenter = groupStart + subjectSkillChart.groupWidth / 2;
                 const barsWidth =
                   subjectGroup.skills.length * subjectSkillChart.barWidth +
-                  (subjectGroup.skills.length - 1) * 5;
+                  (subjectGroup.skills.length - 1) * 6;
                 const barsStart = groupCenter - barsWidth / 2;
 
                 return (
                   <g key={subjectGroup.subject}>
                     {subjectGroup.skills.map((item, skillIndex) => {
                       const x =
-                        barsStart + skillIndex * (subjectSkillChart.barWidth + 5);
+                        barsStart + skillIndex * (subjectSkillChart.barWidth + 6);
                       const y = subjectSkillChart.yForValue(item.percentage);
                       const barHeight =
                         subjectSkillChart.padding.top +
