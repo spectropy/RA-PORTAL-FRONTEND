@@ -1,218 +1,172 @@
 // src/components/LMSExamRegistration.jsx
 import React, { useState } from "react";
 import * as XLSX from "xlsx";
-
+ 
+const SUBJECT_DEFAULTS = {
+  PHYSICS: { questionCount: 15, correctMark: 4, wrongMark: -1 },
+  CHEMISTRY: { questionCount: 15, correctMark: 4, wrongMark: -1 },
+  MATHS: { questionCount: 15, correctMark: 4, wrongMark: -1 },
+  BIOLOGY: { questionCount: 15, correctMark: 4, wrongMark: -1 },
+};
+ 
+const GROUP_SUBJECTS = {
+  PCMB: ["PHYSICS", "CHEMISTRY", "MATHS", "BIOLOGY"],
+  PCM: ["PHYSICS", "CHEMISTRY", "MATHS"],
+  PCB: ["PHYSICS", "CHEMISTRY", "BIOLOGY"],
+};
+ 
+const createSubjectsForGroup = (group) =>
+  GROUP_SUBJECTS[group].map((subject, index) => ({
+    section: `S${index + 1}`,
+    subject,
+    ...SUBJECT_DEFAULTS[subject],
+  }));
+ 
+const DEFAULT_SUBJECTS = createSubjectsForGroup("PCMB");
+ 
+const normalizeAnswer = (value) => (value || "").toString().trim().toUpperCase();
+const toNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+ 
 export default function LMSExamRegistration() {
   const [files, setFiles] = useState({
-    scoresReport: null, // REQUIRED
-    notAttemptedStudents: null, // optional
+    scoresReport: null,
+    absentStudents: null,
   });
-
+  const [subjectGroup, setSubjectGroup] = useState("PCMB");
+  const [subjects, setSubjects] = useState(DEFAULT_SUBJECTS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
+ 
   const handleFileChange = (key, e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFiles((prev) => ({ ...prev, [key]: file }));
-      setError("");
-      setSuccess("");
-    }
+    const file = e.target.files[0] || null;
+    setFiles((prev) => ({ ...prev, [key]: file }));
+    setError("");
+    setSuccess("");
   };
-
+ 
+  const handleSubjectChange = (index, field, value) => {
+    setSubjects((prev) =>
+      prev.map((subject, subjectIndex) =>
+        subjectIndex === index ? { ...subject, [field]: value } : subject,
+      ),
+    );
+  };
+ 
+  const handleGroupChange = (event) => {
+    const nextGroup = event.target.value;
+    setSubjectGroup(nextGroup);
+    setSubjects(createSubjectsForGroup(nextGroup));
+    setError("");
+    setSuccess("");
+  };
+ 
   const processAndDownload = async () => {
     setLoading(true);
     setError("");
     setSuccess("");
-
+ 
     try {
       if (!files.scoresReport) {
-        throw new Error("Please upload the Scores Report file.");
+        throw new Error("Please upload the Attempts Report file.");
       }
-
-      // === 1. Read Scores Report ===
-      const scoresArrayBuffer = await readFileAsArrayBuffer(files.scoresReport);
-      const scoresWB = XLSX.read(scoresArrayBuffer, { type: "array" });
-      const scoresSheet = scoresWB.Sheets[scoresWB.SheetNames[0]];
-      const scoresData = XLSX.utils.sheet_to_json(scoresSheet, { header: 1 });
-
-      if (scoresData.length < 2) {
-        throw new Error("Scores Report is empty or missing data.");
+ 
+      const subjectConfig = subjects.map((subject) => ({
+        section: subject.section,
+        subject: subject.subject.trim().toUpperCase(),
+        questionCount: toNumber(subject.questionCount),
+        correctMark: toNumber(subject.correctMark),
+        wrongMark: toNumber(subject.wrongMark),
+      }));
+ 
+      if (subjectConfig.some((subject) => !subject.subject)) {
+        throw new Error("Please enter all subject names.");
       }
-
-      const headers = scoresData[0].map((h) => (h || "").toString().trim());
-      const rows = scoresData.slice(1);
-
-      // Map attempted students
-      const attemptedStudents = rows
-        .map((row) => {
-          const obj = {};
-          headers.forEach((h, i) => {
-            obj[h] = row[i] !== undefined ? row[i] : "";
-          });
-
-          const studentId = (obj["Username"] || "").toString().trim();
-          if (!studentId) return null; // Skip if no ID
-
-          return {
-            student_id: studentId,
-            student_name:
-              (
-                (obj["First Name"] || "") +
-                " " +
-                (obj["Last Name"] || "")
-              ).trim() ||
-              obj["Name"] ||
-              "Unknown",
-            physics:
-              parseFloat(obj["PHYSICS Score"]) || obj["Physics Score"] || 0,
-            chemistry:
-              parseFloat(obj["CHEMISTRY Score"]) || obj["Chemistry Score"] || 0,
-            maths:
-              parseFloat(obj["MATHS Score"]) || obj["Mathematics Score"] || 0,
-            biology: parseFloat(obj["BIOLOGY Score"]) || 0, // Not in LMS? Set to 0
-            correct: parseFloat(obj["No. Of Correct Answers"]) || 0, // LMS doesn't provide this → infer or leave 0
-            wrong: parseFloat(obj["No. Of incorrect Answers"]) || 0,
-            unattempted: parseFloat(obj["No. Of unanswered Questions"]) || 0,
-          };
-        })
-        .filter(Boolean);
-
-      // === 2. Read Not Attempted (if any) ===
-      let notAttempted = [];
-      if (files.notAttemptedStudents) {
-        const notAttArrayBuffer = await readFileAsArrayBuffer(
-          files.notAttemptedStudents,
+ 
+      if (subjectConfig.some((subject) => subject.questionCount <= 0)) {
+        throw new Error("Question count must be greater than 0 for every subject.");
+      }
+ 
+      const attemptsSheetRows = await readFirstSheet(files.scoresReport);
+      if (attemptsSheetRows.length < 2) {
+        throw new Error("Attempts Report is empty or missing data.");
+      }
+ 
+      const headers = attemptsSheetRows[0].map((header) =>
+        (header || "").toString().trim(),
+      );
+      const dataRows = attemptsSheetRows.slice(1);
+      const objects = dataRows.map((row) => rowToObject(headers, row));
+      const answerKeyRow = objects.find(
+        (row) => normalizeAnswer(row.Username) === "CORRECT ANSWERS",
+      );
+ 
+      if (!answerKeyRow) {
+        throw new Error(
+          'Answer key row not found. The Attempts Report must contain a row with Username as "Correct Answers".',
         );
-        const notAttWB = XLSX.read(notAttArrayBuffer, { type: "array" });
-        const notAttSheet = notAttWB.Sheets[notAttWB.SheetNames[0]];
-        const notAttData = XLSX.utils.sheet_to_json(notAttSheet, { header: 1 });
-
-        if (notAttData.length >= 2) {
-          const notAttHeaders = notAttData[0].map((h) =>
-            (h || "").toString().trim(),
+      }
+ 
+      const questionPlan = buildQuestionPlan(subjectConfig);
+      const missingColumns = questionPlan
+        .map((question) => question.inputColumn)
+        .filter((column) => !headers.includes(column));
+ 
+      if (missingColumns.length > 0) {
+        throw new Error(
+          `Attempts Report is missing question columns: ${missingColumns
+            .slice(0, 8)
+            .join(", ")}${missingColumns.length > 8 ? "..." : ""}`,
+        );
+      }
+ 
+      const attemptedRows = objects
+        .filter((row) => normalizeAnswer(row.Username) !== "CORRECT ANSWERS")
+        .map((row) => buildAttemptedStudent(row, answerKeyRow, questionPlan))
+        .filter(Boolean);
+ 
+      const attemptedRollNumbers = new Set(
+        attemptedRows.map((row) => row.rollNo.toString().trim()),
+      );
+ 
+      let absentRows = [];
+      if (files.absentStudents) {
+        const absentSheetRows = await readFirstSheet(files.absentStudents);
+        if (absentSheetRows.length >= 2) {
+          const absentHeaders = absentSheetRows[0].map((header) =>
+            (header || "").toString().trim(),
           );
-          const notAttRows = notAttData.slice(1);
-
-          notAttempted = notAttRows
-            .map((row) => {
-              const obj = {};
-              notAttHeaders.forEach((h, i) => {
-                obj[h] = row[i] !== undefined ? row[i] : "";
-              });
-
-              const studentId = (obj["Username"] || "").toString().trim();
-              if (!studentId) return null;
-
-              return {
-                student_id: studentId,
-                student_name: obj["Full Name"] || "Unknown",
-                physics: 0,
-                chemistry: 0,
-                maths: 0,
-                biology: 0,
-                correct: 0,
-                wrong: 0,
-                unattempted: 0,
-              };
-            })
-            .filter(Boolean);
+          absentRows = absentSheetRows
+            .slice(1)
+            .map((row) => rowToObject(absentHeaders, row))
+            .map((row) => buildAbsentStudent(row, answerKeyRow, questionPlan))
+            .filter(
+              (row) =>
+                row && !attemptedRollNumbers.has(row.rollNo.toString().trim()),
+            );
         }
       }
-
-      const allStudents = [...attemptedStudents, ...notAttempted];
-
-      // === 3. Build Full Header (61+ columns as per your spec) ===
-      const fullHeaders = [
-        "Exam",
-        "Exam Set",
-        "Roll No",
-        "Name",
-        "Total Marks",
-        "Grade",
-        "Rank",
-        "Correct Answers",
-        "Incorrect Answers",
-        "Not attempted",
-        "PHYSICS -Single Correct",
-        "PHYSICS -Single Correct _Correct Answers",
-        "PHYSICS -Single Correct _Incorrect Answers",
-        "PHYSICS -Single Correct _Not attempted",
-        "PHYSICS",
-        "PHYSICS _Correct Answers",
-        "PHYSICS _Incorrect Answers",
-        "PHYSICS _Not attempted",
-        "CHEMISTRY -Single Correct",
-        "CHEMISTRY -Single Correct_Correct Answers",
-        "CHEMISTRY -Single Correct_Incorrect Answers",
-        "CHEMISTRY -Single Correct_Not attempted",
-        "CHEMISTRY",
-        "CHEMISTRY _Correct Answers",
-        "CHEMISTRY _Incorrect Answers",
-        "CHEMISTRY _Not attempted",
-        "MATHS-Single Correct",
-        "MATHS-Single Correct_Correct Answers",
-        "MATHS-Single Correct_Incorrect Answers",
-        "MATHS-Single Correct_Not attempted",
-        "MATHS",
-        "MATHS_Correct Answers",
-        "MATHS_Incorrect Answers",
-        "MATHS_Not attempted",
-        "BIOLOGY -Single Correct",
-        "BIOLOGY -Single Correct_Correct Answers",
-        "BIOLOGY -Single Correct_Incorrect Answers",
-        "BIOLOGY -Single Correct_Not attempted",
-        "BIOLOGY",
-        "BIOLOGY _Correct Answers",
-        "BIOLOGY _Incorrect Answers",
-        "BIOLOGY _Not attempted",
-        // Q1 to Q60: Options, Key, Marks (3 per question → 180 columns)
-        ...Array.from({ length: 60 }, (_, i) => [
-          `Q ${i + 1} Options`,
-          `Q ${i + 1} Key`,
-          `Q ${i + 1} Marks`,
-        ]).flat(),
-      ];
-
-      // === 4. Build Rows with ONLY required columns filled ===
-      const outputRows = allStudents.map((student) => {
-        const row = new Array(fullHeaders.length).fill(""); // Start with empty strings
-
-        // Map only the 9 required fields to correct column indices (0-based)
-        row[2] = student.student_id; // Roll No
-        row[3] = student.student_name; // Name
-        row[7] = student.correct; // Correct Answers
-        row[8] = student.wrong; // Incorrect Answers
-        row[9] = student.unattempted; // Not attempted
-        row[10] = student.physics; // PHYSICS -Single Correct
-        row[18] = student.chemistry; // CHEMISTRY -Single Correct
-        row[26] = student.maths; // MATHS-Single Correct
-        row[34] = student.biology; // BIOLOGY -Single Correct
-
-        // Set numeric fields that should be 0 (not "")
-        [4, 7, 8, 9, 10, 18, 26, 34].forEach((idx) => {
-          if (row[idx] === "") row[idx] = 0;
-        });
-
-        return row;
-      });
-
-      // === 5. Create worksheet with full header and data ===
+ 
+      const fullHeaders = buildOutputHeaders(subjectConfig, questionPlan.length);
+      const outputRows = [...attemptedRows, ...absentRows].map((student) =>
+        buildOutputRow(student, subjectConfig, questionPlan),
+      );
+ 
       const columnIndices = Array.from(
         { length: fullHeaders.length },
-        (_, i) => i,
+        (_, index) => index,
       );
-      const wsData = [
-        columnIndices, // ← First row: 0, 1, 2, 3, ... (makes backend happy)
-        fullHeaders, // ← Second row: "Exam", "Exam Set", "Roll No", ...
-        ...outputRows, // ← Rest: student data
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const ws = XLSX.utils.aoa_to_sheet([
+        columnIndices,
+        fullHeaders,
+        ...outputRows,
+      ]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "OMR Upload");
-
-      // === 6. Download ===
+ 
       const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const blob = new Blob([excelBuffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -224,112 +178,392 @@ export default function LMSExamRegistration() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      setSuccess("✅ OMR-compatible Excel file downloaded successfully!");
+      URL.revokeObjectURL(url);
+ 
+      setSuccess("OMR-compatible Excel file downloaded successfully.");
     } catch (err) {
       setError(err.message || "An error occurred during processing.");
     } finally {
       setLoading(false);
     }
   };
-
-  const readFileAsArrayBuffer = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
+ 
   return (
     <div style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
       <h2 style={{ margin: "0 0 16px 0", fontSize: 20 }}>
-        LMS Exam Converter → OMR Format
+        LMS Exam Converter to OMR Format
       </h2>
-      <p style={{ marginBottom: 20, color: "#555" }}>
-        Upload the <strong>Scores Report</strong> (required) and optionally the{" "}
-        <strong>Not Attempted Students</strong> list. This will generate an
-        Excel file matching your OMR upload format.
+      <p style={{ marginBottom: 20, color: "#555", lineHeight: 1.5 }}>
+        Select the subject group, configure the subjects, and then upload the
+        Attempts Report. The absent list is optional.
       </p>
-
+ 
+      <div style={{ marginBottom: 20 }}>
+        <label
+          htmlFor="subject-group"
+          style={{
+            fontWeight: "bold",
+            display: "block",
+            marginBottom: 8,
+          }}
+        >
+          Subject Group (Required)
+        </label>
+        <select
+          id="subject-group"
+          value={subjectGroup}
+          onChange={handleGroupChange}
+          style={{ ...inputStyle, maxWidth: 320 }}
+        >
+          <option value="PCMB">PCMB - Physics, Chemistry, Maths, Biology</option>
+          <option value="PCM">PCM - Physics, Chemistry, Maths</option>
+          <option value="PCB">PCB - Physics, Chemistry, Biology</option>
+        </select>
+      </div>
+ 
+      <div
+        style={{
+          border: "1px solid #d7dce5",
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 20,
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ margin: "0 0 14px 0", fontSize: 16 }}>
+          Subject and Marks Configuration ({subjectGroup})
+        </h3>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "80px minmax(160px, 1fr) 130px 120px 120px",
+            gap: 12,
+            alignItems: "center",
+            fontSize: 13,
+            fontWeight: 700,
+            marginBottom: 8,
+          }}
+        >
+          <span>Section</span>
+          <span>Subject</span>
+          <span>Questions</span>
+          <span>Correct Mark</span>
+          <span>Wrong Mark</span>
+        </div>
+        {subjects.map((subject, index) => (
+          <div
+            key={subject.section}
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "80px minmax(160px, 1fr) 130px 120px 120px",
+              gap: 12,
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <strong>{subject.section}</strong>
+            <input
+              value={subject.subject}
+              onChange={(e) =>
+                handleSubjectChange(index, "subject", e.target.value)
+              }
+              style={inputStyle}
+            />
+            <input
+              type="number"
+              min="1"
+              value={subject.questionCount}
+              onChange={(e) =>
+                handleSubjectChange(index, "questionCount", e.target.value)
+              }
+              style={inputStyle}
+            />
+            <input
+              type="number"
+              value={subject.correctMark}
+              onChange={(e) =>
+                handleSubjectChange(index, "correctMark", e.target.value)
+              }
+              style={inputStyle}
+            />
+            <input
+              type="number"
+              value={subject.wrongMark}
+              onChange={(e) =>
+                handleSubjectChange(index, "wrongMark", e.target.value)
+              }
+              style={inputStyle}
+            />
+          </div>
+        ))}
+      </div>
+ 
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "1fr",
-          gap: "20px",
-          marginBottom: "20px",
+          gap: 20,
+          marginBottom: 20,
         }}
       >
-        <div>
-          <label
-            style={{
-              fontWeight: "bold",
-              display: "block",
-              marginBottom: "8px",
-            }}
-          >
-            Scores Report (Required) – CSV/Excel
-          </label>
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={(e) => handleFileChange("scoresReport", e)}
-            style={{
-              padding: "8px",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              width: "100%",
-            }}
-          />
-        </div>
-        <div>
-          <label
-            style={{
-              fontWeight: "bold",
-              display: "block",
-              marginBottom: "8px",
-            }}
-          >
-            Not Attempted Students (Optional) – CSV/Excel
-          </label>
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={(e) => handleFileChange("notAttemptedStudents", e)}
-            style={{
-              padding: "8px",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              width: "100%",
-            }}
-          />
-        </div>
+        <FileInput
+          label="Attempts Report with Answers (Required) - CSV/Excel"
+          onChange={(e) => handleFileChange("scoresReport", e)}
+        />
+        <FileInput
+          label="Absent / Not Attempted Student List (Optional) - CSV/Excel"
+          onChange={(e) => handleFileChange("absentStudents", e)}
+        />
       </div>
-
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
+ 
+      <div style={{ marginTop: 20, textAlign: "center" }}>
         <button
           onClick={processAndDownload}
           disabled={loading}
           style={{
             padding: "10px 20px",
-            backgroundColor: loading ? "#ccc" : "#1e90ff",
+            backgroundColor: loading ? "#9aa4b2" : "#1e90ff",
             color: "white",
             border: "none",
-            borderRadius: "8px",
+            borderRadius: 8,
             cursor: loading ? "not-allowed" : "pointer",
-            fontSize: "16px",
+            fontSize: 16,
             fontWeight: "bold",
           }}
         >
           {loading ? "Processing..." : "Generate OMR Excel File"}
         </button>
       </div>
-
-      {error && <p style={{ color: "crimson", marginTop: "16px" }}>{error}</p>}
-      {success && (
-        <p style={{ color: "green", marginTop: "16px" }}>{success}</p>
-      )}
+ 
+      {error && <p style={{ color: "crimson", marginTop: 16 }}>{error}</p>}
+      {success && <p style={{ color: "green", marginTop: 16 }}>{success}</p>}
     </div>
   );
 }
+ 
+function FileInput({ label, onChange }) {
+  return (
+    <div>
+      <label
+        style={{
+          fontWeight: "bold",
+          display: "block",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </label>
+      <input
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        onChange={onChange}
+        style={{
+          padding: 8,
+          border: "1px solid #ccc",
+          borderRadius: 4,
+          width: "100%",
+        }}
+      />
+    </div>
+  );
+}
+ 
+function buildQuestionPlan(subjectConfig) {
+  let outputQuestionNumber = 1;
+  return subjectConfig.flatMap((subject) =>
+    Array.from({ length: subject.questionCount }, (_, index) => ({
+      section: subject.section,
+      subject: subject.subject,
+      subjectQuestionNumber: index + 1,
+      outputQuestionNumber: outputQuestionNumber++,
+      inputColumn: `${subject.section}Q${index + 1}`,
+      correctMark: subject.correctMark,
+      wrongMark: subject.wrongMark,
+    })),
+  );
+}
+ 
+function buildAttemptedStudent(row, answerKeyRow, questionPlan) {
+  const rollNo = (row.Username || "").toString().trim();
+  if (!rollNo) return null;
+ 
+  const name =
+    (row.Name || "").toString().trim() ||
+    `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim() ||
+    "Unknown";
+ 
+  const subjectStats = {};
+  const questionResults = questionPlan.map((question) => {
+    const response = normalizeAnswer(row[question.inputColumn]);
+    const key = normalizeAnswer(answerKeyRow[question.inputColumn]);
+    let status = "notAttempted";
+    let marks = 0;
+ 
+    if (response) {
+      if (response === key) {
+        status = "correct";
+        marks = question.correctMark;
+      } else {
+        status = "incorrect";
+        marks = question.wrongMark;
+      }
+    }
+ 
+    if (!subjectStats[question.subject]) {
+      subjectStats[question.subject] = {
+        marks: 0,
+        correct: 0,
+        incorrect: 0,
+        notAttempted: 0,
+      };
+    }
+ 
+    subjectStats[question.subject].marks += marks;
+    subjectStats[question.subject][status] += 1;
+ 
+    return {
+      options: response,
+      key,
+      marks,
+      status,
+    };
+  });
+ 
+  return {
+    rollNo,
+    name,
+    subjectStats,
+    questionResults,
+  };
+}
+ 
+function buildAbsentStudent(row, answerKeyRow, questionPlan) {
+  const rollNo = (row.Username || row["Roll No"] || "").toString().trim();
+  if (!rollNo) return null;
+ 
+  const name =
+    (row["Full Name"] || row.Name || "").toString().trim() || "Unknown";
+ 
+  const subjectStats = {};
+  questionPlan.forEach((question) => {
+    if (!subjectStats[question.subject]) {
+      subjectStats[question.subject] = {
+        marks: 0,
+        correct: 0,
+        incorrect: 0,
+        notAttempted: 0,
+      };
+    }
+  });
+ 
+  return {
+    rollNo,
+    name,
+    subjectStats,
+    questionResults: questionPlan.map((question) => ({
+      options: "",
+      key: normalizeAnswer(answerKeyRow[question.inputColumn]),
+      marks: 0,
+      status: "absent",
+    })),
+  };
+}
+ 
+function buildOutputHeaders(subjectConfig, totalQuestions) {
+  return [
+    "Roll No",
+    "Name",
+    "Total Marks",
+    "Grade",
+    "Rank",
+    "Correct Answers",
+    "Incorrect Answers",
+    "Not attempted",
+    ...subjectConfig.flatMap((subject) => [
+      subject.subject,
+      `${subject.subject} _Correct Answers`,
+      `${subject.subject} _Incorrect Answers`,
+      `${subject.subject} _Not attempted`,
+    ]),
+    ...Array.from({ length: totalQuestions }, (_, index) => [
+      `Q ${index + 1} Options`,
+      `Q ${index + 1} Key`,
+      `Q ${index + 1} Marks`,
+    ]).flat(),
+  ];
+}
+ 
+function buildOutputRow(student, subjectConfig, questionPlan) {
+  const totals = calculateTotals(student.subjectStats);
+ 
+  return [
+    student.rollNo,
+    student.name,
+    totals.marks,
+    "",
+    "",
+    totals.correct,
+    totals.incorrect,
+    totals.notAttempted,
+    ...subjectConfig.flatMap((subject) => {
+      const stats = student.subjectStats[subject.subject] || {
+        marks: 0,
+        correct: 0,
+        incorrect: 0,
+        notAttempted: 0,
+      };
+      return [stats.marks, stats.correct, stats.incorrect, stats.notAttempted];
+    }),
+    ...questionPlan.flatMap((_, index) => {
+      const result = student.questionResults[index];
+      return [result.options, result.key, result.marks];
+    }),
+  ];
+}
+ 
+function calculateTotals(subjectStats) {
+  return Object.values(subjectStats).reduce(
+    (total, stats) => ({
+      marks: total.marks + stats.marks,
+      correct: total.correct + stats.correct,
+      incorrect: total.incorrect + stats.incorrect,
+      notAttempted: total.notAttempted + stats.notAttempted,
+    }),
+    { marks: 0, correct: 0, incorrect: 0, notAttempted: 0 },
+  );
+}
+ 
+function rowToObject(headers, row) {
+  return headers.reduce((object, header, index) => {
+    object[header] = row[index] !== undefined ? row[index] : "";
+    return object;
+  }, {});
+}
+ 
+function readFirstSheet(file) {
+  return readFileAsArrayBuffer(file).then((arrayBuffer) => {
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  });
+}
+ 
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+ 
+const inputStyle = {
+  padding: 8,
+  border: "1px solid #c7ccd6",
+  borderRadius: 4,
+  width: "100%",
+  boxSizing: "border-box",
+};
+ 
