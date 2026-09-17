@@ -111,6 +111,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     examPattern: "",
     examDate: "",
     classSection: "",
+    subject_group: "PCMB",
     max_marks_physics: "",
     max_marks_maths: "",
     max_marks_biology: "",
@@ -148,6 +149,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
       examPattern: "",
       examDate: "",
       classSection: "",
+      subject_group: "PCMB",
       max_marks_physics: "",
       max_marks_maths: "",
       max_marks_biology: "",
@@ -398,10 +400,17 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
     formData.append("class", classSectionParts.examClass);
     formData.append("section", classSectionParts.examSection);
     formData.append("exam_date", examForm.examDate);
+    formData.append("subject_group", examForm.subject_group);
     formData.append("max_marks_physics", examForm.max_marks_physics || 50);
-    formData.append("max_marks_maths", examForm.max_marks_maths || 50);
+    formData.append(
+      "max_marks_maths",
+      examForm.subject_group === "PCB" ? 0 : examForm.max_marks_maths || 50,
+    );
     formData.append("max_marks_chemistry", examForm.max_marks_chemistry || 50);
-    formData.append("max_marks_biology", examForm.max_marks_biology || 50);
+    formData.append(
+      "max_marks_biology",
+      examForm.subject_group === "PCM" ? 0 : examForm.max_marks_biology || 50,
+    );
 
     setUploading(true);
     try {
@@ -437,6 +446,7 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
         class: classSectionParts.examClass,
         section: classSectionParts.examSection,
         exam_date: examForm.examDate,
+        subject_group: examForm.subject_group,
         student_count: data.results?.length || 0,
       };
 
@@ -2248,6 +2258,21 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                       ))}
                     </select>
                   </label>
+
+                  <label className="form-field">
+                    <span className="form-label">Subject Group</span>
+                    <select
+                      className="form-input"
+                      name="subject_group"
+                      value={examForm.subject_group}
+                      onChange={handleFormChange}
+                      required
+                    >
+                      <option value="PCMB">PCMB</option>
+                      <option value="PCM">PCM</option>
+                      <option value="PCB">PCB</option>
+                    </select>
+                  </label>
                 </div>
               </section>
 
@@ -2264,6 +2289,9 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                     ["Chemistry", Beaker],
                   ].map(([subject, Icon]) => {
                     const fieldName = `max_marks_${subject.toLowerCase()}`;
+                    const disabled =
+                      (examForm.subject_group === "PCB" && subject === "Maths") ||
+                      (examForm.subject_group === "PCM" && subject === "Biology");
                     return (
                       <label
                         className="form-field omr-subject-field"
@@ -2279,11 +2307,12 @@ export default function ExamRegistration({ schools = [], mode = "list" }) {
                           className="form-input"
                           type="number"
                           name={fieldName}
-                          value={examForm[fieldName] || ""}
+                          value={disabled ? "0" : examForm[fieldName] || ""}
                           onChange={handleFormChange}
                           min="0"
                           step="1"
                           placeholder="e.g., 100"
+                          disabled={disabled}
                           required
                         />
                       </label>

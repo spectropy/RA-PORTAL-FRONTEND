@@ -8,20 +8,20 @@ const SUBJECT_DEFAULTS = {
   MATHS: { questionCount: 15, correctMark: 4, wrongMark: -1 },
   BIOLOGY: { questionCount: 15, correctMark: 4, wrongMark: -1 },
 };
- 
+
 const GROUP_SUBJECTS = {
   PCMB: ["PHYSICS", "CHEMISTRY", "MATHS", "BIOLOGY"],
   PCM: ["PHYSICS", "CHEMISTRY", "MATHS"],
   PCB: ["PHYSICS", "CHEMISTRY", "BIOLOGY"],
 };
- 
+
 const createSubjectsForGroup = (group) =>
   GROUP_SUBJECTS[group].map((subject, index) => ({
     section: `S${index + 1}`,
     subject,
     ...SUBJECT_DEFAULTS[subject],
   }));
- 
+
 const DEFAULT_SUBJECTS = createSubjectsForGroup("PCMB");
  
 const normalizeAnswer = (value) => (value || "").toString().trim().toUpperCase();
@@ -34,6 +34,7 @@ export default function LMSExamRegistration() {
   const [files, setFiles] = useState({
     scoresReport: null,
     absentStudents: null,
+    questionTags: null,
   });
   const [subjectGroup, setSubjectGroup] = useState("PCMB");
   const [subjects, setSubjects] = useState(DEFAULT_SUBJECTS);
@@ -47,7 +48,7 @@ export default function LMSExamRegistration() {
     setError("");
     setSuccess("");
   };
- 
+
   const handleSubjectChange = (index, field, value) => {
     setSubjects((prev) =>
       prev.map((subject, subjectIndex) =>
@@ -55,7 +56,7 @@ export default function LMSExamRegistration() {
       ),
     );
   };
- 
+
   const handleGroupChange = (event) => {
     const nextGroup = event.target.value;
     setSubjectGroup(nextGroup);
@@ -111,6 +112,9 @@ export default function LMSExamRegistration() {
       }
  
       const questionPlan = buildQuestionPlan(subjectConfig);
+      const tagsByQuestion = files.questionTags
+        ? await readQuestionTags(files.questionTags, questionPlan)
+        : null;
       const missingColumns = questionPlan
         .map((question) => question.inputColumn)
         .filter((column) => !headers.includes(column));
@@ -150,9 +154,13 @@ export default function LMSExamRegistration() {
         }
       }
  
-      const fullHeaders = buildOutputHeaders(subjectConfig, questionPlan.length);
+      const fullHeaders = buildOutputHeaders(
+        subjectConfig,
+        questionPlan.length,
+        Boolean(tagsByQuestion),
+      );
       const outputRows = [...attemptedRows, ...absentRows].map((student) =>
-        buildOutputRow(student, subjectConfig, questionPlan),
+        buildOutputRow(student, subjectConfig, questionPlan, tagsByQuestion),
       );
  
       const columnIndices = Array.from(
@@ -191,7 +199,7 @@ export default function LMSExamRegistration() {
   return (
     <div style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
       <h2 style={{ margin: "0 0 16px 0", fontSize: 20 }}>
-        LMS Exam Converter to OMR Format
+        LMS Exam Converter to OMR Format with Bloom's Taxonomy
       </h2>
       <p style={{ marginBottom: 20, color: "#555", lineHeight: 1.5 }}>
         Select the subject group, configure the subjects, and then upload the
@@ -220,7 +228,7 @@ export default function LMSExamRegistration() {
           <option value="PCB">PCB - Physics, Chemistry, Biology</option>
         </select>
       </div>
- 
+
       <div
         style={{
           border: "1px solid #d7dce5",
@@ -299,7 +307,7 @@ export default function LMSExamRegistration() {
           </div>
         ))}
       </div>
- 
+
       <div
         style={{
           display: "grid",
@@ -316,8 +324,12 @@ export default function LMSExamRegistration() {
           label="Absent / Not Attempted Student List (Optional) - CSV/Excel"
           onChange={(e) => handleFileChange("absentStudents", e)}
         />
+        <FileInput
+          label="Question Tags / Exam Analysis (Optional) - CSV/Excel"
+          onChange={(e) => handleFileChange("questionTags", e)}
+        />
       </div>
- 
+
       <div style={{ marginTop: 20, textAlign: "center" }}>
         <button
           onClick={processAndDownload}
@@ -471,8 +483,10 @@ function buildAbsentStudent(row, answerKeyRow, questionPlan) {
   };
 }
  
-function buildOutputHeaders(subjectConfig, totalQuestions) {
+function buildOutputHeaders(subjectConfig, totalQuestions, includeQuestionTags = false) {
   return [
+    "Exam",
+    "Exam Set",
     "Roll No",
     "Name",
     "Total Marks",
@@ -487,18 +501,18 @@ function buildOutputHeaders(subjectConfig, totalQuestions) {
       `${subject.subject} _Incorrect Answers`,
       `${subject.subject} _Not attempted`,
     ]),
-    ...Array.from({ length: totalQuestions }, (_, index) => [
-      `Q ${index + 1} Options`,
-      `Q ${index + 1} Key`,
-      `Q ${index + 1} Marks`,
-    ]).flat(),
+    ...Array.from({ length: totalQuestions }, (_, index) =>
+      buildQuestionHeaders(index + 1, includeQuestionTags),
+    ).flat(),
   ];
 }
  
-function buildOutputRow(student, subjectConfig, questionPlan) {
+function buildOutputRow(student, subjectConfig, questionPlan, tagsByQuestion = null) {
   const totals = calculateTotals(student.subjectStats);
  
   return [
+    "",
+    "",
     student.rollNo,
     student.name,
     totals.marks,
@@ -516,10 +530,37 @@ function buildOutputRow(student, subjectConfig, questionPlan) {
       };
       return [stats.marks, stats.correct, stats.incorrect, stats.notAttempted];
     }),
-    ...questionPlan.flatMap((_, index) => {
+    ...questionPlan.flatMap((question, index) => {
       const result = student.questionResults[index];
-      return [result.options, result.key, result.marks];
+      const baseValues = [result.options, result.key, result.marks];
+      if (!tagsByQuestion) return baseValues;
+
+      const tags = tagsByQuestion.get(question.outputQuestionNumber) || {};
+      return [
+        ...baseValues,
+        tags.chapter || "",
+        tags.topic || "",
+        tags.subtopic || "",
+        tags.bloomsSkill || "",
+        tags.difficultyLevel || "",
+      ];
     }),
+  ];
+}
+
+function buildQuestionHeaders(questionNumber, includeQuestionTags) {
+  const prefix = `Q ${questionNumber}`;
+  const headers = [`${prefix} Options`, `${prefix} Key`, `${prefix} Marks`];
+
+  if (!includeQuestionTags) return headers;
+
+  return [
+    ...headers,
+    `${prefix} Chapter`,
+    `${prefix} Topic`,
+    `${prefix} Subtopic`,
+    `${prefix} Blooms Skill`,
+    `${prefix} Difficulty Level`,
   ];
 }
  
@@ -549,7 +590,137 @@ function readFirstSheet(file) {
     return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
   });
 }
- 
+
+function readQuestionTags(file, questionPlan) {
+  return readFileAsArrayBuffer(file).then((arrayBuffer) => {
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const questionAnalysisSheetName = workbook.SheetNames.find((sheetName) =>
+      normalizeHeader(sheetName).includes("QUESTION ANALYSIS"),
+    );
+
+    if (!questionAnalysisSheetName) {
+      throw new Error(
+        'Question Tags / Exam Analysis file must contain a "Question Analysis" sheet.',
+      );
+    }
+
+    const sheet = workbook.Sheets[questionAnalysisSheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+    const { headers, dataRows } = findQuestionTagRows(rows);
+
+    validateQuestionTagHeaders(headers);
+
+    const tagsByQuestion = new Map();
+    dataRows.forEach((row) => {
+      const object = rowToObject(headers, row);
+      const questionNumber = toNumber(
+        getByHeaderAliases(object, ["Q.No.", "Q.No", "Q No", "Question No"]),
+      );
+
+      if (!questionNumber) return;
+
+      tagsByQuestion.set(questionNumber, {
+        chapter: cleanText(getByHeaderAliases(object, ["Chapter"])),
+        topic: cleanText(getByHeaderAliases(object, ["Topic"])),
+        subtopic: cleanText(getByHeaderAliases(object, ["Subtopic", "Sub Topic"])),
+        bloomsSkill: cleanText(
+          getByHeaderAliases(object, [
+            "Blooms Skill",
+            "Bloom's Skill",
+            "Bloom Skill",
+          ]),
+        ),
+        difficultyLevel: cleanText(
+          getByHeaderAliases(object, ["Difficulty Level", "Difficulty"]),
+        ),
+      });
+    });
+
+    const missingTagQuestions = questionPlan
+      .map((question) => question.outputQuestionNumber)
+      .filter((questionNumber) => !tagsByQuestion.has(questionNumber));
+
+    if (missingTagQuestions.length > 0) {
+      throw new Error(
+        `Question tag data missing for Q${missingTagQuestions[0]}.`,
+      );
+    }
+
+    return tagsByQuestion;
+  });
+}
+
+function findQuestionTagRows(rows) {
+  const headerIndex = rows.findIndex((row) => {
+    const normalizedHeaders = row.map(normalizeHeader);
+    return (
+      normalizedHeaders.includes("Q NO") &&
+      normalizedHeaders.includes("CHAPTER") &&
+      normalizedHeaders.includes("TOPIC")
+    );
+  });
+
+  if (headerIndex === -1) {
+    return { headers: [], dataRows: [] };
+  }
+
+  return {
+    headers: rows[headerIndex].map((header) => cleanText(header)),
+    dataRows: rows.slice(headerIndex + 1).filter(rowHasData),
+  };
+}
+
+function validateQuestionTagHeaders(headers) {
+  const requiredGroups = [
+    ["Q.No.", "Q.No", "Q No", "Question No"],
+    ["Chapter"],
+    ["Topic"],
+    ["Subtopic", "Sub Topic"],
+    ["Blooms Skill", "Bloom's Skill", "Bloom Skill"],
+    ["Difficulty Level", "Difficulty"],
+  ];
+  const missingColumns = requiredGroups
+    .filter((aliases) => !hasHeaderAlias(headers, aliases))
+    .map((aliases) => aliases[0]);
+
+  if (missingColumns.length > 0) {
+    throw new Error(
+      `Question Tags / Exam Analysis file is missing column(s): ${missingColumns.join(
+        ", ",
+      )}.`,
+    );
+  }
+}
+
+function hasHeaderAlias(headers, aliases) {
+  const normalizedHeaders = headers.map(normalizeHeader);
+  return aliases.some((alias) => normalizedHeaders.includes(normalizeHeader(alias)));
+}
+
+function getByHeaderAliases(row, aliases) {
+  const normalizedAliases = aliases.map(normalizeHeader);
+  const key = Object.keys(row).find((header) =>
+    normalizedAliases.includes(normalizeHeader(header)),
+  );
+  return key ? row[key] : "";
+}
+
+function cleanText(value) {
+  return (value ?? "").toString().trim();
+}
+
+function normalizeHeader(value) {
+  return cleanText(value)
+    .replace(/[._-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function rowHasData(row) {
+  return row.some((cell) => cleanText(cell) !== "");
+}
+
 function readFileAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -566,4 +737,5 @@ const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
 };
+ 
  

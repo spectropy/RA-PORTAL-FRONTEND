@@ -166,6 +166,488 @@ function EmptyState() {
   );
 }
 
+const SUBJECT_GROUPS = {
+  PCM: ["physics", "chemistry", "maths"],
+  PCB: ["physics", "chemistry", "biology"],
+  PCMB: ["physics", "chemistry", "maths", "biology"],
+};
+
+const getResultSubjects = (result = {}) => {
+  const group = String(result.subject_group || "").toUpperCase();
+  const keys = SUBJECT_GROUPS[group] || SUBJECTS.map((subject) => subject.key);
+
+  return SUBJECTS.filter((subject) => keys.includes(subject.key)).map(
+    (subject) => ({
+      ...subject,
+      marks: result[`${subject.key}_marks`],
+      correct: result[`${subject.key}_correct_answers`],
+      incorrect: result[`${subject.key}_incorrect_answers`],
+      notAttempted: result[`${subject.key}_not_attempted`],
+    }),
+  );
+};
+
+const getQuestionRows = (questionResults) => {
+  if (!questionResults) return [];
+
+  const parsed =
+    typeof questionResults === "string"
+      ? (() => {
+          try {
+            return JSON.parse(questionResults);
+          } catch {
+            return null;
+          }
+        })()
+      : questionResults;
+
+  if (!parsed || typeof parsed !== "object") return [];
+
+  return Object.entries(parsed)
+    .map(([question, value]) => {
+      const option = value?.option ?? value?.options ?? "";
+      const marks = value?.marks ?? "";
+
+      return {
+        question,
+        option,
+        key: value?.key ?? "",
+        marks,
+        status:
+          value?.status ||
+          (option ? (toNum(marks) > 0 ? "Correct" : "Incorrect") : "Not Attempted"),
+      };
+    })
+    .sort((a, b) => {
+      const first = Number(String(a.question).match(/\d+/)?.[0] || 0);
+      const second = Number(String(b.question).match(/\d+/)?.[0] || 0);
+      return first - second;
+    });
+};
+
+const sanitizeFileName = (value) =>
+  String(value || "exam")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_");
+
+const getStudentDetailsLine = (studentData = {}, result = {}) => {
+  const grade = studentData?.class ? `${studentData.class}` : "Grade";
+  const section = studentData?.section ? `Section ${studentData.section}` : "Section";
+  const rollNo =
+    studentData?.roll_no || studentData?.student_id || result?.student_id || "-";
+  const programGroup = [result?.program, result?.subject_group]
+    .filter(Boolean)
+    .join(" / ");
+
+  return [
+    studentData?.name || "Student",
+    grade,
+    section,
+    `Roll No. ${rollNo}`,
+    formatDate(result?.date),
+    programGroup,
+  ]
+    .filter(Boolean)
+    .join("  -  ");
+};
+
+const toDataUrl = async (src) => {
+  if (!src || typeof src !== "string") return null;
+  if (/^data:image\/(png|jpe?g|webp|svg\+xml);/i.test(src)) return src;
+
+  try {
+    const response = await fetch(src, { mode: "cors" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn("Unable to load analytics report image:", src, error);
+    return null;
+  }
+};
+
+const downloadExamAnalyticsReport = async ({
+  studentName,
+  studentData,
+  schoolData,
+  result,
+  subjectRows,
+  questionRows,
+}) => {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const navy = [15, 47, 99];
+  const title = formatExamName(result.exam, "Exam");
+  const generatedOn = new Date().toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const [schoolLogo, spectropyLogo] = await Promise.all([
+    toDataUrl(
+      schoolData?.logo_base64 || schoolData?.logo_data_url || schoolData?.logo_url,
+    ),
+    toDataUrl(spectropyLogoUrl),
+  ]);
+
+  doc.setProperties({
+    title: `${title} Analytics Report`,
+    subject: "Student subject-wise and question-wise analytics",
+    creator: "SPECTROPY Result Analysis Portal",
+  });
+
+  const getImageFormat = (dataUrl) => {
+    if (/^data:image\/jpe?g/i.test(dataUrl)) return "JPEG";
+    if (/^data:image\/webp/i.test(dataUrl)) return "WEBP";
+    return "PNG";
+  };
+
+  const drawImageContain = (dataUrl, x, y, w, h) => {
+    if (!dataUrl) return false;
+
+    try {
+      const props = doc.getImageProperties(dataUrl);
+      const scale = Math.min(w / props.width, h / props.height);
+      const dw = props.width * scale;
+      const dh = props.height * scale;
+      doc.addImage(
+        dataUrl,
+        getImageFormat(dataUrl),
+        x + (w - dw) / 2,
+        y + (h - dh) / 2,
+        dw,
+        dh,
+      );
+      return true;
+    } catch (error) {
+      console.warn("Unable to draw analytics report image:", error);
+      return false;
+    }
+  };
+
+  const drawImageCoverCircle = (dataUrl, cx, cy, r) => {
+    if (!dataUrl) return false;
+
+    try {
+      const props = doc.getImageProperties(dataUrl);
+      const box = r * 2;
+      const scale = Math.max(box / props.width, box / props.height);
+      const dw = props.width * scale;
+      const dh = props.height * scale;
+
+      doc.saveGraphicsState();
+      doc.circle(cx, cy, r, null);
+      doc.clip();
+      doc.discardPath();
+      doc.addImage(
+        dataUrl,
+        getImageFormat(dataUrl),
+        cx - dw / 2,
+        cy - dh / 2,
+        dw,
+        dh,
+      );
+      doc.restoreGraphicsState();
+      return true;
+    } catch (error) {
+      console.warn("Unable to draw analytics report circle image:", error);
+      return false;
+    }
+  };
+
+  const drawLocationIcon = (x, y) => {
+    doc.setFillColor(190, 213, 240);
+    doc.circle(x, y - 1.45, 1.25, "F");
+    doc.triangle(x - 0.9, y - 0.6, x + 0.9, y - 0.6, x, y + 1.15, "F");
+    doc.setFillColor(15, 47, 99);
+    doc.circle(x, y - 1.5, 0.38, "F");
+  };
+
+  const drawCalendarIcon = (x, y) => {
+    doc.setDrawColor(190, 213, 240);
+    doc.setLineWidth(0.22);
+    doc.roundedRect(x - 1.35, y - 2.2, 2.7, 2.9, 0.3, 0.3, "S");
+    doc.line(x - 1.35, y - 1.3, x + 1.35, y - 1.3);
+    doc.line(x - 0.72, y - 2.65, x - 0.72, y - 1.9);
+    doc.line(x + 0.72, y - 2.65, x + 0.72, y - 1.9);
+  };
+
+  const drawHeader = () => {
+    const headerHeight = 34;
+
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(170, 200, 235);
+    doc.setLineWidth(0.6);
+    doc.circle(16, headerHeight / 2, 9.6, "FD");
+
+    const schoolAdded = drawImageCoverCircle(schoolLogo, 16, headerHeight / 2, 8.6);
+    if (!schoolAdded) {
+      doc.setFillColor(...navy);
+      doc.circle(16, headerHeight / 2, 7, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(
+        String(schoolData?.school_name || "S").charAt(0).toUpperCase(),
+        16,
+        headerHeight / 2 + 3.5,
+        { align: "center" },
+      );
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.3);
+    doc.setTextColor(255, 255, 255);
+    const schoolName = String(schoolData?.school_name || "School Name").toUpperCase();
+    doc.text(doc.splitTextToSize(schoolName, 43), 29, 10.5);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.8);
+    doc.setTextColor(190, 213, 240);
+    drawLocationIcon(30, 18.3);
+    if (schoolData?.area) {
+      doc.text(String(schoolData.area), 34, 18.3);
+    }
+    drawCalendarIcon(30, 24);
+    doc.text(`Academic Year : ${schoolData?.academic_year || "-"}`, 34, 24);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12.2);
+    doc.setTextColor(255, 255, 255);
+    doc.text("STUDENT ANALYTICS REPORT", pageWidth / 2, 13, {
+      align: "center",
+    });
+
+    doc.setDrawColor(130, 168, 215);
+    doc.setLineWidth(0.35);
+    doc.line(pageWidth / 2 - 38, 21, pageWidth / 2 - 18, 21);
+    doc.line(pageWidth / 2 + 18, 21, pageWidth / 2 + 38, 21);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.2);
+    doc.setTextColor(190, 213, 240);
+    doc.text("SUBJECT & QUESTION ANALYSIS", pageWidth / 2, 23, {
+      align: "center",
+    });
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(170, 200, 235);
+    doc.setLineWidth(0.6);
+    doc.circle(pageWidth - 48, headerHeight / 2, 8.6, "FD");
+    const spectropyAdded = drawImageCoverCircle(
+      spectropyLogo,
+      pageWidth - 48,
+      headerHeight / 2,
+      7.4,
+    );
+    if (!spectropyAdded) {
+      doc.setFillColor(...navy);
+      doc.circle(pageWidth - 48, headerHeight / 2, 6.2, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("S", pageWidth - 48, headerHeight / 2 + 2.8, {
+        align: "center",
+      });
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.8);
+    doc.setTextColor(255, 255, 255);
+    doc.text("SPECTROPY", pageWidth - 12, 14, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.8);
+    doc.setTextColor(190, 213, 240);
+    doc.text("Powered by Spectropy", pageWidth - 12, 20, { align: "right" });
+  };
+
+  const addFooter = () => {
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      doc.setPage(page);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated on ${generatedOn}`, margin, pageHeight - 8);
+      doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 8, {
+        align: "right",
+      });
+    }
+  };
+
+  drawHeader();
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text(title, margin, 43);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12.8);
+  doc.setTextColor(51, 65, 85);
+  doc.text(
+    getStudentDetailsLine({ ...studentData, name: studentName }, result),
+    margin,
+    50,
+  );
+
+  doc.autoTable({
+    startY: 58,
+    theme: "grid",
+    margin: { left: margin, right: margin },
+    head: [["Total Marks", "Percentage", "Class Rank", "School Rank", "All India Rank"]],
+    body: [
+      [
+        round(result.total, 0),
+        `${round(result.percentage)}%`,
+        result.class_rank ?? "—",
+        result.school_rank ?? "—",
+        result.all_schools_rank ?? "—",
+      ],
+    ],
+    styles: {
+      font: "helvetica",
+      fontSize: 10,
+      cellPadding: 4,
+      halign: "center",
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [239, 246, 255],
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+      lineColor: [203, 213, 225],
+    },
+    bodyStyles: {
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+    },
+  });
+
+  let y = doc.lastAutoTable.finalY + 12;
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("Subject-wise analytics", margin, y);
+
+  doc.autoTable({
+    startY: y + 5,
+    theme: "striped",
+    margin: { left: margin, right: margin },
+    head: [["Subject", "Marks", "Correct", "Incorrect", "Not Attempted"]],
+    body: subjectRows.map((subject) => [
+      subject.label,
+      toNum(subject.marks),
+      toNum(subject.correct),
+      toNum(subject.incorrect),
+      toNum(subject.notAttempted),
+    ]),
+    styles: {
+      font: "helvetica",
+      fontSize: 9.5,
+      cellPadding: 3.5,
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: navy,
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+
+  y = doc.lastAutoTable.finalY + 12;
+  if (y > pageHeight - 50) {
+    doc.addPage();
+    y = margin;
+  }
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("Question-wise analytics", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`${questionRows.length} questions`, pageWidth - margin, y, {
+    align: "right",
+  });
+
+  doc.autoTable({
+    startY: y + 5,
+    theme: "grid",
+    margin: { left: margin, right: margin },
+    tableWidth: "auto",
+    head: [["Question", "Option", "Key", "Marks", "Status"]],
+    body: questionRows.map((question) => [
+      question.question,
+      question.option || "—",
+      question.key || "—",
+      question.marks === "" ? "—" : question.marks,
+      question.status || "—",
+    ]),
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      cellPadding: 2.8,
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: navy,
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      lineColor: navy,
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      1: { cellWidth: 39 },
+      2: { cellWidth: 39 },
+      3: { cellWidth: 28, halign: "center" },
+      4: { cellWidth: "auto" },
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 4) return;
+
+      const status = String(data.cell.raw || "").toLowerCase();
+      data.cell.styles.fontStyle = "bold";
+      data.cell.styles.halign = "center";
+
+      if (status.includes("incorrect")) {
+        data.cell.styles.fillColor = [254, 226, 226];
+        data.cell.styles.textColor = [153, 27, 27];
+      } else if (status.includes("correct")) {
+        data.cell.styles.fillColor = [220, 252, 231];
+        data.cell.styles.textColor = [22, 101, 52];
+      } else if (status.includes("not") || status.includes("unattempted")) {
+        data.cell.styles.fillColor = [254, 249, 195];
+        data.cell.styles.textColor = [133, 77, 14];
+      }
+    },
+  });
+
+  addFooter();
+
+  const fileName = [
+    sanitizeFileName(studentName),
+    sanitizeFileName(formatExamName(result.exam, "Exam")),
+    "analytics_report.pdf",
+  ].join("_");
+
+  doc.save(fileName);
+};
+
 const generatePDF = (studentData, schoolData, examResults) => {
   if (!studentData || !schoolData || !examResults?.length) {
     throw new Error("Missing required data for PDF generation");
@@ -748,6 +1230,7 @@ export default function StudentPerformanceView({
   onBack,
 }) {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [selectedExamResult, setSelectedExamResult] = useState(null);
 
   const analytics = useMemo(() => {
     const chronologicalResults = [...examResults].sort((a, b) => {
@@ -945,6 +1428,12 @@ export default function StudentPerformanceView({
   const studentName = student?.name || "Student";
   const classLabel = `${student?.class || "—"}${student?.section ? `-${student.section}` : ""}`;
   const isParentProfile = title === "Your Child's Profile";
+  const selectedSubjectRows = selectedExamResult
+    ? getResultSubjects(selectedExamResult)
+    : [];
+  const selectedQuestionRows = selectedExamResult
+    ? getQuestionRows(selectedExamResult.question_results)
+    : [];
 
   return (
     <>
@@ -1014,7 +1503,7 @@ export default function StudentPerformanceView({
               </span>
             </div>
             <div className="sp-identity">
-              {!isParentProfile && (
+              {!isParentProfile && !selectedExamResult && (
                 <span className="sp-hero-kicker">{title}</span>
               )}
               <h1>{studentName}</h1>
@@ -1035,7 +1524,166 @@ export default function StudentPerformanceView({
           </div>
         </header>
 
-        {examResults.length === 0 ? (
+        {selectedExamResult ? (
+          <section className="sp-dashboard-section sp-exam-detail">
+            <SectionHeader
+              eyebrow="Exam analysis"
+              title={formatExamName(selectedExamResult.exam, "Exam")}
+              description={getStudentDetailsLine(student, selectedExamResult)}
+              action={
+                <div className="sp-detail-actions">
+                  <button
+                    type="button"
+                    className="sp-button sp-button-small sp-detail-download-button"
+                    onClick={async () => {
+                      try {
+                        await downloadExamAnalyticsReport({
+                          studentName,
+                          studentData: student,
+                          schoolData: school || {},
+                          result: selectedExamResult,
+                          subjectRows: selectedSubjectRows,
+                          questionRows: selectedQuestionRows,
+                        });
+                      } catch (error) {
+                        console.error(error);
+                        window.alert(
+                          "Unable to generate analytics PDF. Please try again.",
+                        );
+                      }
+                    }}
+                  >
+                    <FileDown size={15} strokeWidth={2.3} aria-hidden="true" />
+                    Download Analytics PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="sp-button sp-button-small sp-detail-back-button"
+                    onClick={() => setSelectedExamResult(null)}
+                  >
+                    Back
+                  </button>
+                </div>
+              }
+            />
+
+            <div className="sp-detail-summary">
+              <div>
+                <span>Total Marks</span>
+                <strong>{round(selectedExamResult.total, 0)}</strong>
+              </div>
+              <div>
+                <span>Percentage</span>
+                <strong>{round(selectedExamResult.percentage)}%</strong>
+              </div>
+              <div>
+                <span>Class Rank</span>
+                <strong>{selectedExamResult.class_rank ?? "—"}</strong>
+              </div>
+              <div>
+                <span>School Rank</span>
+                <strong>{selectedExamResult.school_rank ?? "—"}</strong>
+              </div>
+              <div>
+                <span>All India Rank</span>
+                <strong>{selectedExamResult.all_schools_rank ?? "—"}</strong>
+              </div>
+            </div>
+
+            <section className="sp-panel sp-detail-panel">
+              <div className="sp-panel-header">
+                <div>
+                  <h3>Subject-wise analytics</h3>
+                  <p>Stored subject attempt data for this exam.</p>
+                </div>
+              </div>
+              <div className="sp-detail-subject-grid">
+                {selectedSubjectRows.map((subject) => (
+                  <article className="sp-detail-subject-card" key={subject.key}>
+                    <div>
+                      <span
+                        className="sp-detail-subject-dot"
+                        style={{ background: subject.color }}
+                      />
+                      <h4>{subject.label}</h4>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Marks</dt>
+                        <dd>{toNum(subject.marks)}</dd>
+                      </div>
+                      <div>
+                        <dt>Correct</dt>
+                        <dd>{toNum(subject.correct)}</dd>
+                      </div>
+                      <div>
+                        <dt>Incorrect</dt>
+                        <dd>{toNum(subject.incorrect)}</dd>
+                      </div>
+                      <div>
+                        <dt>Not attempted</dt>
+                        <dd>{toNum(subject.notAttempted)}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="sp-panel sp-detail-panel">
+              <div className="sp-panel-header">
+                <div>
+                  <h3>Question-wise analytics</h3>
+                  <p>Stored option, key, and marks for every question.</p>
+                </div>
+                <span className="sp-panel-badge">
+                  {selectedQuestionRows.length} questions
+                </span>
+              </div>
+
+              {selectedQuestionRows.length > 0 ? (
+                <div className="sp-question-table-wrap">
+                  <table className="sp-question-table">
+                    <thead>
+                      <tr>
+                        <th>Question</th>
+                        <th>Option</th>
+                        <th>Key</th>
+                        <th>Marks</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedQuestionRows.map((question) => (
+                        <tr key={question.question}>
+                          <td>{question.question}</td>
+                          <td>{question.option || "—"}</td>
+                          <td>{question.key || "—"}</td>
+                          <td>{question.marks === "" ? "—" : question.marks}</td>
+                          <td>
+                            <span
+                              className={`sp-status-pill sp-status-pill-${String(
+                                question.status,
+                              )
+                                .toLowerCase()
+                                .replace(/\s+/g, "-")}`}
+                            >
+                              {question.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="sp-inline-empty">
+                  No question-wise data available for this exam.
+                </div>
+              )}
+            </section>
+          </section>
+        ) : examResults.length === 0 ? (
           <EmptyState />
         ) : (
           <>
@@ -1474,6 +2122,7 @@ export default function StudentPerformanceView({
                           "Class rank",
                           "School rank",
                           "All India rank",
+                          "Actions",
                         ].map((heading) => (
                           <th key={heading}>{heading}</th>
                         ))}
@@ -1520,6 +2169,15 @@ export default function StudentPerformanceView({
                           <td>{result.class_rank ?? "—"}</td>
                           <td>{result.school_rank ?? "—"}</td>
                           <td>{result.all_schools_rank ?? "—"}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="sp-button sp-button-small"
+                              onClick={() => setSelectedExamResult(result)}
+                            >
+                              View
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1593,6 +2251,14 @@ export default function StudentPerformanceView({
                         );
                       })}
                     </div>
+
+                    <button
+                      type="button"
+                      className="sp-button sp-button-small sp-mobile-view-button"
+                      onClick={() => setSelectedExamResult(result)}
+                    >
+                      View
+                    </button>
                   </article>
                 ))}
               </div>
@@ -1600,44 +2266,46 @@ export default function StudentPerformanceView({
           </>
         )}
 
-        <section className="sp-dashboard-section sp-teachers-section">
-          <SectionHeader
-            eyebrow="Academic support"
-            title="Assigned teachers"
-            description="Subject contacts available to the student and parent."
-          />
+        {!selectedExamResult && (
+          <section className="sp-dashboard-section sp-teachers-section">
+            <SectionHeader
+              eyebrow="Academic support"
+              title="Assigned teachers"
+              description="Subject contacts available to the student and parent."
+            />
 
-          {teachers.length > 0 ? (
-            <div className="sp-teacher-grid">
-              {teachers.map((teacher, index) => (
-                <article
-                  className="sp-teacher-card"
-                  key={`${teacher.email || teacher.name}-${index}`}
-                >
-                  <div className="sp-teacher-avatar">
-                    {getInitials(teacher.name)}
-                  </div>
-                  <div className="sp-teacher-copy">
-                    <h3>{teacher.name || "Teacher"}</h3>
-                    <span>{teacher.subject || "Subject teacher"}</span>
-                    <div className="sp-teacher-links">
-                      {teacher.email && (
-                        <a href={`mailto:${teacher.email}`}>Email</a>
-                      )}
-                      {teacher.phone && (
-                        <a href={`tel:${teacher.phone}`}>Call</a>
-                      )}
+            {teachers.length > 0 ? (
+              <div className="sp-teacher-grid">
+                {teachers.map((teacher, index) => (
+                  <article
+                    className="sp-teacher-card"
+                    key={`${teacher.email || teacher.name}-${index}`}
+                  >
+                    <div className="sp-teacher-avatar">
+                      {getInitials(teacher.name)}
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="sp-inline-empty">
-              No teachers are assigned to this class yet.
-            </div>
-          )}
-        </section>
+                    <div className="sp-teacher-copy">
+                      <h3>{teacher.name || "Teacher"}</h3>
+                      <span>{teacher.subject || "Subject teacher"}</span>
+                      <div className="sp-teacher-links">
+                        {teacher.email && (
+                          <a href={`mailto:${teacher.email}`}>Email</a>
+                        )}
+                        {teacher.phone && (
+                          <a href={`tel:${teacher.phone}`}>Call</a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="sp-inline-empty">
+                No teachers are assigned to this class yet.
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </>
   );
@@ -1757,6 +2425,40 @@ const DASHBOARD_CSS = `
     border-color: #2563eb;
     color: #fff;
     background: #2563eb;
+  }
+  .sp-button-small {
+    min-height: 28px;
+    padding: 5px 10px;
+    border: 1px solid #cfe0f6;
+    color: #1d4ed8;
+    background: #eff6ff;
+    font-size: 11px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .sp-detail-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .sp-detail-download-button {
+    min-height: 42px;
+    padding: 10px 18px;
+    border-color: #0f2f63;
+    border-radius: 8px;
+    color: #fff;
+    background: #0f2f63;
+    font-size: 14px;
+    font-weight: 850;
+  }
+  .sp-detail-back-button {
+    min-height: 42px;
+    padding: 10px 22px;
+    border-color: #b8d4fb;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 850;
   }
 
   .sp-hero-content {
@@ -2075,6 +2777,140 @@ const DASHBOARD_CSS = `
   .sp-number-bad { color: #b91c1c; background: #fef2f2; }
   .sp-mobile-results { display: none; }
 
+  .sp-exam-detail {
+    display: grid;
+    gap: 12px;
+  }
+  .sp-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .sp-detail-summary > div {
+    padding: 12px;
+    border: 1px solid var(--sp-slate-200);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,.045);
+  }
+  .sp-detail-summary span,
+  .sp-detail-subject-card dt {
+    color: var(--sp-slate-500);
+    font-size: 10px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .sp-detail-summary strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--sp-navy);
+    font-size: 18px;
+  }
+  .sp-detail-panel {
+    padding-bottom: 14px;
+  }
+  .sp-detail-subject-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px;
+  }
+  .sp-detail-subject-card {
+    padding: 12px;
+    border: 1px solid var(--sp-slate-200);
+    border-radius: 8px;
+    background: var(--sp-slate-50);
+  }
+  .sp-detail-subject-card > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sp-detail-subject-card h4 {
+    margin: 0;
+    color: var(--sp-navy);
+    font-size: 13px;
+  }
+  .sp-detail-subject-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+  }
+  .sp-detail-subject-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 0;
+  }
+  .sp-detail-subject-card dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sp-detail-subject-card dd {
+    margin: 0;
+    color: var(--sp-slate-700);
+    font-weight: 850;
+  }
+  .sp-question-table-wrap {
+    max-height: 600px;
+    margin: 16px;
+    overflow: auto;
+    border: 1px solid var(--sp-slate-200);
+    border-radius: 8px;
+  }
+  .sp-question-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .sp-question-table th,
+  .sp-question-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--sp-slate-100);
+    text-align: left;
+  }
+  .sp-question-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    color: var(--sp-slate-600);
+    background: var(--sp-slate-50);
+    font-size: 12px;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .sp-question-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .sp-status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .sp-status-pill-correct {
+    color: #047857;
+    background: #ecfdf5;
+  }
+  .sp-status-pill-incorrect {
+    color: #b91c1c;
+    background: #fef2f2;
+  }
+  .sp-status-pill-not-attempted {
+    color: #b45309;
+    background: #fffbeb;
+  }
+  .sp-mobile-view-button {
+    width: 100%;
+    margin-top: 12px;
+  }
+
   .sp-teacher-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .sp-teacher-card {
     display: flex;
@@ -2256,6 +3092,8 @@ const DASHBOARD_CSS = `
   @media (max-width: 1120px) {
     .sp-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .sp-subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-detail-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sp-detail-subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sp-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sp-chart-wide { grid-column: span 1; }
     .sp-teacher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2297,6 +3135,9 @@ const DASHBOARD_CSS = `
     .sp-chart-area { height: 195px; padding: 6px 2px 10px; }
     .sp-subject-grid { grid-template-columns: 1fr; }
     .sp-subject-card { border-radius: 15px; }
+    .sp-detail-summary,
+    .sp-detail-subject-grid { grid-template-columns: 1fr; }
+    .sp-question-table-wrap { margin: 12px; }
     .sp-desktop-results { display: none; }
     .sp-mobile-results { display: grid; gap: 12px; }
     .sp-mobile-result-card { padding: 12px; border: 1px solid var(--sp-slate-200); border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(15,23,42,.045); }

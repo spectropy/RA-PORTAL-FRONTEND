@@ -1535,7 +1535,7 @@ export default function TeacherDashboard({
             </button>
           )}
 
-          <div className="sidebar-version">{schoolName}</div>
+          <div className="sidebar-version">Version - 3.0</div>
         </div>
       </aside>
 

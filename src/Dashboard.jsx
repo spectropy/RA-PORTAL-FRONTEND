@@ -15,6 +15,7 @@ import ClassTeacherRegistration from "./components/ClassTeacherRegistration.jsx"
 import StudentRegistration from "./components/StudentRegistration.jsx";
 import ExamsRegistration from "./components/ExamsRegistration.jsx";
 import LMSExamRegistration from "./components/LMSExamRegistration.jsx";
+import OfflineOMRTagConverter from "./components/OfflineOMRTagConverter.jsx";
 import QueriesPage from "./components/QueriesPage.jsx";
 import TopStudentsSchool from "./components/TopStudentsSchool.jsx";
 import ExamWiseTopStudents from "./components/ExamWiseTopStudents.jsx";
@@ -64,7 +65,7 @@ const TABS = [
     id: "lms",
     path: "lms",
     icon: <BookOpenCheck size={18} strokeWidth={2.2} />,
-    label: "LMS Converter",
+    label: "Converter",
   },
   {
     id: "queries",
@@ -126,6 +127,7 @@ export default function Dashboard({ user, onLogout }) {
   const [error, setError] = useState("");
   const [schoolMobileDetailOpen, setSchoolMobileDetailOpen] = useState(false);
   const [posterTemplateMode, setPosterTemplateMode] = useState("cumulative");
+  const [converterMode, setConverterMode] = useState("online");
 
   //  Data
   const refresh = useCallback(async () => {
@@ -240,7 +242,7 @@ export default function Dashboard({ user, onLogout }) {
           )}
 
           <div className="sidebar-version">
-            v1.0 - {schools.length} school{schools.length !== 1 ? "s" : ""}
+            Version - 3.0
           </div>
         </div>
       </aside>
@@ -410,21 +412,45 @@ export default function Dashboard({ user, onLogout }) {
             }
           />
 
-          {/*  LMS Converter  */}
+          {/*  Converter  */}
           <Route
             path="lms"
             element={
               <div className="animate-fade-in">
                 <div className="page-header">
                   <div className="page-header-left">
-                    <h1 className="page-header-title">LMS Exam Converter</h1>
+                    <h1 className="page-header-title">
+                      {converterMode === "online" ? "Online Converter" : "Offline Converter"}
+                    </h1>
                     <p className="page-header-subtitle">
-                      Convert and import LMS exam result files.
+                      {converterMode === "online"
+                        ? "Convert and import LMS exam result files."
+                        : "Convert offline exam files."}
                     </p>
+                  </div>
+                  <div className="poster-toolbar-actions poster-template-header-actions">
+                    <button
+                      type="button"
+                      className={converterMode === "online" ? "btn-link-primary" : "poster-secondary-btn"}
+                      onClick={() => setConverterMode("online")}
+                    >
+                      Online Converter
+                    </button>
+                    <button
+                      type="button"
+                      className={converterMode === "offline" ? "btn-link-primary" : "poster-secondary-btn"}
+                      onClick={() => setConverterMode("offline")}
+                    >
+                      Offline Converter
+                    </button>
                   </div>
                 </div>
                 <div className="page-content">
-                  <LMSExamRegistration />
+                  {converterMode === "online" ? (
+                    <LMSExamRegistration />
+                  ) : (
+                    <OfflineOMRTagConverter />
+                  )}
                 </div>
               </div>
             }

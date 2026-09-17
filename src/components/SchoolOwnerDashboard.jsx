@@ -17,16 +17,23 @@ import {
   Award,
   BarChart3,
   BookOpen,
+  Brain,
+  Calculator,
   ClipboardList,
   Download,
   FileText,
+  FlaskConical,
   GraduationCap,
   Images,
   LayoutDashboard,
+  Leaf,
+  Lightbulb,
   Loader2,
   Search,
   School as SchoolIcon,
+  Target,
   UserRoundCog,
+  UsersRound,
 } from "lucide-react";
 import StudentDashboard from "./StudentDashboard"; // adjust path as needed
 import TeacherDashboard from "./TeacherDashboard";
@@ -105,6 +112,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [resultsLoading, setResultsLoading] = useState(false); // 👈 New loading state
   const analysisDownloadButtonRef = useRef(null);
   const studentResultsDownloadButtonRef = useRef(null);
+  const [examResultView, setExamResultView] = useState("cognitive");
+  const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
 
   // 📝 Exam Wise View State (isolated from batch flow)
   const [examWiseClassSection, setExamWiseClassSection] = useState(null);
@@ -2692,6 +2701,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     const handleViewExamResult = async (exam) => {
       setResultsLoading(true);
+      setShowDetailedAnalysis(false);
+      setExamResultView("cognitive");
       try {
         const params = new URLSearchParams({
           school_id: schoolId,
@@ -4813,11 +4824,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
                                   className="btn btn-primary"
                                   onClick={() => handleViewExamResult(exam)}
                                   style={{
-                                    padding: "5px 12px",
-                                    fontSize: "12px",
+                                    padding: "4px 8px",
+                                    fontSize: "10px",
                                   }}
                                 >
-                                  View Exam Result
+                                  View
                                 </button>
                               </td>
                             </tr>
@@ -5101,8 +5112,1655 @@ export default function SchoolOwnerDashboard({ onBack }) {
       });
     });
 
+    const parseQuestionResults = (value) => {
+      if (!value) return {};
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value) || {};
+        } catch {
+          return {};
+        }
+      }
+      return typeof value === "object" ? value : {};
+    };
+
+    const getQuestionNumber = (question) =>
+      Number(String(question || "").match(/\d+/)?.[0] || 0);
+
+    const bloomSkills = [
+      "Remember",
+      "Understand",
+      "Apply",
+      "Analyse",
+      "Evaluate",
+      "Create",
+    ];
+
+    const normalizeBloomSkill = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (["remember", "remembering"].includes(normalized)) return "Remember";
+      if (["understand", "understanding"].includes(normalized)) return "Understand";
+      if (["apply", "applying"].includes(normalized)) return "Apply";
+      if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+        return "Analyse";
+      }
+      if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+      if (["create", "creating"].includes(normalized)) return "Create";
+      return "";
+    };
+
+    const getQuestionResponseStatus = (details = {}) => {
+      const status = String(details?.status || "").toLowerCase();
+      const option = details?.option ?? details?.options ?? "";
+      const marks = Number(details?.marks);
+
+      if (status.includes("incorrect")) return "incorrect";
+      if (status.includes("correct")) return "correct";
+      if (status.includes("not") || status.includes("unattempted") || !option) {
+        return "unattempted";
+      }
+      if (Number.isFinite(marks) && marks > 0) return "correct";
+      if (option) return "incorrect";
+      return "unattempted";
+    };
+
+    const normalizeStoredDifficultyLevel = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (normalized === "very easy") return "Very Easy";
+      if (normalized === "easy") return "Easy";
+      if (normalized === "medium") return "Medium";
+      if (normalized === "hard" || normalized === "difficult") return "Hard";
+      if (normalized === "very hard") return "Very Hard";
+      return "";
+    };
+
+    const getQuestionSubject = (question, details = {}, totalQuestionCount = 0) => {
+      const storedSubject = details?.subject || details?.Subject;
+      if (storedSubject) return String(storedSubject);
+
+      const questionNumber = getQuestionNumber(question);
+      if (!questionNumber || !activeSubs.length) return "General";
+
+      const questionsPerSubject = Math.max(
+        1,
+        Math.ceil((totalQuestionCount || questionNumber) / activeSubs.length),
+      );
+      const subjectIndex = Math.min(
+        activeSubs.length - 1,
+        Math.floor((questionNumber - 1) / questionsPerSubject),
+      );
+
+      return activeSubs[subjectIndex] || "General";
+    };
+
+    const questionMap = {};
+    results.forEach((studentResult) => {
+      const questions = parseQuestionResults(studentResult.question_results);
+      Object.entries(questions).forEach(([question, details]) => {
+        const questionKey = String(question || "").trim();
+        if (!questionKey) return;
+
+        if (!questionMap[questionKey]) {
+          questionMap[questionKey] = {
+            question: questionKey,
+            subject: details?.subject || details?.Subject || "",
+            correct: 0,
+            incorrect: 0,
+            unattempted: 0,
+            total_students: 0,
+            total_marks: 0,
+            blooms_skill: "",
+            stored_difficulty_level: "",
+          };
+        }
+
+        const row = questionMap[questionKey];
+        row.subject = row.subject || details?.subject || details?.Subject || "";
+        row.blooms_skill =
+          row.blooms_skill ||
+          normalizeBloomSkill(
+            details?.blooms_skill ||
+              details?.bloomsSkill ||
+              details?.["Blooms Skill"] ||
+              details?.["Bloom's Skill"],
+          );
+        row.stored_difficulty_level =
+          row.stored_difficulty_level ||
+          normalizeStoredDifficultyLevel(
+            details?.difficulty_level ||
+              details?.difficultyLevel ||
+              details?.difficulty ||
+              details?.["Difficulty Level"],
+          );
+        const marks = Number(details?.marks);
+        const responseStatus = getQuestionResponseStatus(details);
+
+        row.total_students += 1;
+        row.total_marks += Number.isFinite(marks) ? marks : 0;
+
+        if (responseStatus === "incorrect") {
+          row.incorrect += 1;
+        } else if (responseStatus === "correct") {
+          row.correct += 1;
+        } else {
+          row.unattempted += 1;
+        }
+      });
+    });
+
+    const totalQuestionCountForMapping = Math.max(
+      ...Object.keys(questionMap).map(getQuestionNumber),
+      Object.keys(questionMap).length,
+      0,
+    );
+
+    const questionAnalytics = Object.values(questionMap)
+      .map((question) => {
+        const total = question.total_students || totalStudents || 1;
+        const correctPercentage = (question.correct / total) * 100;
+        const difficultyScore =
+          ((question.incorrect + question.unattempted) / total) * 100;
+        const difficultyLevel =
+          difficultyScore >= 60
+            ? "Difficult"
+            : correctPercentage >= 70
+              ? "Easy"
+              : "Medium";
+
+        return {
+          ...question,
+          subject: getQuestionSubject(
+            question.question,
+            { subject: question.subject },
+            totalQuestionCountForMapping,
+          ),
+          blooms_skill: question.blooms_skill,
+          stored_difficulty_level: question.stored_difficulty_level,
+          correct_percentage: correctPercentage.toFixed(2),
+          incorrect_percentage: ((question.incorrect / total) * 100).toFixed(2),
+          unattempted_percentage: (
+            (question.unattempted / total) *
+            100
+          ).toFixed(2),
+          average_marks: (question.total_marks / total).toFixed(2),
+          difficulty_score: difficultyScore.toFixed(2),
+          difficulty_level: difficultyLevel,
+        };
+      })
+      .sort((a, b) => {
+        const first = getQuestionNumber(a.question);
+        const second = getQuestionNumber(b.question);
+        return first - second;
+      });
+
+    const bloomTaggedQuestions = questionAnalytics.filter(
+      (question) => question.blooms_skill,
+    );
+    const calculateMastery = (questions) => {
+      const totals = questions.reduce(
+        (sum, question) => ({
+          correct: sum.correct + question.correct,
+          responses:
+            sum.responses +
+            question.correct +
+            question.incorrect +
+            question.unattempted,
+        }),
+        { correct: 0, responses: 0 },
+      );
+
+      return totals.responses > 0
+        ? ((totals.correct / totals.responses) * 100).toFixed(2)
+        : "0.00";
+    };
+    const lowerOrderQuestions = bloomTaggedQuestions.filter((question) =>
+      ["Remember", "Understand"].includes(question.blooms_skill),
+    );
+    const higherOrderQuestions = bloomTaggedQuestions.filter((question) =>
+      ["Apply", "Analyse", "Evaluate", "Create"].includes(question.blooms_skill),
+    );
+    const bloomSummaryCards = [
+      {
+        title: "Overall Cognitive Mastery",
+        value: `${calculateMastery(bloomTaggedQuestions)}%`,
+        helper: "Across all Bloom-tagged questions",
+        Icon: Target,
+        iconColor: "#1681ff",
+        valueColor: "#061a4f",
+        bg: "linear-gradient(135deg, #eef6ff 0%, #f7fbff 100%)",
+      },
+      {
+        title: "Lower Order Thinking",
+        value: `${calculateMastery(lowerOrderQuestions)}%`,
+        helper: "Remember + Understand",
+        Icon: Brain,
+        iconColor: "#10b981",
+        valueColor: "#061a4f",
+        bg: "linear-gradient(135deg, #eafbf6 0%, #f7fffc 100%)",
+      },
+      {
+        title: "Higher Order Thinking",
+        value: `${calculateMastery(higherOrderQuestions)}%`,
+        helper: "Apply + Analyse + Evaluate + Create",
+        Icon: Lightbulb,
+        iconColor: "#ff7a1a",
+        valueColor: "#a20f2d",
+        bg: "linear-gradient(135deg, #fff2e8 0%, #fff9f4 100%)",
+      },
+      {
+        title: "Questions Analysed",
+        value: bloomTaggedQuestions.length,
+        helper: "Questions with Bloom skill tags",
+        Icon: FileText,
+        iconColor: "#3b82f6",
+        valueColor: "#061a4f",
+        bg: "linear-gradient(135deg, #f0f3ff 0%, #fbfaff 100%)",
+      },
+      {
+        title: "Students",
+        value: results.length || totalStudents || 0,
+        helper: "Students in selected exam",
+        Icon: UsersRound,
+        iconColor: "#fb5b7b",
+        valueColor: "#a20f2d",
+        bg: "linear-gradient(135deg, #fff0f5 0%, #fff7fa 100%)",
+      },
+    ];
+    const bloomDistributionColors = {
+      Remember: "#2f8cff",
+      Understand: "#34c99a",
+      Apply: "#ffc83d",
+      Analyse: "#ff8a45",
+      Evaluate: "#ff5f7d",
+      Create: "#8f6df6",
+    };
+    const bloomDistribution = bloomSkills.map((skill) => {
+      const count = bloomTaggedQuestions.filter(
+        (question) => question.blooms_skill === skill,
+      ).length;
+      const percentage =
+        bloomTaggedQuestions.length > 0
+          ? Math.round((count / bloomTaggedQuestions.length) * 100)
+          : 0;
+
+      return {
+        skill,
+        count,
+        percentage,
+        color: bloomDistributionColors[skill],
+      };
+    });
+    let bloomDistributionCursor = 0;
+    const bloomDistributionSegments = bloomDistribution
+      .filter((item) => item.count > 0)
+      .map((item) => {
+        const precisePercentage =
+          bloomTaggedQuestions.length > 0
+            ? (item.count / bloomTaggedQuestions.length) * 100
+            : 0;
+        const start = bloomDistributionCursor;
+        const end = start + precisePercentage;
+        const midpoint = start + precisePercentage / 2;
+        const angle = (midpoint / 100) * 360 - 90;
+        const radius = 82;
+        bloomDistributionCursor = end;
+
+        return {
+          ...item,
+          gradient: `${item.color} ${start}% ${end}%`,
+          labelStyle: {
+            left: `calc(50% + ${Math.cos((angle * Math.PI) / 180) * radius}px)`,
+            top: `calc(50% + ${Math.sin((angle * Math.PI) / 180) * radius}px)`,
+          },
+        };
+      });
+    const bloomDistributionGradient =
+      bloomDistributionSegments.map((item) => item.gradient).join(", ") ||
+      "#e2e8f0 0% 100%";
+    const bloomPerformance = bloomSkills.map((skill) => {
+      const skillQuestions = bloomTaggedQuestions.filter(
+        (question) => question.blooms_skill === skill,
+      );
+      const correct = skillQuestions.reduce(
+        (sum, question) => sum + question.correct,
+        0,
+      );
+      const incorrect = skillQuestions.reduce(
+        (sum, question) => sum + question.incorrect,
+        0,
+      );
+      const unattempted = skillQuestions.reduce(
+        (sum, question) => sum + question.unattempted,
+        0,
+      );
+      const totalResponses = correct + incorrect + unattempted;
+
+      return {
+        skill,
+        percentage:
+          totalResponses > 0 ? Math.round((correct / totalResponses) * 100) : 0,
+        color: bloomDistributionColors[skill],
+      };
+    });
+    const cognitiveBalance = (() => {
+      const lotsCount = bloomDistribution
+        .filter((item) => ["Remember", "Understand"].includes(item.skill))
+        .reduce((sum, item) => sum + item.count, 0);
+      const hotsCount = bloomDistribution
+        .filter((item) =>
+          ["Apply", "Analyse", "Evaluate", "Create"].includes(item.skill),
+        )
+        .reduce((sum, item) => sum + item.count, 0);
+      const total = lotsCount + hotsCount;
+      const lotsPercentage = total > 0 ? Math.round((lotsCount / total) * 100) : 0;
+      const hotsPercentage = total > 0 ? 100 - lotsPercentage : 0;
+
+      return {
+        lotsCount,
+        hotsCount,
+        lotsPercentage,
+        hotsPercentage,
+        gradient:
+          total > 0
+            ? `#22b981 0% ${lotsPercentage}%, #ff7a1a ${lotsPercentage}% 100%`
+          : "#e2e8f0 0% 100%",
+      };
+    })();
+
+    const cognitivePerformanceTrend = (() => {
+      const normalizeExamDateValue = (value) => {
+        if (!value) return "";
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+        return String(value).trim().slice(0, 10);
+      };
+      const getExamOrder = (exam) =>
+        parseInt(String(exam?.exam_pattern || "").replace(/[^0-9]/g, ""), 10) || 0;
+      const getExamTime = (exam) => {
+        const date = new Date(exam?.exam_date || exam?.created_at || "");
+        return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+      };
+      const getTrendKey = (exam) =>
+        [
+          exam?.school_id || currentOMRExam.school_id || schoolId || "",
+          exam?.program || currentOMRExam.program || "",
+          exam?.exam_pattern || "",
+          exam?.class || "",
+          exam?.section || "",
+          normalizeExamDateValue(exam?.exam_date),
+        ].join("|");
+      const sameValue = (left, right) =>
+        String(left || "").trim().toLowerCase() ===
+        String(right || "").trim().toLowerCase();
+      const sourceRows =
+        Array.isArray(allClassExams) && allClassExams.length > 0
+          ? allClassExams
+          : results;
+      const scopedRows = sourceRows.filter(
+        (exam) =>
+          sameValue(exam.class, currentOMRExam.class) &&
+          sameValue(exam.section, currentOMRExam.section) &&
+          (!currentOMRExam.school_id ||
+            sameValue(exam.school_id, currentOMRExam.school_id)) &&
+          (!currentOMRExam.program ||
+            sameValue(exam.program, currentOMRExam.program)),
+      );
+      const grouped = new Map();
+
+      scopedRows.forEach((exam) => {
+        const key = getTrendKey(exam);
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            key,
+            exam_pattern: exam.exam_pattern || "Exam",
+            exam_date: exam.exam_date || "",
+            created_at: exam.created_at || "",
+            rows: [],
+          });
+        }
+        const group = grouped.get(key);
+        group.rows.push(exam);
+        if (!group.exam_date && exam.exam_date) group.exam_date = exam.exam_date;
+        if (exam.created_at && (!group.created_at || exam.created_at > group.created_at)) {
+          group.created_at = exam.created_at;
+        }
+      });
+
+      const currentKey = getTrendKey(currentOMRExam);
+      if (!grouped.has(currentKey)) {
+        grouped.set(currentKey, {
+          key: currentKey,
+          exam_pattern: currentOMRExam.exam_pattern || "Current",
+          exam_date: currentOMRExam.exam_date || "",
+          created_at: currentOMRExam.created_at || "",
+          rows: results,
+        });
+      }
+
+      const sortedGroups = Array.from(grouped.values()).sort((a, b) => {
+        const orderA = getExamOrder(a);
+        const orderB = getExamOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        const timeA = getExamTime(a);
+        const timeB = getExamTime(b);
+        if (timeA !== timeB) return timeA - timeB;
+        return String(a.exam_pattern).localeCompare(String(b.exam_pattern));
+      });
+      const currentIndex = sortedGroups.findIndex((group) => group.key === currentKey);
+      const visibleGroups =
+        currentIndex >= 0 ? sortedGroups.slice(0, currentIndex + 1) : sortedGroups;
+
+      return visibleGroups.map((group, index) => {
+        const totals = group.rows.reduce(
+          (acc, studentResult) => {
+            const questions = parseQuestionResults(studentResult.question_results);
+            Object.values(questions).forEach((details) => {
+              const skill = normalizeBloomSkill(
+                details?.blooms_skill ||
+                  details?.bloomsSkill ||
+                  details?.["Blooms Skill"] ||
+                  details?.["Bloom's Skill"],
+              );
+              const bucket = ["Remember", "Understand"].includes(skill)
+                ? "lots"
+                : ["Apply", "Analyse", "Evaluate", "Create"].includes(skill)
+                  ? "hots"
+                  : "";
+              if (!bucket) return;
+
+              acc[bucket].total += 1;
+              if (getQuestionResponseStatus(details) === "correct") {
+                acc[bucket].correct += 1;
+              }
+            });
+            return acc;
+          },
+          {
+            lots: { correct: 0, total: 0 },
+            hots: { correct: 0, total: 0 },
+          },
+        );
+
+        const pct = (bucket) =>
+          bucket.total > 0 ? Math.round((bucket.correct / bucket.total) * 100) : null;
+        return {
+          key: group.key,
+          label: group.exam_pattern || `Exam ${index + 1}`,
+          lots: pct(totals.lots),
+          hots: pct(totals.hots),
+        };
+      });
+    })();
+    const trendChart = (() => {
+      const width = 520;
+      const height = 235;
+      const padding = { top: 16, right: 18, bottom: 36, left: 64 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const xForIndex = (index) =>
+        padding.left +
+        (cognitivePerformanceTrend.length <= 1
+          ? plotWidth / 2
+          : (plotWidth / (cognitivePerformanceTrend.length - 1)) * index);
+      const yForValue = (value) =>
+        padding.top + plotHeight - ((value ?? 0) / 100) * plotHeight;
+      const pointsFor = (key) =>
+        cognitivePerformanceTrend
+          .map((item, index) => `${xForIndex(index)},${yForValue(item[key])}`)
+          .join(" ");
+
+      return {
+        width,
+        height,
+        padding,
+        plotWidth,
+        plotHeight,
+        xForIndex,
+        yForValue,
+        lotsPoints: pointsFor("lots"),
+        hotsPoints: pointsFor("hots"),
+      };
+    })();
+    const studentCognitiveDistribution = (() => {
+      const bands = [
+        {
+          label: "Advanced Thinkers",
+          range: "80-100%",
+          min: 80,
+          max: 100,
+          count: 0,
+          color: "#8f6df6",
+          bg: "linear-gradient(90deg, rgba(143, 109, 246, 0.16), rgba(143, 109, 246, 0.05))",
+          clipPath: "polygon(42% 0, 58% 0, 70% 100%, 30% 100%)",
+        },
+        {
+          label: "Proficient",
+          range: "60-79%",
+          min: 60,
+          max: 79.999,
+          count: 0,
+          color: "#34c99a",
+          bg: "linear-gradient(90deg, rgba(52, 201, 154, 0.16), rgba(52, 201, 154, 0.05))",
+          clipPath: "polygon(30% 0, 70% 0, 82% 100%, 18% 100%)",
+        },
+        {
+          label: "Developing",
+          range: "40-59%",
+          min: 40,
+          max: 59.999,
+          count: 0,
+          color: "#ffc83d",
+          bg: "linear-gradient(90deg, rgba(255, 200, 61, 0.18), rgba(255, 200, 61, 0.06))",
+          clipPath: "polygon(18% 0, 82% 0, 94% 100%, 6% 100%)",
+        },
+        {
+          label: "Foundation",
+          range: "0-39%",
+          min: 0,
+          max: 39.999,
+          count: 0,
+          color: "#ff6f8d",
+          bg: "linear-gradient(90deg, rgba(255, 111, 141, 0.18), rgba(255, 111, 141, 0.06))",
+          clipPath: "polygon(6% 0, 94% 0, 100% 100%, 0 100%)",
+        },
+      ];
+
+      results.forEach((studentResult) => {
+        const questions = parseQuestionResults(studentResult.question_results);
+        const totals = Object.values(questions).reduce(
+          (acc, details) => {
+            const skill = normalizeBloomSkill(
+              details?.blooms_skill ||
+                details?.bloomsSkill ||
+                details?.["Blooms Skill"] ||
+                details?.["Bloom's Skill"],
+            );
+            if (!skill) return acc;
+
+            acc.total += 1;
+            if (getQuestionResponseStatus(details) === "correct") {
+              acc.correct += 1;
+            }
+            return acc;
+          },
+          { correct: 0, total: 0 },
+        );
+        const accuracy =
+          totals.total > 0 ? (totals.correct / totals.total) * 100 : 0;
+        const band =
+          bands.find((item) => accuracy >= item.min && accuracy <= item.max) ||
+          bands[bands.length - 1];
+        band.count += 1;
+      });
+
+      const studentCount = results.length || totalStudents || 0;
+      return bands.map((band) => ({
+        ...band,
+        percentage:
+          studentCount > 0 ? Math.round((band.count / studentCount) * 100) : 0,
+      }));
+    })();
+    const cognitiveKeyInsights = (() => {
+      const lowerOrderMastery = parseFloat(calculateMastery(lowerOrderQuestions)) || 0;
+      const higherOrderMastery = parseFloat(calculateMastery(higherOrderQuestions)) || 0;
+      const hotsGap = Math.round(lowerOrderMastery - higherOrderMastery);
+      const taggedSkillPerformance = bloomPerformance
+        .filter((item) =>
+          bloomTaggedQuestions.some((question) => question.blooms_skill === item.skill),
+        )
+        .sort((a, b) => b.percentage - a.percentage);
+      const topSkills = taggedSkillPerformance
+        .slice(0, 2)
+        .map((item) => item.skill);
+      const strongestText =
+        topSkills.length > 1
+          ? `Strong performance in ${topSkills[0]} and ${topSkills[1]} levels.`
+          : topSkills.length === 1
+            ? `Strong performance in ${topSkills[0]} level.`
+            : "Bloom-tagged performance data is not available yet.";
+
+      const hotsSupportCount = results.reduce((count, studentResult) => {
+        const questions = parseQuestionResults(studentResult.question_results);
+        const totals = Object.values(questions).reduce(
+          (acc, details) => {
+            const skill = normalizeBloomSkill(
+              details?.blooms_skill ||
+                details?.bloomsSkill ||
+                details?.["Blooms Skill"] ||
+                details?.["Bloom's Skill"],
+            );
+            if (!["Apply", "Analyse", "Evaluate", "Create"].includes(skill)) {
+              return acc;
+            }
+
+            acc.total += 1;
+            if (getQuestionResponseStatus(details) === "correct") {
+              acc.correct += 1;
+            }
+            return acc;
+          },
+          { correct: 0, total: 0 },
+        );
+        const hotsAccuracy =
+          totals.total > 0 ? (totals.correct / totals.total) * 100 : null;
+        return hotsAccuracy !== null && hotsAccuracy < 40 ? count + 1 : count;
+      }, 0);
+      const hotsInsight =
+        hotsGap >= 10
+          ? `HOTS trails LOTS by ${hotsGap}%, needs focused improvement.`
+          : higherOrderMastery < 60
+            ? "HOTS needs focused improvement."
+            : "HOTS performance is broadly in line with LOTS.";
+      const recommendation =
+        cognitiveBalance.hotsPercentage < 50
+          ? "Increase application-based and open-ended questions in future assessments."
+          : higherOrderMastery < 60
+            ? "Add focused practice for Apply, Analyse, Evaluate, and Create questions."
+            : "Maintain a balanced mix of LOTS and HOTS questions.";
+
+      return [
+        {
+          text: strongestText,
+          Icon: Target,
+          color: "#ff3158",
+        },
+        {
+          text: hotsInsight,
+          Icon: Activity,
+          color: "#22b981",
+        },
+        {
+          text: `${hotsSupportCount} students require targeted support in higher-order thinking.`,
+          Icon: UsersRound,
+          color: "#1681ff",
+        },
+        {
+          text: recommendation,
+          Icon: Lightbulb,
+          color: "#ffb11a",
+        },
+      ];
+    })();
+
+    const subjectDifficultySummary = activeSubs.map((subject) => {
+      const subjectQuestions = questionAnalytics.filter(
+        (question) =>
+          String(question.subject || "").toLowerCase() ===
+          String(subject || "").toLowerCase(),
+      );
+      const totalQuestions = subjectQuestions.length || 0;
+      const difficultCount = subjectQuestions.filter(
+        (question) => question.difficulty_level === "Difficult",
+      ).length;
+      const mediumCount = subjectQuestions.filter(
+        (question) => question.difficulty_level === "Medium",
+      ).length;
+      const easyCount = subjectQuestions.filter(
+        (question) => question.difficulty_level === "Easy",
+      ).length;
+      const pct = (count) =>
+        totalQuestions > 0 ? ((count / totalQuestions) * 100).toFixed(2) : "0.00";
+
+      return {
+        subject,
+        total_questions: totalQuestions,
+        difficult_count: difficultCount,
+        medium_count: mediumCount,
+        easy_count: easyCount,
+        difficult_percentage: pct(difficultCount),
+        medium_percentage: pct(mediumCount),
+        easy_percentage: pct(easyCount),
+      };
+    });
+
+    const subjectBloomSkillSummary = activeSubs.map((subject) => {
+      const subjectQuestions = questionAnalytics.filter(
+        (question) =>
+          String(question.subject || "").toLowerCase() ===
+          String(subject || "").toLowerCase(),
+      );
+
+      return {
+        subject,
+        total_questions: subjectQuestions.length,
+        skills: bloomSkills.map((skill) => {
+          const skillQuestions = subjectQuestions.filter(
+            (question) => question.blooms_skill === skill,
+          );
+          const correct = skillQuestions.reduce(
+            (sum, question) => sum + question.correct,
+            0,
+          );
+          const incorrect = skillQuestions.reduce(
+            (sum, question) => sum + question.incorrect,
+            0,
+          );
+          const unattempted = skillQuestions.reduce(
+            (sum, question) => sum + question.unattempted,
+            0,
+          );
+          const totalResponses = correct + incorrect + unattempted;
+          const pct = (count) =>
+            totalResponses > 0
+              ? ((count / totalResponses) * 100).toFixed(2)
+              : "0.00";
+
+          return {
+            skill,
+            questions: skillQuestions.length,
+            correct,
+            incorrect,
+            unattempted,
+            correct_percentage: pct(correct),
+            incorrect_percentage: pct(incorrect),
+            unattempted_percentage: pct(unattempted),
+          };
+        }),
+      };
+    });
+
+    const mostDifficultQuestions = [...questionAnalytics]
+      .sort((a, b) => parseFloat(b.difficulty_score) - parseFloat(a.difficulty_score))
+      .slice(0, 5);
+    const easiestQuestions = [...questionAnalytics]
+      .sort((a, b) => parseFloat(b.correct_percentage) - parseFloat(a.correct_percentage))
+      .slice(0, 5);
+    const mediumQuestions = questionAnalytics
+      .filter((question) => question.difficulty_level === "Medium")
+      .sort(
+        (a, b) =>
+          Math.abs(parseFloat(a.correct_percentage) - 50) -
+          Math.abs(parseFloat(b.correct_percentage) - 50),
+      )
+      .slice(0, 5);
+
+    const bloomTaxonomyAnalyticsSection = (
+        <section
+          className="exam-results-page bloom-analysis"
+          data-bloom-taxonomy-analytics
+          style={{ marginBottom: "20px" }}
+        >
+          {questionAnalytics.length > 0 && (
+            <div
+              className="bloom-summary-grid"
+              style={{
+                display: "grid",
+                gap: "14px",
+                marginBottom: "20px",
+              }}
+            >
+              {bloomSummaryCards.map((card) => {
+                const Icon = card.Icon;
+
+                return (
+                  <div
+                    key={card.title}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "44px minmax(0, 1fr)",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "18px 16px",
+                      borderRadius: "8px",
+                      background: card.bg,
+                      border: "1px solid #e8eef7",
+                      minHeight: "118px",
+                      boxShadow: "0 8px 22px rgba(15, 47, 99, 0.06)",
+                    }}
+                  >
+                    <Icon
+                      size={44}
+                      strokeWidth={2.2}
+                      color={card.iconColor}
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <div
+                        style={{
+                          color: "#0b1f5c",
+                          fontSize: "12px",
+                          fontWeight: "900",
+                          lineHeight: 1.25,
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {card.title}
+                      </div>
+                      <div
+                        style={{
+                          color: card.valueColor,
+                          fontSize: "30px",
+                          fontWeight: "900",
+                          lineHeight: 1,
+                          marginBottom: "7px",
+                        }}
+                      >
+                        {card.value}
+                      </div>
+                      <div
+                        style={{
+                          color: "#30507f",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {card.helper}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {questionAnalytics.length > 0 && (
+            <div
+              className="bloom-chart-grid"
+              style={{
+                display: "grid",
+                alignItems: "stretch",
+                gap: "18px",
+                marginBottom: "20px",
+              }}
+            >
+            <div
+              style={{
+                padding: "16px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                width: "100%",
+                maxWidth: "none",
+                minHeight: "324px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 16px",
+                  color: "#0b1f5c",
+                  fontSize: "16px",
+                  fontWeight: "900",
+                }}
+              >
+                Question Distribution by Bloom&apos;s Skill
+              </h3>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+                  alignItems: "center",
+                  gap: "14px",
+
+                }}
+              >
+                <div
+                  style={{
+                    width: "min(100%, 210px)",
+                    aspectRatio: "1",
+                    borderRadius: "50%",
+                    background: `conic-gradient(${bloomDistributionGradient})`,
+                    display: "grid",
+                    placeItems: "center",
+                    justifySelf: "center",
+                    position: "relative",
+                  }}
+                >
+                  {bloomDistributionSegments.map((item) => (
+                    <span
+                      key={`${item.skill}-donut-label`}
+                      style={{
+                        position: "absolute",
+                        ...item.labelStyle,
+                        transform: "translate(-50%, -50%)",
+                        color: item.skill === "Apply" ? "#0b1f5c" : "#ffffff",
+                        fontSize: "14px",
+                        fontWeight: "900",
+                        lineHeight: 1,
+                        textShadow:
+                          item.skill === "Apply"
+                            ? "0 1px 2px rgba(255, 255, 255, 0.45)"
+                            : "0 1px 2px rgba(15, 23, 42, 0.3)",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {item.percentage}%
+                    </span>
+                  ))}
+                  <div
+                    style={{
+                      width: "104px",
+                      height: "104px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      display: "grid",
+                      placeItems: "center",
+                      textAlign: "center",
+                      boxShadow: "inset 0 0 0 1px #e2e8f0",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color: "#0b1f5c",
+                          fontSize: "30px",
+                          fontWeight: "900",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {bloomTaggedQuestions.length}
+                      </div>
+                      <div
+                        style={{
+                          color: "#30507f",
+                          fontSize: "11px",
+                          fontWeight: "800",
+                          marginTop: "4px",
+                        }}
+                      >
+                        Questions
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "11px",
+                    minWidth: 0,
+                  }}
+                >
+                  {bloomDistribution.map((item) => (
+                    <div
+                      key={item.skill}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "16px minmax(82px, 1fr) max-content",
+                        alignItems: "center",
+                        gap: "8px",
+                        color: "#0b1f5c",
+                        fontSize: "14px",
+                        fontWeight: "800",
+                        minWidth: 0,
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: "12px",
+                          height: "12px",
+                          borderRadius: "3px",
+                          background: item.color,
+                        }}
+                      />
+                      <span>{item.skill}</span>
+                      <span>
+                        {item.percentage}% ({item.count})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div
+              className="bloom-centered-chart-card"
+              style={{
+                padding: "16px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                width: "100%",
+                maxWidth: "none",
+                minHeight: "324px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 16px",
+                  color: "#0b1f5c",
+                  fontSize: "16px",
+                  fontWeight: "900",
+                }}
+              >
+                Overall Performance by Bloom&apos;s Skill
+              </h3>
+              <div className="bloom-centered-chart-body">
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "26px minmax(0, 1fr)",
+                  gap: "10px",
+                  height: "230px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    alignItems: "flex-end",
+                    paddingTop: "12px",
+                    paddingBottom: "48px",
+                    color: "#30507f",
+                    fontSize: "11px",
+                    fontWeight: "800",
+                  }}
+                >
+                  {[100, 80, 60, 40, 20, 0].map((value) => (
+                    <span key={value}>{value}</span>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+                    alignItems: "end",
+                    gap: "clamp(4px, 1cqi, 14px)",
+                    borderLeft: "1px solid #dbe5f2",
+                    borderBottom: "1px solid #dbe5f2",
+                    padding: "12px 4px 48px",
+                    background:
+                      "repeating-linear-gradient(to top, transparent 0, transparent 31px, #edf2f7 32px)",
+                  }}
+                >
+                  {bloomPerformance.map((item) => (
+                    <div
+                      key={item.skill}
+                      style={{
+                        height: "100%",
+                        display: "grid",
+                        alignItems: "end",
+                        justifyItems: "center",
+                        position: "relative",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: `calc(${item.percentage}% + 7px)`,
+                          color: "#0b1f5c",
+                          fontSize: "12px",
+                          fontWeight: "900",
+                          whiteSpace: "normal",
+                          overflowWrap: "anywhere",
+                          textAlign: "center",
+                        }}
+                      >
+                        {item.percentage}%
+                      </span>
+                      <div
+                        style={{
+                          width: "34px",
+                          minWidth: 0,
+                          maxWidth: "100%",
+                          height: `${item.percentage}%`,
+                          minHeight: item.percentage > 0 ? "4px" : 0,
+                          borderRadius: "6px 6px 2px 2px",
+                          background: item.color,
+                          boxShadow: "0 6px 12px rgba(15, 47, 99, 0.12)",
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          width: "100%",
+                          marginTop: "8px",
+                          color: "#0b1f5c",
+                          fontSize: "11px",
+                          fontWeight: "800",
+                          whiteSpace: "normal",
+                          overflowWrap: "anywhere",
+                          textAlign: "center",
+                        }}
+                      >
+                        {item.skill}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              </div>
+            </div>
+            <div
+              className="bloom-centered-chart-card"
+              style={{
+                padding: "16px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                width: "100%",
+                maxWidth: "none",
+                minHeight: "324px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 16px",
+                  color: "#0b1f5c",
+                  fontSize: "16px",
+                  fontWeight: "900",
+                }}
+              >
+                Cognitive Balance
+              </h3>
+              <div className="bloom-centered-chart-body">
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(44px, 1fr) minmax(0, 176px) minmax(44px, 1fr)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "12px",
+                  marginTop: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#10a878",
+                    textAlign: "center",
+                    fontWeight: "900",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  <div style={{ fontSize: "20px" }}>
+                    {cognitiveBalance.lotsPercentage}%
+                  </div>
+                  <div style={{ fontSize: "12px" }}>LOTS</div>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1",
+                    borderRadius: "50%",
+                    background: `conic-gradient(${cognitiveBalance.gradient})`,
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "90px",
+                      height: "90px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      display: "grid",
+                      placeItems: "center",
+                      textAlign: "center",
+                      boxShadow: "inset 0 0 0 1px #e2e8f0",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color: "#0b1f5c",
+                          fontSize: "24px",
+                          fontWeight: "900",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {bloomTaggedQuestions.length > 0 ? "100%" : "0%"}
+                      </div>
+                      <div
+                        style={{
+                          color: "#30507f",
+                          fontSize: "11px",
+                          fontWeight: "800",
+                          marginTop: "4px",
+                        }}
+                      >
+                        Questions
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    color: "#ff6f1a",
+                    textAlign: "center",
+                    fontWeight: "900",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  <div style={{ fontSize: "20px" }}>
+                    {cognitiveBalance.hotsPercentage}%
+                  </div>
+                  <div style={{ fontSize: "12px" }}>HOTS</div>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                  marginTop: "18px",
+                  color: "#0b1f5c",
+                  fontSize: "12px",
+                  fontWeight: "800",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "50%",
+                      background: "#22b981",
+                    }}
+                  />
+                  <span>LOTS (Remember + Understand)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "50%",
+                      background: "#ff7a1a",
+                    }}
+                  />
+                  <span>HOTS (Apply + Analyse + Evaluate + Create)</span>
+                </div>
+              </div>
+              </div>
+            </div>
+            </div>
+          )}
+
+          {questionAnalytics.length > 0 && (
+            <div
+              className="bloom-chart-grid"
+              style={{
+                display: "grid",
+                alignItems: "stretch",
+                gap: "18px",
+                marginBottom: "20px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                  width: "100%",
+                  maxWidth: "none",
+                  minHeight: "280px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: "#0b1f5c",
+                      fontSize: "18px",
+                      fontWeight: "900",
+                    }}
+                  >
+                    Cognitive Performance Trend
+                  </h3>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      color: "#0b1f5c",
+                      fontSize: "14px",
+                      fontWeight: "800",
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "50%",
+                          background: "#22b981",
+                        }}
+                      />
+                      LOTS
+                    </span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "50%",
+                          background: "#ff7a1a",
+                        }}
+                      />
+                      HOTS
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ width: "100%", overflowX: "hidden" }}>
+                  <svg
+                    width="100%"
+                    height="220"
+                    viewBox={`0 0 ${trendChart.width} ${trendChart.height}`}
+                    role="img"
+                    aria-label="Cognitive performance trend for current and previous exams"
+                    style={{ display: "block" }}
+                  >
+                    {[100, 80, 60, 40, 20, 0].map((value) => {
+                      const y = trendChart.yForValue(value);
+                      return (
+                        <g key={`trend-grid-${value}`}>
+                          <line
+                            x1={trendChart.padding.left}
+                            y1={y}
+                            x2={trendChart.padding.left + trendChart.plotWidth}
+                            y2={y}
+                            stroke="#edf2f7"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={trendChart.padding.left - 10}
+                            y={y + 4}
+                            textAnchor="end"
+                            fill="#30507f"
+                            fontSize="12"
+                            fontWeight="800"
+                          >
+                            {value}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    <line
+                      x1={trendChart.padding.left}
+                      y1={trendChart.padding.top}
+                      x2={trendChart.padding.left}
+                      y2={trendChart.padding.top + trendChart.plotHeight}
+                      stroke="#dbe5f2"
+                      strokeWidth="1"
+                    />
+                    <line
+                      x1={trendChart.padding.left}
+                      y1={trendChart.padding.top + trendChart.plotHeight}
+                      x2={trendChart.padding.left + trendChart.plotWidth}
+                      y2={trendChart.padding.top + trendChart.plotHeight}
+                      stroke="#dbe5f2"
+                      strokeWidth="1"
+                    />
+                    {cognitivePerformanceTrend.length > 1 && (
+                      <>
+                        <polyline
+                          points={trendChart.lotsPoints}
+                          fill="none"
+                          stroke="#22b981"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <polyline
+                          points={trendChart.hotsPoints}
+                          fill="none"
+                          stroke="#ff7a1a"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </>
+                    )}
+                    {cognitivePerformanceTrend.map((item, index) => {
+                      const x = trendChart.xForIndex(index);
+                      const labelY =
+                        trendChart.padding.top + trendChart.plotHeight + 26;
+                      return (
+                        <g key={item.key}>
+                          <text
+                            x={x}
+                            y={labelY}
+                            textAnchor={index === 0 ? "start" : index === cognitivePerformanceTrend.length - 1 ? "end" : "middle"}
+                            fill="#0b1f5c"
+                            fontSize="12"
+                            fontWeight="800"
+                          >
+                            {item.label}
+                          </text>
+                          {[
+                            { key: "lots", color: "#22b981", dy: -14 },
+                            { key: "hots", color: "#ff7a1a", dy: 22 },
+                          ].map((series) => {
+                            const value = item[series.key] ?? 0;
+                            const y = trendChart.yForValue(value);
+                            return (
+                              <g key={`${item.key}-${series.key}`}>
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r="6"
+                                  fill={series.color}
+                                  stroke="#ffffff"
+                                  strokeWidth="2"
+                                />
+                                <text
+                                  x={x}
+                                  y={Math.max(14, Math.min(trendChart.height - 12, y + series.dy))}
+                                  textAnchor="middle"
+                                  fill={series.color}
+                                  fontSize="12"
+                                  fontWeight="900"
+                                >
+                                  {value}%
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })}
+                    <text
+                      x="24"
+                      y="118"
+                      fill="#30507f"
+                      fontSize="12"
+                      fontWeight="800"
+                      transform="rotate(-90 24 118)"
+                      textAnchor="middle"
+                    >
+                      Accuracy (%)
+                    </text>
+                  </svg>
+                </div>
+              </div>
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                  width: "100%",
+                  maxWidth: "none",
+                  minHeight: "280px",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: "0 0 14px",
+                    color: "#0b1f5c",
+                    fontSize: "18px",
+                    fontWeight: "900",
+                  }}
+                >
+                  Student Distribution by Cognitive Level
+                </h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "6px",
+                  }}
+                >
+                  {studentCognitiveDistribution.map((band, index) => (
+                    <div
+                      key={band.label}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(40px, 28%) minmax(0, 1fr)",
+                        alignItems: "center",
+                        minHeight: "48px",
+                        borderRadius: "8px",
+                        background: band.bg,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: "100%",
+                          background: band.color,
+                          clipPath: band.clipPath,
+                        }}
+                      />
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "minmax(0, 1fr) max-content",
+                          alignItems: "center",
+                          gap: "12px",
+                          padding: "10px 8px",
+                          color: "#0b1f5c",
+                          fontSize: "14px",
+                          fontWeight: "800",
+                          minWidth: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+
+                            whiteSpace: "normal",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {band.label} ({band.range})
+                        </span>
+                        <span
+                          style={{
+                            color:
+                              band.label === "Foundation"
+                                ? "#a20f2d"
+                                : band.color,
+                            fontSize: "20px",
+                            fontWeight: "900",
+                          }}
+                        >
+                          {band.percentage}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                  width: "100%",
+                  maxWidth: "none",
+                  minHeight: "280px",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: "0 0 14px",
+                    color: "#0b1f5c",
+                    fontSize: "18px",
+                    fontWeight: "900",
+                  }}
+                >
+                  Key Insights
+                </h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "14px",
+                  }}
+                >
+                  {cognitiveKeyInsights.map((insight) => {
+                    const Icon = insight.Icon;
+
+                    return (
+                      <div
+                        key={insight.text}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "42px minmax(0, 1fr)",
+                          alignItems: "center",
+                          gap: "12px",
+                          color: "#0b1f5c",
+                          fontSize: "14px",
+                          fontWeight: "700",
+                          lineHeight: 1.35,
+                          minHeight: "42px",
+                        }}
+                      >
+                        <Icon
+                          size={34}
+                          strokeWidth={2.4}
+                          color={insight.color}
+                          aria-hidden="true"
+                        />
+                        <span>{insight.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {questionAnalytics.length === 0 && (
+              <div
+                style={{
+                  padding: "40px",
+                  borderRadius: "10px",
+                  background: "#f8fafc",
+                  color: "#64748b",
+                  textAlign: "center",
+                  border: "1px dashed #cbd5e1",
+                }}
+              >
+              No Bloom&apos;s taxonomy analytics available for this exam.
+            </div>
+          )}
+        </section>
+      );
+
     return (
-      <div className="exam-results-page">
+      <div className="exam-results-page exam-results-tabbed">
         <div style={{ display: "none" }}>
           <h2>
             {currentOMRExam.class}-{currentOMRExam.section} |{" "}
@@ -5145,84 +6803,48 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 : ""}
             </div>
             </div>
-            <div
-            className="exam-results-summary"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(120px, 1fr))",
-              gap: "10px",
-              minWidth: "260px",
-            }}
-          >
-            <div
-              className="exam-results-summary-item"
-              style={{
-                padding: "12px",
-                borderRadius: "8px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              <div
-                className="exam-results-summary-label"
-                style={{
-                  fontSize: "12px",
-                  color: "#64748b",
-                  fontWeight: "600",
-                }}
-              >
-                Students
-              </div>
-              <div
-                className="exam-results-summary-value"
-                style={{
-                  fontSize: "22px",
-                  color: "#0f172a",
-                  fontWeight: "700",
-                }}
-              >
-                {totalStudents}
-              </div>
-            </div>
-            <div
-              className="exam-results-summary-item"
-              style={{
-                padding: "12px",
-                borderRadius: "8px",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-              }}
-            >
-              <div
-                className="exam-results-summary-label"
-                style={{
-                  fontSize: "12px",
-                  color: "#1d4ed8",
-                  fontWeight: "600",
-                }}
-              >
-                Overall Avg
-              </div>
-              <div
-                className="exam-results-summary-value"
-                style={{
-                  fontSize: "22px",
-                  color: "#1e3a8a",
-                  fontWeight: "700",
-                }}
-              >
-                {overallAverage}%
-              </div>
-            </div>
-          </div>
           </div>
           <div className="exam-results-header-actions">
+
+            <div className="exam-view-switcher" role="group" aria-label="Exam views">
+              {[
+                { id: "cognitive", label: "Cognitive Analysis" },
+                { id: "analysis", label: "Exam Analysis" },
+                { id: "results", label: "Exam Result" },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="exam-view-button"
+                  aria-pressed={examResultView === item.id}
+                  aria-controls={`exam-view-${item.id}`}
+                  onClick={() => setExamResultView(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             <button
               className="page-back-nav exam-results-back"
               onClick={() => setView("exam")}
             >
               Back to Batch Wise Results
             </button>
+          </div>
+          </div>
+
+        <section id="exam-view-cognitive" className="exam-view-panel" aria-label="Cognitive Analysis" hidden={examResultView !== "cognitive"}>
+          <div className="exam-view-actions">
+            <button type="button" className="exam-results-header-download" onClick={() => setView("subject-bloom-analytics")}>
+              Detailed Analysis
+            </button>
+          </div>
+          {bloomTaxonomyAnalyticsSection}
+        </section>
+
+        {/* === ANALYSIS SECTION === */}
+        <section id="exam-view-analysis" className="exam-view-panel" aria-label="Exam Analysis" hidden={examResultView !== "analysis"}>
+          <div className="exam-view-actions">
             <button
               type="button"
               className="exam-results-header-download"
@@ -5232,20 +6854,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
               <Download size={15} />
               Download Analysis PDF
             </button>
-            <button
-              type="button"
-              className="exam-results-header-download exam-results-header-download--student"
-              disabled={resultsLoading || results.length === 0}
-              onClick={() => studentResultsDownloadButtonRef.current?.click()}
-            >
-              <Download size={15} />
-              Download Student Results PDF
-            </button>
-            </div>
           </div>
-
-        {/* === ANALYSIS SECTION === */}
-        <div>
           {/* 1. Subject Averages (Percentages) */}
           <div
             className="exam-results-analysis-section exam-results-analysis-section--averages"
@@ -5534,9 +7143,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
               </table>
             </div>
           </div>
-        </div>
 
-        {/* ===== DOWNLOAD ANALYSIS PDF BUTTON ===== */}
+        </section>
+
+        {/* Keep the existing PDF handler mounted for the analysis download. */}
+        <div hidden>
         <button
           className="exam-results-download-btn exam-results-download-btn--analysis"
           ref={analysisDownloadButtonRef}
@@ -6590,7 +8201,20 @@ export default function SchoolOwnerDashboard({ onBack }) {
           <Download size={15} />
           Download Analysis PDF
         </button>
+        </div>
 
+        <section id="exam-view-results" className="exam-view-panel" aria-label="Exam Result" hidden={examResultView !== "results"}>
+          <div className="exam-view-actions">
+            <button
+              type="button"
+              className="exam-results-header-download exam-results-header-download--student"
+              disabled={resultsLoading || results.length === 0}
+              onClick={() => studentResultsDownloadButtonRef.current?.click()}
+            >
+              <Download size={15} />
+              Download Student Results PDF
+            </button>
+          </div>
         {/* ===== STUDENT RESULTS TABLE ===== */}
         {resultsLoading ? (
           <div
@@ -6609,8 +8233,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
               className="exam-results-student-download-row"
               style={{
                 margin: "20px 0",
-                display: "flex",
+                display: "none",
                 justifyContent: "flex-end",
+                gap: "10px",
               }}
             >
               <button
@@ -7598,6 +9223,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
             📭 No results available.
           </div>
         )}
+        </section>
+
       </div>
     );
   };
@@ -7794,6 +9421,1036 @@ export default function SchoolOwnerDashboard({ onBack }) {
     );
   };
 
+  const renderSubjectBloomAnalyticsView = () => {
+    if (!currentOMRExam) {
+      setView("examwise-results");
+      return null;
+    }
+
+    const results = examResults[currentOMRExam.id] || [];
+    const activeSubs = getActiveSubjects(
+      getGroupByClassSection(currentOMRExam.class, currentOMRExam.section),
+    );
+    const parseQuestionResults = (value) => {
+      if (!value) return {};
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value) || {};
+        } catch {
+          return {};
+        }
+      }
+      return typeof value === "object" ? value : {};
+    };
+    const getQuestionNumber = (question) =>
+      Number(String(question || "").match(/\d+/)?.[0] || 0);
+    const normalizeBloomSkill = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (["remember", "remembering"].includes(normalized)) return "Remember";
+      if (["understand", "understanding"].includes(normalized)) return "Understand";
+      if (["apply", "applying"].includes(normalized)) return "Apply";
+      if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+        return "Analyse";
+      }
+      if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+      if (["create", "creating"].includes(normalized)) return "Create";
+      return "";
+    };
+    const getQuestionResponseStatus = (details = {}) => {
+      const status = String(details?.status || "").toLowerCase();
+      const option = details?.option ?? details?.options ?? "";
+      const marks = Number(details?.marks);
+
+      if (status.includes("incorrect")) return "incorrect";
+      if (status.includes("correct")) return "correct";
+      if (status.includes("not") || status.includes("unattempted") || !option) {
+        return "unattempted";
+      }
+      if (Number.isFinite(marks) && marks > 0) return "correct";
+      if (option) return "incorrect";
+      return "unattempted";
+    };
+    const uniqueQuestionNumbers = new Set();
+    results.forEach((studentResult) => {
+      Object.keys(parseQuestionResults(studentResult.question_results)).forEach(
+        (question) => {
+          const questionNumber = getQuestionNumber(question);
+          if (questionNumber) uniqueQuestionNumbers.add(questionNumber);
+        },
+      );
+    });
+    const totalQuestionCountForMapping = Math.max(
+      ...Array.from(uniqueQuestionNumbers),
+      uniqueQuestionNumbers.size,
+      0,
+    );
+    const normalizeSubjectName = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (normalized.includes("math")) return "Maths";
+      if (normalized.includes("physics")) return "Physics";
+      if (normalized.includes("chemistry")) return "Chemistry";
+      if (normalized.includes("biology")) return "Biology";
+      return "";
+    };
+    const getQuestionSubject = (question, details = {}) => {
+      const storedSubject = details?.subject || details?.Subject;
+      const normalizedStoredSubject = normalizeSubjectName(storedSubject);
+      if (normalizedStoredSubject) return normalizedStoredSubject;
+
+      const questionNumber = getQuestionNumber(question);
+      if (!questionNumber || !activeSubs.length) return "General";
+
+      const questionsPerSubject = Math.max(
+        1,
+        Math.ceil((totalQuestionCountForMapping || questionNumber) / activeSubs.length),
+      );
+      const subjectIndex = Math.min(
+        activeSubs.length - 1,
+        Math.floor((questionNumber - 1) / questionsPerSubject),
+      );
+
+      return activeSubs[subjectIndex] || "General";
+    };
+    const subjectCardMeta = {
+      Maths: {
+        title: "Mathematics",
+        Icon: Calculator,
+        iconColor: "#1681ff",
+        accent: "#2f8cff",
+        bg: "linear-gradient(135deg, #eaf4ff 0%, #f7fbff 100%)",
+      },
+      Physics: {
+        title: "Physics",
+        Icon: Activity,
+        iconColor: "#8f6df6",
+        accent: "#2f8cff",
+        bg: "linear-gradient(135deg, #f0eaff 0%, #fbf9ff 100%)",
+      },
+      Chemistry: {
+        title: "Chemistry",
+        Icon: FlaskConical,
+        iconColor: "#10a878",
+        accent: "#34c99a",
+        bg: "linear-gradient(135deg, #eafbf6 0%, #f7fffc 100%)",
+      },
+      Biology: {
+        title: "Biology",
+        Icon: Leaf,
+        iconColor: "#fb5b7b",
+        accent: "#34c99a",
+        bg: "linear-gradient(135deg, #fff0f5 0%, #fff9fb 100%)",
+      },
+    };
+    const subjectTotals = activeSubs.reduce((acc, subject) => {
+      acc[subject] = {
+        subject,
+        correct: 0,
+        total: 0,
+        lotsCorrect: 0,
+        lotsTotal: 0,
+        hotsCorrect: 0,
+        hotsTotal: 0,
+        questionKeys: new Set(),
+        skills: {
+          Remember: { correct: 0, total: 0 },
+          Understand: { correct: 0, total: 0 },
+          Apply: { correct: 0, total: 0 },
+          Analyse: { correct: 0, total: 0 },
+          Evaluate: { correct: 0, total: 0 },
+          Create: { correct: 0, total: 0 },
+        },
+      };
+      return acc;
+    }, {});
+
+    results.forEach((studentResult) => {
+      const questions = parseQuestionResults(studentResult.question_results);
+      Object.entries(questions).forEach(([question, details]) => {
+        const skill = normalizeBloomSkill(
+          details?.blooms_skill ||
+            details?.bloomsSkill ||
+            details?.["Blooms Skill"] ||
+            details?.["Bloom's Skill"],
+        );
+        if (!skill) return;
+
+        const subject = getQuestionSubject(question, details);
+        if (!subjectTotals[subject]) return;
+
+        const responseStatus = getQuestionResponseStatus(details);
+        const isCorrect = responseStatus === "correct";
+        const subjectTotal = subjectTotals[subject];
+        subjectTotal.total += 1;
+        subjectTotal.questionKeys.add(String(question || "").trim());
+        if (isCorrect) subjectTotal.correct += 1;
+        subjectTotal.skills[skill].total += 1;
+        if (isCorrect) subjectTotal.skills[skill].correct += 1;
+
+        if (["Remember", "Understand"].includes(skill)) {
+          subjectTotal.lotsTotal += 1;
+          if (isCorrect) subjectTotal.lotsCorrect += 1;
+        } else if (["Apply", "Analyse", "Evaluate", "Create"].includes(skill)) {
+          subjectTotal.hotsTotal += 1;
+          if (isCorrect) subjectTotal.hotsCorrect += 1;
+        }
+      });
+    });
+
+    const toPercent = (correct, total) =>
+      total > 0 ? Math.round((correct / total) * 100) : 0;
+    const subjectBloomCards = activeSubs.map((subject) => {
+      const totals = subjectTotals[subject];
+      const meta = subjectCardMeta[subject] || {
+        title: subject,
+        Icon: BookOpen,
+        iconColor: "#1681ff",
+        accent: "#2f8cff",
+        bg: "linear-gradient(135deg, #eef6ff 0%, #f7fbff 100%)",
+      };
+
+      return {
+        ...meta,
+        subject,
+        mastery: toPercent(totals.correct, totals.total),
+        lots: toPercent(totals.lotsCorrect, totals.lotsTotal),
+        hots: toPercent(totals.hotsCorrect, totals.hotsTotal),
+        questions: totals.questionKeys.size,
+      };
+    });
+    const subjectBloomSkillColors = {
+      Remember: "#2f8cff",
+      Understand: "#34c99a",
+      Apply: "#ffc83d",
+      Analyse: "#ff8a45",
+      Evaluate: "#ff5f7d",
+      Create: "#8f6df6",
+    };
+    const subjectBloomSkillPerformance = activeSubs.map((subject) => {
+      const totals = subjectTotals[subject];
+      return {
+        subject,
+        label: subject === "Maths" ? "Mathematics" : subject,
+        skills: Object.entries(totals.skills).map(([skill, values]) => ({
+          skill,
+          percentage: toPercent(values.correct, values.total),
+          color: subjectBloomSkillColors[skill],
+        })),
+      };
+    });
+    const subjectSkillChart = {
+      width: 690,
+      height: 285,
+      padding: { top: 18, right: 10, bottom: 58, left: 56 },
+    };
+    subjectSkillChart.plotWidth =
+      subjectSkillChart.width -
+      subjectSkillChart.padding.left -
+      subjectSkillChart.padding.right;
+    subjectSkillChart.plotHeight =
+      subjectSkillChart.height -
+      subjectSkillChart.padding.top -
+      subjectSkillChart.padding.bottom;
+    subjectSkillChart.groupWidth =
+      subjectSkillChart.plotWidth /
+      Math.max(subjectBloomSkillPerformance.length, 1);
+    subjectSkillChart.barWidth = Math.min(
+      20,
+      Math.max(12, subjectSkillChart.groupWidth / 9),
+    );
+    subjectSkillChart.yForValue = (value) =>
+      subjectSkillChart.padding.top +
+      subjectSkillChart.plotHeight -
+      (value / 100) * subjectSkillChart.plotHeight;
+    const getHeatmapCellColor = (value) => {
+      if (value >= 80) return "#34c99a";
+      if (value >= 60) return "#d6df4d";
+      if (value >= 40) return "#ff9852";
+      return "#ff6f8d";
+    };
+    const heatmapLegend = [
+      { label: ">= 80% (Strong)", color: "#34c99a" },
+      { label: "60-79% (Developing)", color: "#d6df4d" },
+      { label: "40-59% (Needs Support)", color: "#ff9852" },
+      { label: "< 40% (Critical)", color: "#ff6f8d" },
+    ];
+    const subjectHotsLotsDistribution = activeSubs.map((subject) => {
+      const totals = subjectTotals[subject];
+      const correctTotal = totals.lotsCorrect + totals.hotsCorrect;
+      const lots = correctTotal > 0
+        ? Math.round((totals.lotsCorrect / correctTotal) * 100)
+        : 0;
+
+      return {
+        subject,
+        label: subject === "Maths" ? "Mathematics" : subject,
+        lots,
+        hots: correctTotal > 0 ? 100 - lots : 0,
+      };
+    });
+    const formatSkillList = (skills) => {
+      if (skills.length <= 1) return skills[0] || "";
+      if (skills.length === 2) return `${skills[0]} and ${skills[1]}`;
+      return `${skills.slice(0, -1).join(", ")} and ${skills[skills.length - 1]}`;
+    };
+    const subjectStrengthGapInsights = subjectBloomSkillPerformance.map((subjectGroup) => {
+      const availableSkills = subjectGroup.skills.filter(
+        (item) => subjectTotals[subjectGroup.subject]?.skills?.[item.skill]?.total > 0,
+      );
+      const rankedStrongSkills = [...availableSkills].sort(
+        (first, second) => second.percentage - first.percentage,
+      );
+      const rankedGapSkills = [...availableSkills].sort(
+        (first, second) => first.percentage - second.percentage,
+      );
+      const strengthSkills = rankedStrongSkills.slice(0, 2).map((item) => item.skill);
+      const gapSkills = rankedGapSkills
+        .filter((item) => item.percentage < 60)
+        .slice(0, 2)
+        .map((item) => item.skill);
+
+      return {
+        subject: subjectGroup.subject,
+        label: subjectGroup.label,
+        meta: subjectCardMeta[subjectGroup.subject],
+        strengthText: strengthSkills.length
+          ? `Strong in ${formatSkillList(strengthSkills)}`
+          : "No Bloom skill strength available",
+        gapText: gapSkills.length
+          ? `Needs focus on ${formatSkillList(gapSkills)}`
+          : "Consistent performance",
+      };
+    });
+
+    return (
+      <div className="exam-results-page subject-bloom-page">
+        <div
+          className="subject-bloom-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "16px",
+            flexWrap: "wrap",
+            marginBottom: "20px",
+            paddingBottom: "16px",
+            borderBottom: "1px solid #e2e8f0",
+          }}
+        >
+          <div>
+            <h2
+              style={{
+                margin: 0,
+                color: "#0b1f5c",
+                fontSize: "24px",
+                lineHeight: 1.15,
+                fontWeight: "900",
+              }}
+            >
+              Subject-wise Bloom&apos;s Taxonomy Analytics
+            </h2>
+            <div
+              style={{
+                marginTop: "6px",
+                color: "#42639b",
+                fontSize: "14px",
+              }}
+            >
+              Compare cognitive performance across subjects
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              className="page-back-nav exam-results-back"
+              onClick={() => setView("examwise-results")}
+            >
+              Back to Exam Result
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+            gap: "12px",
+          }}
+        >
+          {subjectBloomCards.map((card) => {
+            const Icon = card.Icon;
+
+            return (
+              <div
+                key={card.subject}
+                style={{
+                  padding: "10px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  background: card.bg,
+                  boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      borderRadius: "8px",
+                      display: "grid",
+                      placeItems: "center",
+                      background: card.iconColor,
+                      color: "#ffffff",
+                    }}
+                  >
+                    <Icon size={22} strokeWidth={2.2} aria-hidden="true" />
+                  </span>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: card.iconColor,
+                      fontSize: "16px",
+                      fontWeight: "900",
+                    }}
+                  >
+                    {card.title}
+                  </h3>
+                </div>
+                <div
+                  style={{
+                    padding: "8px",
+                    borderRadius: "8px",
+                    background: "rgba(255, 255, 255, 0.75)",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#0b1f5c",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                    }}
+                  >
+                    Cognitive Mastery
+                  </div>
+                  <div
+                    style={{
+                      color: "#061a4f",
+                      fontSize: "21px",
+                      fontWeight: "900",
+                      lineHeight: 1,
+                      margin: "3px 0 7px",
+                    }}
+                  >
+                    {card.mastery}%
+                  </div>
+                  <div
+                    style={{
+                      height: "8px",
+                      borderRadius: "999px",
+                      background: "#d8e1ef",
+                      overflow: "hidden",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${card.mastery}%`,
+                        height: "100%",
+                        borderRadius: "999px",
+                        background: card.accent,
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                      color: "#0b1f5c",
+                      fontSize: "13px",
+                      fontWeight: "900",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <span>LOTS</span>
+                    <span style={{ color: "#10a878" }}>{card.lots}%</span>
+                    <span style={{ color: "#94a3b8" }}>|</span>
+                    <span>HOTS</span>
+                    <span style={{ color: "#e11d48" }}>{card.hots}%</span>
+                  </div>
+                  <div
+                    style={{
+                      color: "#0b1f5c",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                    }}
+                  >
+                    Questions <span style={{ marginLeft: "14px" }}>{card.questions}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div
+          className="subject-bloom-panels"
+          style={{
+            display: "grid",
+            gap: "14px",
+            marginTop: "14px",
+          }}
+        >
+        <div
+          className="subject-bloom-performance-card"
+          style={{
+            padding: "12px",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            background: "#ffffff",
+            boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+            minWidth: 0,
+          }}
+        >
+          <h3
+            style={{
+              margin: "0 0 14px",
+              color: "#0b1f5c",
+              fontSize: "15px",
+              fontWeight: "900",
+            }}
+          >
+            Subject-wise Performance by Bloom&apos;s Skill
+          </h3>
+          <div className="subject-bloom-scroll" tabIndex={0} role="region" aria-label="Subject performance chart, scroll horizontally to see all subjects">
+            <svg
+              width="100%"
+              height="285"
+              viewBox={`0 0 ${subjectSkillChart.width} ${subjectSkillChart.height}`}
+              role="img"
+              aria-label="Subject-wise performance by Bloom skill"
+              className="subject-bloom-performance-chart"
+            >
+              {[100, 80, 60, 40, 20, 0].map((value) => {
+                const y = subjectSkillChart.yForValue(value);
+                return (
+                  <g key={`subject-skill-grid-${value}`}>
+                    <line
+                      x1={subjectSkillChart.padding.left}
+                      y1={y}
+                      x2={subjectSkillChart.padding.left + subjectSkillChart.plotWidth}
+                      y2={y}
+                      stroke="#edf2f7"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={subjectSkillChart.padding.left - 10}
+                      y={y + 4}
+                      textAnchor="end"
+                      fill="#30507f"
+                      fontSize="12"
+                      fontWeight="800"
+                    >
+                      {value}
+                    </text>
+                  </g>
+                );
+              })}
+              <line
+                x1={subjectSkillChart.padding.left}
+                y1={subjectSkillChart.padding.top}
+                x2={subjectSkillChart.padding.left}
+                y2={subjectSkillChart.padding.top + subjectSkillChart.plotHeight}
+                stroke="#dbe5f2"
+                strokeWidth="1"
+              />
+              <line
+                x1={subjectSkillChart.padding.left}
+                y1={subjectSkillChart.padding.top + subjectSkillChart.plotHeight}
+                x2={subjectSkillChart.padding.left + subjectSkillChart.plotWidth}
+                y2={subjectSkillChart.padding.top + subjectSkillChart.plotHeight}
+                stroke="#dbe5f2"
+                strokeWidth="1"
+              />
+              <text
+                x="16"
+                y={subjectSkillChart.padding.top + subjectSkillChart.plotHeight / 2}
+                fill="#30507f"
+                fontSize="12"
+                fontWeight="800"
+                transform={`rotate(-90 16 ${subjectSkillChart.padding.top + subjectSkillChart.plotHeight / 2})`}
+                textAnchor="middle"
+              >
+                Accuracy (%)
+              </text>
+              {subjectBloomSkillPerformance.map((subjectGroup, subjectIndex) => {
+                const groupStart =
+                  subjectSkillChart.padding.left +
+                  subjectSkillChart.groupWidth * subjectIndex;
+                const groupCenter = groupStart + subjectSkillChart.groupWidth / 2;
+                const barsWidth =
+                  subjectGroup.skills.length * subjectSkillChart.barWidth +
+                  (subjectGroup.skills.length - 1) * 6;
+                const barsStart = groupCenter - barsWidth / 2;
+
+                return (
+                  <g key={subjectGroup.subject}>
+                    {subjectGroup.skills.map((item, skillIndex) => {
+                      const x =
+                        barsStart + skillIndex * (subjectSkillChart.barWidth + 6);
+                      const y = subjectSkillChart.yForValue(item.percentage);
+                      const barHeight =
+                        subjectSkillChart.padding.top +
+                        subjectSkillChart.plotHeight -
+                        y;
+
+                      return (
+                        <g key={`${subjectGroup.subject}-${item.skill}`}>
+                          <rect
+                            x={x}
+                            y={y}
+                            width={subjectSkillChart.barWidth}
+                            height={barHeight}
+                            rx="4"
+                            fill={item.color}
+                          />
+                          <text
+                            x={x + subjectSkillChart.barWidth / 2}
+                            y={Math.max(12, y - 6)}
+                            textAnchor="middle"
+                            fill="#0b1f5c"
+                            fontSize="11"
+                            fontWeight="900"
+                          >
+                            {item.percentage}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    <text
+                      x={groupCenter}
+                      y={
+                        subjectSkillChart.padding.top +
+                        subjectSkillChart.plotHeight +
+                        24
+                      }
+                      textAnchor="middle"
+                      fill="#0b1f5c"
+                      fontSize="12"
+                      fontWeight="800"
+                    >
+                      {subjectGroup.label}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              gap: "16px",
+              marginTop: "8px",
+              color: "#0b1f5c",
+              fontSize: "11px",
+              fontWeight: "700",
+            }}
+          >
+            {Object.entries(subjectBloomSkillColors).map(([skill, color]) => (
+              <span
+                key={skill}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "3px",
+                    background: color,
+                  }}
+                />
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: "12px",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            background: "#ffffff",
+            boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+          }}
+        >
+          <h3
+            style={{
+              margin: "0 0 14px",
+              color: "#0b1f5c",
+              fontSize: "15px",
+              fontWeight: "900",
+            }}
+          >
+            Subject x Bloom&apos;s Skill Mastery (Heatmap)
+          </h3>
+          <div className="subject-bloom-scroll" tabIndex={0} role="region" aria-label="Bloom skill heatmap, scroll horizontally to see all skills">
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "96px repeat(6, minmax(58px, 1fr))",
+                minWidth: "500px",
+                color: "#0b1f5c",
+                fontSize: "11px",
+                fontWeight: "800",
+              }}
+            >
+              <div />
+              {Object.keys(subjectBloomSkillColors).map((skill) => (
+                <div
+                  key={`heatmap-heading-${skill}`}
+                  style={{
+                    padding: "8px 6px",
+                    textAlign: "center",
+                  }}
+                >
+                  {skill}
+                </div>
+              ))}
+              {subjectBloomSkillPerformance.map((subjectGroup) => (
+                <React.Fragment key={`heatmap-row-${subjectGroup.subject}`}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "8px 8px 8px 0",
+                      fontWeight: "900",
+                    }}
+                  >
+                    {subjectGroup.label}
+                  </div>
+                  {subjectGroup.skills.map((item) => (
+                    <div
+                      key={`${subjectGroup.subject}-${item.skill}-heatmap`}
+                      style={{
+                        display: "grid",
+                        placeItems: "center",
+                        minHeight: "42px",
+                        background: getHeatmapCellColor(item.percentage),
+                        border: "1px solid rgba(255, 255, 255, 0.85)",
+                        color: item.percentage >= 40 ? "#0b1f5c" : "#ffffff",
+                        fontWeight: "900",
+                      }}
+                    >
+                      {item.percentage}%
+                    </div>
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+              marginTop: "12px",
+              color: "#0b1f5c",
+              fontSize: "10px",
+              fontWeight: "700",
+            }}
+          >
+            {heatmapLegend.map((item) => (
+              <span
+                key={item.label}
+                style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "3px",
+                    background: item.color,
+                  }}
+                />
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        </div>
+        <div
+          className="subject-bloom-panels"
+          style={{
+            display: "grid",
+            gap: "14px",
+            marginTop: "14px",
+          }}
+        >
+          <div
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+              minWidth: 0,
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 14px",
+                color: "#0b1f5c",
+                fontSize: "15px",
+                fontWeight: "900",
+              }}
+            >
+              Subject-wise HOTS vs LOTS
+            </h3>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {subjectHotsLotsDistribution.map((item) => (
+                <div
+                  key={`${item.subject}-hots-lots`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "96px minmax(0, 1fr)",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#0b1f5c",
+                      fontSize: "13px",
+                      fontWeight: "800",
+                      textAlign: "right",
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      height: "28px",
+                      borderRadius: "5px",
+                      overflow: "hidden",
+                      background: "#f1f5f9",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${item.lots}%`,
+                        minWidth: item.lots > 0 ? "26px" : 0,
+                        display: "grid",
+                        placeItems: "center",
+                        background: "#34c99a",
+                        color: "#0b1f5c",
+                        fontSize: "12px",
+                        fontWeight: "900",
+                      }}
+                    >
+                      {item.lots > 0 ? `${item.lots}%` : ""}
+                    </div>
+                    <div
+                      style={{
+                        width: `${item.hots}%`,
+                        minWidth: item.hots > 0 ? "26px" : 0,
+                        display: "grid",
+                        placeItems: "center",
+                        background: "#ff8a45",
+                        color: "#0b1f5c",
+                        fontSize: "12px",
+                        fontWeight: "900",
+                      }}
+                    >
+                      {item.hots > 0 ? `${item.hots}%` : ""}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "14px",
+                marginTop: "14px",
+                color: "#0b1f5c",
+                fontSize: "11px",
+                fontWeight: "700",
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "50%",
+                    background: "#34c99a",
+                  }}
+                />
+                LOTS (Remember + Understand)
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "50%",
+                    background: "#ff8a45",
+                  }}
+                />
+                HOTS (Apply + Analyse + Evaluate + Create)
+              </span>
+            </div>
+          </div>
+          <div
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 14px",
+                color: "#0b1f5c",
+                fontSize: "15px",
+                fontWeight: "900",
+              }}
+            >
+              Subject-wise Cognitive Strengths &amp; Gaps
+            </h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+                gap: "10px",
+              }}
+            >
+              {subjectStrengthGapInsights.map((item) => (
+                <div
+                  key={`${item.subject}-strength-gap`}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    overflow: "hidden",
+                    background: "#ffffff",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "8px 10px",
+                      background: item.meta?.bg || "#eef6ff",
+                      color: item.meta?.iconColor || "#0b1f5c",
+                      fontSize: "13px",
+                      fontWeight: "900",
+                      textAlign: "center",
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "10px",
+                      padding: "12px 10px",
+                      color: "#0b1f5c",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "22px minmax(0, 1fr)",
+                        alignItems: "start",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          display: "grid",
+                          placeItems: "center",
+                          background: "#34c99a",
+                          color: "#ffffff",
+                        }}
+                      >
+                        <Award size={14} strokeWidth={2.5} aria-hidden="true" />
+                      </span>
+                      <span>{item.strengthText}</span>
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "22px minmax(0, 1fr)",
+                        alignItems: "start",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          display: "grid",
+                          placeItems: "center",
+                          background: "#ff5f7d",
+                          color: "#ffffff",
+                        }}
+                      >
+                        <AlertTriangle size={14} strokeWidth={2.5} aria-hidden="true" />
+                      </span>
+                      <span>{item.gapText}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ── Nav helper: set tab + matching view ──
   const goTab = (tabId) => {
     const tab = OWNER_TABS.find((t) => t.id === tabId);
@@ -7903,7 +10560,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           </button>
 
           <div className="sidebar-version">
-            {school?.academic_year || "v1.0"}
+            Version - 3.0
           </div>
         </div>
       </aside>
@@ -7916,7 +10573,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
           <Route
             path="batchwise"
             element={
-              view === "examwise-results"
+              view === "subject-bloom-analytics"
+                ? renderSubjectBloomAnalyticsView()
+                : view === "examwise-results"
                 ? renderExamWiseResultsView()
                 : renderExamWiseView()
             }

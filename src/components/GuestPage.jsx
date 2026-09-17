@@ -20,7 +20,7 @@ const solutions = [
   },
   {
     icon: Lightbulb,
-    title: "AI-Ready Question Papers",
+    title: "Question Papers",
     text: "Create customized assessments from dynamic, syllabus-aligned question banks.",
   },
   {
