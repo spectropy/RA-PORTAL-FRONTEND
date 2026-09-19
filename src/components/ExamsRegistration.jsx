@@ -42,6 +42,7 @@ const SUPPORTED_PROGRAMS = new Set([
   "CAT",
   "SPARK",
   "MANAIR_MAESTRO",
+  "JEE MAIN",
 ]);
 
 const COMMON_EXAM_PATTERNS = [

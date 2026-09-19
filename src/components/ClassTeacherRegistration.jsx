@@ -12,7 +12,7 @@ import {
 } from "../api";
 
 // ===== Constants =====
-const GRADE_OPTIONS = Array.from({ length: 10 }, (_, i) => `GRADE-${i + 1}`);
+const GRADE_OPTIONS = Array.from({ length: 12 }, (_, i) => `GRADE-${i + 1}`);
 const FOUNDATION_OPTIONS = ["IIT-MED", "IIT", "MED"];
 const PROGRAM_OPTIONS = [
   "SPHS",
@@ -28,6 +28,7 @@ const PROGRAM_OPTIONS = [
   "CAT",
   "SPARK",
   "MANAIR_MAESTRO",
+  "JEE MAIN",
 ];
 const PROGRAMS = [
   { id: "SPHS", name: "SPHS" },

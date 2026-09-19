@@ -1,5 +1,15 @@
 import React, { useMemo, useState } from "react";
-import { FileDown } from "lucide-react";
+import {
+  Activity,
+  Award,
+  Brain,
+  Calculator,
+  FileDown,
+  FlaskConical,
+  Leaf,
+  Lightbulb,
+  Target,
+} from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import spectropyLogoUrl from "../assets/logo.png";
@@ -39,10 +49,10 @@ const COLORS = {
 };
 
 const SUBJECTS = [
-  { key: "physics", label: "Physics", color: COLORS.blue },
-  { key: "chemistry", label: "Chemistry", color: COLORS.cyan },
-  { key: "maths", label: "Mathematics", color: COLORS.violet },
-  { key: "biology", label: "Biology", color: COLORS.green },
+  { key: "physics", label: "Physics", color: COLORS.blue, iconColor: "#8f6df6", Icon: Activity },
+  { key: "chemistry", label: "Chemistry", color: COLORS.cyan, iconColor: "#10a878", Icon: FlaskConical },
+  { key: "maths", label: "Mathematics", color: COLORS.violet, iconColor: "#1681ff", Icon: Calculator },
+  { key: "biology", label: "Biology", color: COLORS.green, iconColor: "#fb5b7b", Icon: Leaf },
 ];
 
 const toNum = (value) => {
@@ -223,6 +233,348 @@ const getQuestionRows = (questionResults) => {
       const second = Number(String(b.question).match(/\d+/)?.[0] || 0);
       return first - second;
     });
+};
+
+const BLOOM_SKILLS = [
+  { key: "Remember", color: "#2f8cff", group: "LOTS" },
+  { key: "Understand", color: "#34c99a", group: "LOTS" },
+  { key: "Apply", color: "#ffc83d", group: "HOTS" },
+  { key: "Analyse", color: "#ff8a45", group: "HOTS" },
+  { key: "Evaluate", color: "#ff5f7d", group: "HOTS" },
+  { key: "Create", color: "#8f6df6", group: "HOTS" },
+];
+
+function BloomSkillLegend() {
+  return (
+    <div className="sp-bloom-chart-legend">
+      {BLOOM_SKILLS.map((skill) => (
+        <span key={skill.key}>
+          <i style={{ background: skill.color }} />
+          {skill.key}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const parseQuestionResults = (value) => {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === "object" ? value : {};
+};
+
+const normalizeBloomSkill = (value) => {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (["remember", "remembering"].includes(normalized)) return "Remember";
+  if (["understand", "understanding"].includes(normalized)) return "Understand";
+  if (["apply", "applying"].includes(normalized)) return "Apply";
+  if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+    return "Analyse";
+  }
+  if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+  if (["create", "creating"].includes(normalized)) return "Create";
+  return "";
+};
+
+const getBloomSkill = (details = {}) =>
+  normalizeBloomSkill(
+    details?.blooms_skill ||
+      details?.bloomsSkill ||
+      details?.["Blooms Skill"] ||
+      details?.["Bloom's Skill"],
+  );
+
+const normalizeCognitiveSubject = (value) => {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (["physics", "phy"].includes(normalized)) return "physics";
+  if (["chemistry", "chemical science", "chem"].includes(normalized)) {
+    return "chemistry";
+  }
+  if (["math", "maths", "mathematics"].includes(normalized)) return "maths";
+  if (["biology", "bio", "biological science"].includes(normalized)) {
+    return "biology";
+  }
+  return "";
+};
+
+const getQuestionNumber = (question) =>
+  Number(String(question || "").match(/\d+/)?.[0] || 0);
+
+const getCognitiveSubject = (
+  details = {},
+  question = "",
+  result = {},
+  totalQuestionCount = 0,
+) => {
+  const storedSubject = normalizeCognitiveSubject(
+    details?.subject ||
+      details?.Subject ||
+      details?.subject_name ||
+      details?.subjectName,
+  );
+  if (storedSubject) return storedSubject;
+
+  const activeSubjects = getResultSubjects(result);
+  const questionNumber = getQuestionNumber(question);
+  if (!questionNumber || !activeSubjects.length) return "";
+
+  const questionsPerSubject = Math.max(
+    1,
+    Math.ceil((totalQuestionCount || questionNumber) / activeSubjects.length),
+  );
+  const subjectIndex = Math.min(
+    activeSubjects.length - 1,
+    Math.floor((questionNumber - 1) / questionsPerSubject),
+  );
+  return activeSubjects[subjectIndex]?.key || "";
+};
+
+const getCognitiveResponseStatus = (details = {}) => {
+  const status = String(details?.status || "").toLowerCase();
+  const option = details?.option ?? details?.options ?? "";
+  const marks = Number(details?.marks);
+
+  if (status.includes("incorrect")) return "incorrect";
+  if (status.includes("correct")) return "correct";
+  if (status.includes("not") || status.includes("unattempted") || !option) {
+    return "unattempted";
+  }
+  if (Number.isFinite(marks) && marks > 0) return "correct";
+  if (option) return "incorrect";
+  return "unattempted";
+};
+
+const emptyCognitiveCounts = () => ({
+  correct: 0,
+  incorrect: 0,
+  unattempted: 0,
+  total: 0,
+});
+
+const addCognitiveResponse = (bucket, status) => {
+  bucket.total += 1;
+  bucket[status] += 1;
+};
+
+const cognitivePercentage = (bucket) =>
+  bucket.total > 0 ? round((bucket.correct / bucket.total) * 100) : null;
+
+const getCognitiveLevel = (percentage) => {
+  if (percentage === null) return { label: "Not assessed", tone: "primary" };
+  if (percentage >= 80) return { label: "Advanced Thinker", tone: "success" };
+  if (percentage >= 60) return { label: "Proficient", tone: "primary" };
+  if (percentage >= 40) return { label: "Developing", tone: "warning" };
+  return { label: "Foundation", tone: "danger" };
+};
+
+const buildStudentCognitiveAnalysis = (examResults = []) => {
+  const skills = Object.fromEntries(
+    BLOOM_SKILLS.map(({ key }) => [key, emptyCognitiveCounts()]),
+  );
+  const lots = emptyCognitiveCounts();
+  const hots = emptyCognitiveCounts();
+  const overall = emptyCognitiveCounts();
+  const subjects = Object.fromEntries(
+    SUBJECTS.map((subject) => [
+      subject.key,
+      {
+        ...subject,
+        overall: emptyCognitiveCounts(),
+        lots: emptyCognitiveCounts(),
+        hots: emptyCognitiveCounts(),
+        skills: Object.fromEntries(
+          BLOOM_SKILLS.map(({ key }) => [key, emptyCognitiveCounts()]),
+        ),
+      },
+    ]),
+  );
+  let allQuestions = 0;
+  let subjectTaggedQuestions = 0;
+
+  const chronologicalResults = [...examResults].sort((a, b) => {
+    const first = a.date ? new Date(a.date).getTime() : 0;
+    const second = b.date ? new Date(b.date).getTime() : 0;
+    return first - second;
+  });
+
+  const trend = chronologicalResults.map((result, index) => {
+    const examOverall = emptyCognitiveCounts();
+    const examLots = emptyCognitiveCounts();
+    const examHots = emptyCognitiveCounts();
+    const questions = parseQuestionResults(result.question_results);
+    const questionEntries = Object.entries(questions);
+    const totalQuestionCountForMapping = Math.max(
+      ...questionEntries.map(([question]) => getQuestionNumber(question)),
+      questionEntries.length,
+      0,
+    );
+    allQuestions += questionEntries.length;
+
+    questionEntries.forEach(([question, details]) => {
+      const skill = getBloomSkill(details);
+      if (!skill) return;
+
+      const status = getCognitiveResponseStatus(details);
+      const group = BLOOM_SKILLS.find((item) => item.key === skill)?.group;
+      const groupBucket = group === "LOTS" ? lots : hots;
+      const examGroupBucket = group === "LOTS" ? examLots : examHots;
+      const subjectKey = getCognitiveSubject(
+        details,
+        question,
+        result,
+        totalQuestionCountForMapping,
+      );
+
+      addCognitiveResponse(skills[skill], status);
+      addCognitiveResponse(groupBucket, status);
+      addCognitiveResponse(overall, status);
+      addCognitiveResponse(examGroupBucket, status);
+      addCognitiveResponse(examOverall, status);
+
+      if (subjectKey && subjects[subjectKey]) {
+        const subject = subjects[subjectKey];
+        const subjectGroupBucket = group === "LOTS" ? subject.lots : subject.hots;
+        addCognitiveResponse(subject.skills[skill], status);
+        addCognitiveResponse(subjectGroupBucket, status);
+        addCognitiveResponse(subject.overall, status);
+        subjectTaggedQuestions += 1;
+      }
+    });
+
+    return {
+      exam: formatExamName(result.exam, `Exam ${index + 1}`),
+      shortExam: `E${index + 1}`,
+      date: formatDate(result.date),
+      overall: cognitivePercentage(examOverall),
+      lots: cognitivePercentage(examLots),
+      hots: cognitivePercentage(examHots),
+      taggedQuestions: examOverall.total,
+    };
+  });
+
+  const skillPerformance = BLOOM_SKILLS.map(({ key, color, group }) => ({
+    skill: key,
+    color,
+    group,
+    ...skills[key],
+    percentage: cognitivePercentage(skills[key]),
+  }));
+  const overallPercentage = cognitivePercentage(overall);
+  const lotsPercentage = cognitivePercentage(lots);
+  const hotsPercentage = cognitivePercentage(hots);
+  const gap =
+    lotsPercentage !== null && hotsPercentage !== null
+      ? round(lotsPercentage - hotsPercentage)
+      : null;
+  const coverage = allQuestions > 0 ? round((overall.total / allQuestions) * 100) : 0;
+  const sufficientlyMeasured = skillPerformance
+    .filter((skill) => skill.total >= 3 && skill.percentage !== null)
+    .sort((a, b) => b.percentage - a.percentage);
+  const strongestSkill = sufficientlyMeasured[0] || null;
+  const weakestSkill = sufficientlyMeasured[sufficientlyMeasured.length - 1] || null;
+  const insights = [];
+
+  if (strongestSkill) {
+    insights.push(
+      `${strongestSkill.skill} is the strongest measured cognitive skill at ${strongestSkill.percentage}%.`,
+    );
+  }
+  if (weakestSkill && weakestSkill.skill !== strongestSkill?.skill) {
+    insights.push(
+      `${weakestSkill.skill} needs the most support at ${weakestSkill.percentage}%.`,
+    );
+  }
+  if (gap !== null) {
+    if (gap >= 10) {
+      insights.push(`HOTS trails LOTS by ${gap} percentage points; prioritise application and reasoning practice.`);
+    } else if (gap <= -10) {
+      insights.push(`HOTS leads LOTS by ${Math.abs(gap)} percentage points; reinforce recall and conceptual foundations.`);
+    } else {
+      insights.push("LOTS and HOTS performance is balanced within 10 percentage points.");
+    }
+  }
+  if (coverage < 70) {
+    insights.push(`Bloom coverage is ${coverage}%; interpret the result cautiously until more questions are tagged.`);
+  }
+
+  const subjectPerformance = SUBJECTS.map(({ key }) => {
+    const subject = subjects[key];
+    const skillResults = BLOOM_SKILLS.map(({ key: skill, color, group }) => ({
+      skill,
+      color,
+      group,
+      ...subject.skills[skill],
+      percentage: cognitivePercentage(subject.skills[skill]),
+    }));
+    const overallMastery = cognitivePercentage(subject.overall);
+    const lotsMastery = cognitivePercentage(subject.lots);
+    const hotsMastery = cognitivePercentage(subject.hots);
+
+    return {
+      key: subject.key,
+      label: subject.label,
+      color: subject.color,
+      iconColor: subject.iconColor,
+      Icon: subject.Icon,
+      overall: overallMastery,
+      lots: lotsMastery,
+      hots: hotsMastery,
+      gap:
+        lotsMastery !== null && hotsMastery !== null
+          ? round(lotsMastery - hotsMastery)
+          : null,
+      correct: subject.overall.correct,
+      total: subject.overall.total,
+      skills: skillResults,
+      ...Object.fromEntries(
+        skillResults.map((skill) => [skill.skill, skill.percentage]),
+      ),
+    };
+  }).filter((subject) => subject.total > 0);
+
+  const measuredSubjects = subjectPerformance
+    .filter((subject) => subject.total >= 3)
+    .sort((a, b) => b.overall - a.overall);
+  const strongestSubject = measuredSubjects[0] || null;
+  const prioritySubject = measuredSubjects[measuredSubjects.length - 1] || null;
+
+  return {
+    hasData: overall.total > 0,
+    overall: { ...overall, percentage: overallPercentage },
+    lots: { ...lots, percentage: lotsPercentage },
+    hots: { ...hots, percentage: hotsPercentage },
+    level: getCognitiveLevel(overallPercentage),
+    gap,
+    coverage,
+    allQuestions,
+    untaggedQuestions: Math.max(0, allQuestions - overall.total),
+    skillPerformance,
+    trend,
+    insights,
+    subjectPerformance,
+    subjectTaggedQuestions,
+    subjectCoverage:
+      overall.total > 0 ? round((subjectTaggedQuestions / overall.total) * 100) : 0,
+    strongestSubject,
+    prioritySubject,
+  };
 };
 
 const sanitizeFileName = (value) =>
@@ -1406,6 +1758,11 @@ export default function StudentPerformanceView({
     };
   }, [examResults]);
 
+  const cognitiveAnalysis = useMemo(
+    () => buildStudentCognitiveAnalysis(examResults),
+    [examResults],
+  );
+
   const {
     bestExam,
     latestExam,
@@ -1434,6 +1791,13 @@ export default function StudentPerformanceView({
   const selectedQuestionRows = selectedExamResult
     ? getQuestionRows(selectedExamResult.question_results)
     : [];
+  const selectedExamCognitiveAnalysis = useMemo(
+    () =>
+      selectedExamResult
+        ? buildStudentCognitiveAnalysis([selectedExamResult])
+        : buildStudentCognitiveAnalysis([]),
+    [selectedExamResult],
+  );
 
   return (
     <>
@@ -1567,67 +1931,198 @@ export default function StudentPerformanceView({
               }
             />
 
-            <div className="sp-detail-summary">
-              <div>
-                <span>Total Marks</span>
-                <strong>{round(selectedExamResult.total, 0)}</strong>
-              </div>
-              <div>
-                <span>Percentage</span>
-                <strong>{round(selectedExamResult.percentage)}%</strong>
-              </div>
-              <div>
-                <span>Class Rank</span>
-                <strong>{selectedExamResult.class_rank ?? "—"}</strong>
-              </div>
-              <div>
-                <span>School Rank</span>
-                <strong>{selectedExamResult.school_rank ?? "—"}</strong>
-              </div>
-              <div>
-                <span>All India Rank</span>
-                <strong>{selectedExamResult.all_schools_rank ?? "—"}</strong>
-              </div>
-            </div>
-
-            <section className="sp-panel sp-detail-panel">
+            <section className="sp-panel sp-detail-panel sp-exam-cognitive-panel">
               <div className="sp-panel-header">
                 <div>
-                  <h3>Subject-wise analytics</h3>
-                  <p>Stored subject attempt data for this exam.</p>
+                  <h3>Cognitive Analysis</h3>
+                  <p>Bloom-tagged mastery for this exam only.</p>
                 </div>
+                <span className="sp-panel-badge">
+                  {selectedExamCognitiveAnalysis.overall.total} tagged response
+                  {selectedExamCognitiveAnalysis.overall.total === 1 ? "" : "s"}
+                </span>
               </div>
-              <div className="sp-detail-subject-grid">
-                {selectedSubjectRows.map((subject) => (
-                  <article className="sp-detail-subject-card" key={subject.key}>
-                    <div>
-                      <span
-                        className="sp-detail-subject-dot"
-                        style={{ background: subject.color }}
-                      />
-                      <h4>{subject.label}</h4>
-                    </div>
-                    <dl>
+
+              {selectedExamCognitiveAnalysis.hasData ? (
+                <>
+                  <div className="sp-exam-cognitive-summary">
+                    <article className="sp-exam-cognitive-card sp-exam-cognitive-overall">
+                      <span className="sp-exam-cognitive-icon" aria-hidden="true">
+                        <Target size={17} strokeWidth={2.4} />
+                      </span>
                       <div>
-                        <dt>Marks</dt>
-                        <dd>{toNum(subject.marks)}</dd>
+                        <span>Overall mastery</span>
+                        <strong>{selectedExamCognitiveAnalysis.overall.percentage}%</strong>
+                        <small>
+                          {selectedExamCognitiveAnalysis.overall.correct}/
+                          {selectedExamCognitiveAnalysis.overall.total} correct
+                        </small>
                       </div>
+                    </article>
+                    <article className="sp-exam-cognitive-card sp-exam-cognitive-lots">
+                      <span className="sp-exam-cognitive-icon" aria-hidden="true">
+                        <Brain size={17} strokeWidth={2.4} />
+                      </span>
                       <div>
-                        <dt>Correct</dt>
-                        <dd>{toNum(subject.correct)}</dd>
+                        <span>LOTS</span>
+                        <strong>
+                          {selectedExamCognitiveAnalysis.lots.percentage ?? "Not assessed"}
+                          {selectedExamCognitiveAnalysis.lots.percentage === null ? "" : "%"}
+                        </strong>
+                        <small>Remember + Understand</small>
                       </div>
+                    </article>
+                    <article className="sp-exam-cognitive-card sp-exam-cognitive-hots">
+                      <span className="sp-exam-cognitive-icon" aria-hidden="true">
+                        <Lightbulb size={17} strokeWidth={2.4} />
+                      </span>
                       <div>
-                        <dt>Incorrect</dt>
-                        <dd>{toNum(subject.incorrect)}</dd>
+                        <span>HOTS</span>
+                        <strong>
+                          {selectedExamCognitiveAnalysis.hots.percentage ?? "Not assessed"}
+                          {selectedExamCognitiveAnalysis.hots.percentage === null ? "" : "%"}
+                        </strong>
+                        <small>Apply + Analyse + Evaluate + Create</small>
                       </div>
+                    </article>
+                    <article className={`sp-exam-cognitive-card sp-exam-cognitive-level sp-tone-${selectedExamCognitiveAnalysis.level.tone}`}>
+                      <span className="sp-exam-cognitive-icon" aria-hidden="true">
+                        <Award size={17} strokeWidth={2.4} />
+                      </span>
                       <div>
-                        <dt>Not attempted</dt>
-                        <dd>{toNum(subject.notAttempted)}</dd>
+                        <span>Cognitive level</span>
+                        <strong>{selectedExamCognitiveAnalysis.level.label}</strong>
+                        <small>
+                          {selectedExamCognitiveAnalysis.gap === null
+                            ? "LOTS/HOTS gap not available"
+                            : `${Math.abs(selectedExamCognitiveAnalysis.gap)} point LOTS/HOTS gap`}
+                        </small>
                       </div>
-                    </dl>
-                  </article>
-                ))}
+                    </article>
+                  </div>
+
+                  <div className="sp-exam-cognitive-skills">
+                    {selectedExamCognitiveAnalysis.skillPerformance.map((skill) => (
+                      <div className="sp-exam-cognitive-skill" key={skill.skill}>
+                        <span>
+                          <i style={{ background: skill.color }} />
+                          {skill.skill}
+                        </span>
+                        <strong>
+                          {skill.percentage === null ? "Not assessed" : `${skill.percentage}%`}
+                        </strong>
+                        <small>
+                          {skill.total > 0
+                            ? `${skill.correct}/${skill.total} correct`
+                            : "No tagged questions"}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="sp-inline-empty sp-cognitive-empty">
+                  Cognitive analysis is unavailable because this exam does not have Bloom-tagged questions.
+                </div>
+              )}
+            </section>
+
+            <section className="sp-panel sp-detail-panel sp-exam-subject-cognitive-panel">
+              <div className="sp-panel-header">
+                <div>
+                  <h3>Subject-wise Cognitive Analytics</h3>
+                  <p>Subject mastery calculated from this exam's Bloom-tagged questions.</p>
+                </div>
+                <span className="sp-panel-badge">
+                  {selectedExamCognitiveAnalysis.subjectPerformance.length} subject
+                  {selectedExamCognitiveAnalysis.subjectPerformance.length === 1 ? "" : "s"}
+                </span>
               </div>
+
+              {selectedExamCognitiveAnalysis.subjectPerformance.length > 0 ? (
+                <>
+                  <div className="sp-subject-bloom-cards sp-exam-subject-cognitive-cards">
+                    {selectedExamCognitiveAnalysis.subjectPerformance.map((subject) => (
+                      <article
+                        className="sp-panel sp-subject-bloom-card"
+                        key={subject.key}
+                        style={{
+                          "--subject-color": subject.color,
+                          "--subject-icon-color": subject.iconColor,
+                        }}
+                      >
+                        <div className="sp-subject-bloom-card-head">
+                          <div>
+                            <span className="sp-subject-bloom-icon" aria-hidden="true">
+                              {React.createElement(subject.Icon, {
+                                size: 19,
+                                strokeWidth: 2.3,
+                              })}
+                            </span>
+                            <h3>{subject.label}</h3>
+                          </div>
+                          <strong>{subject.overall}%</strong>
+                        </div>
+                        <p>
+                          {subject.correct}/{subject.total} tagged questions correct
+                        </p>
+                        <dl>
+                          <div>
+                            <dt>LOTS</dt>
+                            <dd>{subject.lots === null ? "Not assessed" : `${subject.lots}%`}</dd>
+                          </div>
+                          <div>
+                            <dt>HOTS</dt>
+                            <dd>{subject.hots === null ? "Not assessed" : `${subject.hots}%`}</dd>
+                          </div>
+                          <div>
+                            <dt>Gap</dt>
+                            <dd>{subject.gap === null ? "—" : `${Math.abs(subject.gap)} pts`}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="sp-subject-bloom-table-wrap sp-exam-subject-cognitive-table-wrap">
+                    <table className="sp-subject-bloom-table">
+                      <thead>
+                        <tr>
+                          <th>Subject</th>
+                          {BLOOM_SKILLS.map((skill) => (
+                            <th key={skill.key}>{skill.key}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedExamCognitiveAnalysis.subjectPerformance.map((subject) => (
+                          <tr key={subject.key}>
+                            <th>{subject.label}</th>
+                            {subject.skills.map((skill) => (
+                              <td key={skill.skill}>
+                                <strong>
+                                  {skill.percentage === null
+                                    ? "—"
+                                    : `${skill.percentage}%`}
+                                </strong>
+                                <small>
+                                  {skill.total > 0
+                                    ? `${skill.correct}/${skill.total}`
+                                    : "Not assessed"}
+                                </small>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div className="sp-inline-empty sp-cognitive-empty">
+                  Subject-wise cognitive analytics is unavailable because this exam does not have recognized subject tags.
+                </div>
+              )}
             </section>
 
             <section className="sp-panel sp-detail-panel">
@@ -2086,6 +2581,457 @@ export default function StudentPerformanceView({
                   </dl>
                 </section>
               </div>
+            </section>
+
+            <section className="sp-dashboard-section sp-cognitive-section">
+              <SectionHeader
+                eyebrow="Bloom's taxonomy"
+                title="Cognitive Analysis"
+                description="Cumulative mastery across Bloom-tagged questions from all recorded exams. Unattempted questions are included in the calculation."
+                action={
+                  <span className="sp-count-chip">
+                    {cognitiveAnalysis.overall.total} tagged response
+                    {cognitiveAnalysis.overall.total === 1 ? "" : "s"}
+                  </span>
+                }
+              />
+
+              {cognitiveAnalysis.hasData ? (
+                <>
+                  <div className="sp-cognitive-summary">
+                    <article className="sp-cognitive-summary-card sp-cognitive-overall">
+                      <div className="sp-cognitive-summary-head">
+                        <span className="sp-cognitive-summary-icon" aria-hidden="true">
+                          <Target size={18} strokeWidth={2.4} />
+                        </span>
+                        <span>Overall cognitive mastery</span>
+                      </div>
+                      <strong>{cognitiveAnalysis.overall.percentage}%</strong>
+                      <small>
+                        {cognitiveAnalysis.overall.correct}/
+                        {cognitiveAnalysis.overall.total} correct
+                      </small>
+                    </article>
+                    <article className="sp-cognitive-summary-card sp-cognitive-lots">
+                      <div className="sp-cognitive-summary-head">
+                        <span className="sp-cognitive-summary-icon" aria-hidden="true">
+                          <Brain size={18} strokeWidth={2.4} />
+                        </span>
+                        <span>Lower Order Thinking</span>
+                      </div>
+                      <strong>{cognitiveAnalysis.lots.percentage ?? "Not assessed"}{cognitiveAnalysis.lots.percentage === null ? "" : "%"}</strong>
+                      <small>Remember + Understand</small>
+                    </article>
+                    <article className="sp-cognitive-summary-card sp-cognitive-hots">
+                      <div className="sp-cognitive-summary-head">
+                        <span className="sp-cognitive-summary-icon" aria-hidden="true">
+                          <Lightbulb size={18} strokeWidth={2.4} />
+                        </span>
+                        <span>Higher Order Thinking</span>
+                      </div>
+                      <strong>{cognitiveAnalysis.hots.percentage ?? "Not assessed"}{cognitiveAnalysis.hots.percentage === null ? "" : "%"}</strong>
+                      <small>Apply + Analyse + Evaluate + Create</small>
+                    </article>
+                    <article className={`sp-cognitive-summary-card sp-cognitive-level sp-tone-${cognitiveAnalysis.level.tone}`}>
+                      <div className="sp-cognitive-summary-head">
+                        <span className="sp-cognitive-summary-icon" aria-hidden="true">
+                          <Award size={18} strokeWidth={2.4} />
+                        </span>
+                        <span>Cognitive level</span>
+                      </div>
+                      <strong>{cognitiveAnalysis.level.label}</strong>
+                      <small>
+                        {cognitiveAnalysis.gap === null
+                          ? "LOTS/HOTS gap not available"
+                          : `${Math.abs(cognitiveAnalysis.gap)} point LOTS/HOTS gap`}
+                      </small>
+                    </article>
+                  </div>
+
+                  <div className="sp-cognitive-grid">
+                    <section className="sp-panel sp-cognitive-skills-panel">
+                      <div className="sp-panel-header">
+                        <div>
+                          <h3>Bloom skill mastery</h3>
+                          <p>Correct answers out of all questions at each level.</p>
+                        </div>
+                        <span className="sp-panel-badge">
+                          {cognitiveAnalysis.coverage}% coverage
+                        </span>
+                      </div>
+                      <div className="sp-cognitive-skill-list">
+                        {cognitiveAnalysis.skillPerformance.map((skill) => (
+                          <article className="sp-cognitive-skill-row" key={skill.skill}>
+                            <div className="sp-cognitive-donut">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={[
+                                      { name: "Mastery", value: skill.percentage ?? 0 },
+                                      {
+                                        name: "Remaining",
+                                        value: skill.percentage === null
+                                          ? 100
+                                          : 100 - skill.percentage,
+                                      },
+                                    ]}
+                                    dataKey="value"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius="67%"
+                                    outerRadius="88%"
+                                    stroke="none"
+                                    isAnimationActive={false}
+                                  >
+                                    <Cell fill={skill.color} />
+                                    <Cell fill="#e8edf4" />
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
+                              <div className="sp-cognitive-donut-value">
+                                <strong>
+                                  {skill.percentage === null
+                                    ? "—"
+                                    : `${skill.percentage}%`}
+                                </strong>
+                              </div>
+                            </div>
+                            <div className="sp-cognitive-donut-copy">
+                              <strong>{skill.skill}</strong>
+                              <span>{skill.group}</span>
+                            </div>
+                            <div className="sp-cognitive-skill-track">
+                              <span
+                                style={{
+                                  width: `${skill.percentage ?? 0}%`,
+                                  background: skill.color,
+                                }}
+                              />
+                            </div>
+                            <div className="sp-cognitive-skill-score">
+                              <strong>
+                                {skill.percentage === null
+                                  ? "Not assessed"
+                                  : `${skill.percentage}%`}
+                              </strong>
+                              <small>
+                                {skill.total > 0
+                                  ? `${skill.correct}/${skill.total} correct`
+                                  : "No tagged questions"}
+                              </small>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+
+                    <ChartCard
+                      title="Cognitive performance trend"
+                      subtitle="Exam-wise overall, LOTS, and HOTS mastery"
+                      badge={`${cognitiveAnalysis.trend.filter((item) => item.taggedQuestions > 0).length} measured exams`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={cognitiveAnalysis.trend}
+                          margin={{ top: 8, right: 10, left: -16, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            stroke="#e2e8f0"
+                            strokeDasharray="4 4"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="shortExam"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#64748b", fontSize: 12 }}
+                          />
+                          <YAxis
+                            domain={[0, 100]}
+                            ticks={[0, 25, 50, 75, 100]}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#64748b", fontSize: 11 }}
+                            tickFormatter={(value) => `${value}%`}
+                          />
+                          <Tooltip
+                            contentStyle={TOOLTIP_STYLE}
+                            labelFormatter={(_, payload) => {
+                              const row = payload?.[0]?.payload;
+                              return row ? `${row.exam} - ${row.date}` : "Assessment";
+                            }}
+                            formatter={(value, name) => [
+                              value === null ? "Not assessed" : `${value}%`,
+                              name,
+                            ]}
+                          />
+                          <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="overall"
+                            name="Overall"
+                            stroke={COLORS.blue}
+                            strokeWidth={2.6}
+                            connectNulls={false}
+                            dot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="lots"
+                            name="LOTS"
+                            stroke={COLORS.green}
+                            strokeWidth={2.2}
+                            connectNulls={false}
+                            dot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="hots"
+                            name="HOTS"
+                            stroke="#ff7a1a"
+                            strokeWidth={2.2}
+                            connectNulls={false}
+                            dot={{ r: 3 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </div>
+
+                  <div className="sp-cognitive-footer-grid">
+                    <section className="sp-panel sp-cognitive-evidence">
+                      <div className="sp-panel-header">
+                        <div>
+                          <h3>Evidence quality</h3>
+                          <p>How much of the available question data supports this analysis.</p>
+                        </div>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Bloom coverage</dt>
+                          <dd>{cognitiveAnalysis.coverage}%</dd>
+                        </div>
+                        <div>
+                          <dt>Tagged questions</dt>
+                          <dd>{cognitiveAnalysis.overall.total}</dd>
+                        </div>
+                        <div>
+                          <dt>Untagged questions</dt>
+                          <dd>{cognitiveAnalysis.untaggedQuestions}</dd>
+                        </div>
+                        <div>
+                          <dt>Unattempted tagged</dt>
+                          <dd>{cognitiveAnalysis.overall.unattempted}</dd>
+                        </div>
+                      </dl>
+                    </section>
+
+                    <section className="sp-panel sp-cognitive-insights">
+                      <div className="sp-panel-header">
+                        <div>
+                          <h3>Cognitive insights</h3>
+                          <p>Priority observations based on measured performance.</p>
+                        </div>
+                      </div>
+                      <ul>
+                        {cognitiveAnalysis.insights.map((insight) => (
+                          <li key={insight}>{insight}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  </div>
+                </>
+              ) : (
+                <div className="sp-inline-empty sp-cognitive-empty">
+                  Cognitive analysis is unavailable because the recorded questions do not contain valid Bloom taxonomy tags.
+                </div>
+              )}
+            </section>
+
+            <section className="sp-dashboard-section sp-subject-bloom-section">
+              <SectionHeader
+                eyebrow="Subject intelligence"
+                title="Subject Bloom's Taxonomy Analytics"
+                description="Cumulative subject-wise mastery calculated from correctly answered Bloom-tagged questions, including unattempted questions in the denominator."
+                action={
+                  <span className="sp-count-chip">
+                    {cognitiveAnalysis.subjectCoverage}% subject coverage
+                  </span>
+                }
+              />
+
+              {cognitiveAnalysis.subjectPerformance.length > 0 ? (
+                <>
+                  <div className="sp-subject-bloom-cards">
+                    {cognitiveAnalysis.subjectPerformance.map((subject) => (
+                      <article
+                        className="sp-panel sp-subject-bloom-card"
+                        key={subject.key}
+                        style={{
+                          "--subject-color": subject.color,
+                          "--subject-icon-color": subject.iconColor,
+                        }}
+                      >
+                        <div className="sp-subject-bloom-card-head">
+                          <div>
+                            <span className="sp-subject-bloom-icon" aria-hidden="true">
+                              {React.createElement(subject.Icon, {
+                                size: 19,
+                                strokeWidth: 2.3,
+                              })}
+                            </span>
+                            <h3>{subject.label}</h3>
+                          </div>
+                          <strong>{subject.overall}%</strong>
+                        </div>
+                        <p>
+                          {subject.correct}/{subject.total} tagged questions correct
+                        </p>
+                        <dl>
+                          <div>
+                            <dt>LOTS</dt>
+                            <dd>{subject.lots === null ? "Not assessed" : `${subject.lots}%`}</dd>
+                          </div>
+                          <div>
+                            <dt>HOTS</dt>
+                            <dd>{subject.hots === null ? "Not assessed" : `${subject.hots}%`}</dd>
+                          </div>
+                          <div>
+                            <dt>Gap</dt>
+                            <dd>{subject.gap === null ? "—" : `${Math.abs(subject.gap)} pts`}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="sp-subject-bloom-grid">
+                    <ChartCard
+                      title="Subject cognitive profile"
+                      subtitle="Mastery comparison across all six Bloom levels"
+                      badge={`${cognitiveAnalysis.subjectPerformance.length} subjects`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={cognitiveAnalysis.subjectPerformance}
+                          margin={{ top: 6, right: 8, left: -16, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            stroke="#e2e8f0"
+                            strokeDasharray="4 4"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="label"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#64748b", fontSize: 11 }}
+                          />
+                          <YAxis
+                            domain={[0, 100]}
+                            ticks={[0, 25, 50, 75, 100]}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                            tickFormatter={(value) => `${value}%`}
+                          />
+                          <Tooltip
+                            contentStyle={TOOLTIP_STYLE}
+                            formatter={(value, name) => [
+                              value === null ? "Not assessed" : `${value}%`,
+                              name,
+                            ]}
+                          />
+                          <Legend content={<BloomSkillLegend />} />
+                          {BLOOM_SKILLS.map((skill) => (
+                            <Bar
+                              key={skill.key}
+                              dataKey={skill.key}
+                              name={skill.key}
+                              fill={skill.color}
+                              radius={[3, 3, 0, 0]}
+                              maxBarSize={18}
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+
+                    <section className="sp-panel sp-subject-bloom-matrix-panel">
+                      <div className="sp-panel-header">
+                        <div>
+                          <h3>Subject × Bloom mastery</h3>
+                          <p>Exact mastery and response evidence for every measured skill.</p>
+                        </div>
+                      </div>
+                      <div className="sp-subject-bloom-table-wrap">
+                        <table className="sp-subject-bloom-table">
+                          <thead>
+                            <tr>
+                              <th>Subject</th>
+                              {BLOOM_SKILLS.map((skill) => (
+                                <th key={skill.key}>{skill.key}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cognitiveAnalysis.subjectPerformance.map((subject) => (
+                              <tr key={subject.key}>
+                                <th>{subject.label}</th>
+                                {subject.skills.map((skill) => (
+                                  <td key={skill.skill}>
+                                    <strong>
+                                      {skill.percentage === null
+                                        ? "—"
+                                        : `${skill.percentage}%`}
+                                    </strong>
+                                    <small>
+                                      {skill.total > 0
+                                        ? `${skill.correct}/${skill.total}`
+                                        : "Not assessed"}
+                                    </small>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="sp-subject-bloom-insights">
+                    <article className="sp-subject-bloom-insight sp-subject-bloom-strength">
+                      <span>Strongest measured subject</span>
+                      <strong>
+                        {cognitiveAnalysis.strongestSubject?.label || "More evidence needed"}
+                      </strong>
+                      <p>
+                        {cognitiveAnalysis.strongestSubject
+                          ? `${cognitiveAnalysis.strongestSubject.overall}% cognitive mastery across ${cognitiveAnalysis.strongestSubject.total} tagged questions.`
+                          : "At least three tagged questions are required before identifying a strength."}
+                      </p>
+                    </article>
+                    <article className="sp-subject-bloom-insight sp-subject-bloom-priority">
+                      <span>Priority measured subject</span>
+                      <strong>
+                        {cognitiveAnalysis.prioritySubject?.label || "More evidence needed"}
+                      </strong>
+                      <p>
+                        {cognitiveAnalysis.prioritySubject
+                          ? `${cognitiveAnalysis.prioritySubject.overall}% cognitive mastery; review its lowest Bloom-skill results first.`
+                          : "At least three tagged questions are required before identifying a priority."}
+                      </p>
+                    </article>
+                  </div>
+                </>
+              ) : (
+                <div className="sp-inline-empty sp-cognitive-empty">
+                  Subject Bloom analytics is unavailable because the Bloom-tagged questions do not contain recognized subject tags.
+                </div>
+              )}
             </section>
 
             <section className="sp-dashboard-section">
@@ -2749,6 +3695,366 @@ const DASHBOARD_CSS = `
   .sp-snapshot-list dd { margin: 0; color: var(--sp-slate-700); font-size: 12px; font-weight: 750; text-align: right; }
   .sp-snapshot-list dd span { display: inline-block; margin-left: 5px; color: var(--sp-blue); }
 
+  .sp-cognitive-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .sp-cognitive-summary-card {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #dce3ec;
+    border-top: 3px solid #2563eb;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,.055);
+  }
+  .sp-cognitive-summary-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .sp-cognitive-summary-head > span:last-child {
+    display: block;
+    color: var(--sp-slate-500);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+  }
+  .sp-cognitive-summary-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: #fff;
+    background: #2563eb;
+  }
+  .sp-cognitive-lots .sp-cognitive-summary-icon { background: #10b981; }
+  .sp-cognitive-hots .sp-cognitive-summary-icon { background: #ff7a1a; }
+  .sp-cognitive-level .sp-cognitive-summary-icon { background: #2563eb; }
+  .sp-cognitive-summary-card strong {
+    display: block;
+    margin-top: 7px;
+    color: var(--sp-navy);
+    font-size: clamp(20px, 2.4vw, 27px);
+    line-height: 1.1;
+  }
+  .sp-cognitive-summary-card small {
+    display: block;
+    margin-top: 7px;
+    color: var(--sp-slate-500);
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+  .sp-cognitive-lots { border-top-color: #10b981; }
+  .sp-cognitive-hots { border-top-color: #ff7a1a; }
+  .sp-cognitive-level.sp-tone-success { border-top-color: #10b981; }
+  .sp-cognitive-level.sp-tone-warning { border-top-color: #f59e0b; }
+  .sp-cognitive-level.sp-tone-danger { border-top-color: #ef4444; }
+  .sp-cognitive-level strong { font-size: clamp(18px, 2vw, 23px); }
+
+  .sp-cognitive-grid,
+  .sp-cognitive-footer-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .sp-cognitive-skills-panel { padding-bottom: 14px; }
+  .sp-cognitive-skill-list {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 14px;
+  }
+  .sp-cognitive-skill-row {
+    display: grid;
+    grid-template-columns: 90px minmax(120px, 1fr) 92px;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 0;
+  }
+  .sp-cognitive-skill-row .sp-cognitive-donut { display: none; }
+  .sp-cognitive-donut-copy { min-width: 0; }
+  .sp-cognitive-donut-copy > strong {
+    display: block;
+    color: var(--sp-navy);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .sp-cognitive-donut-copy > span {
+    display: block;
+    margin-top: 4px;
+    color: var(--sp-slate-500);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+  .sp-cognitive-skill-track {
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e8edf4;
+  }
+  .sp-cognitive-skill-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .sp-cognitive-skill-score {
+    text-align: right;
+  }
+  .sp-cognitive-skill-score > strong {
+    display: block;
+    color: var(--sp-navy);
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .sp-cognitive-skill-score > small {
+    display: block;
+    margin-top: 4px;
+    color: var(--sp-slate-500);
+    font-size: 9px;
+    line-height: 1.3;
+  }
+  .sp-cognitive-evidence,
+  .sp-cognitive-insights { padding-bottom: 14px; }
+  .sp-cognitive-evidence dl {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px;
+  }
+  .sp-cognitive-evidence dl > div {
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--sp-slate-50);
+  }
+  .sp-cognitive-evidence dt {
+    color: var(--sp-slate-500);
+    font-size: 9px;
+    line-height: 1.35;
+  }
+  .sp-cognitive-evidence dd {
+    margin: 5px 0 0;
+    color: var(--sp-navy);
+    font-size: 17px;
+    font-weight: 850;
+  }
+  .sp-cognitive-insights ul {
+    display: grid;
+    gap: 8px;
+    margin: 14px;
+    padding: 0;
+    list-style: none;
+  }
+  .sp-cognitive-insights li {
+    position: relative;
+    padding: 10px 10px 10px 29px;
+    border-radius: 8px;
+    color: var(--sp-slate-600);
+    background: var(--sp-slate-50);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .sp-cognitive-insights li::before {
+    content: "";
+    position: absolute;
+    top: 15px;
+    left: 12px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2563eb;
+  }
+  .sp-cognitive-empty { margin-top: 0; }
+
+  .sp-subject-bloom-cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .sp-subject-bloom-card {
+    padding: 14px;
+    border-top: 3px solid var(--subject-color, #2563eb);
+  }
+  .sp-subject-bloom-card-head,
+  .sp-subject-bloom-card-head > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .sp-subject-bloom-card-head > div { justify-content: flex-start; }
+  .sp-subject-bloom-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    color: #fff;
+    background: var(--subject-icon-color, var(--subject-color, #2563eb));
+  }
+  .sp-subject-bloom-card h3 {
+    margin: 0;
+    color: var(--sp-navy);
+    font-size: 13px;
+  }
+  .sp-subject-bloom-card-head > strong {
+    color: var(--subject-color, #2563eb);
+    font-size: 21px;
+  }
+  .sp-subject-bloom-card > p {
+    margin: 8px 0 12px;
+    color: var(--sp-slate-500);
+    font-size: 10px;
+  }
+  .sp-subject-bloom-card dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    margin: 0;
+  }
+  .sp-subject-bloom-card dl > div {
+    padding: 8px 5px;
+    border-radius: 7px;
+    background: var(--sp-slate-50);
+    text-align: center;
+  }
+  .sp-subject-bloom-card dl > div:nth-child(3) {
+    display: none;
+  }
+  .sp-subject-bloom-card dt {
+    color: var(--sp-slate-500);
+    font-size: 8px;
+    font-weight: 800;
+  }
+  .sp-subject-bloom-card dd {
+    margin: 4px 0 0;
+    color: var(--sp-slate-700);
+    font-size: 11px;
+    font-weight: 850;
+  }
+  .sp-subject-bloom-grid {
+    display: grid;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .sp-bloom-chart-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 7px 12px;
+    padding: 4px 8px 0;
+  }
+  .sp-bloom-chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--sp-slate-600);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .sp-bloom-chart-legend i {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .sp-subject-bloom-matrix-panel {
+    min-width: 0;
+    overflow: hidden;
+    padding-bottom: 12px;
+  }
+  .sp-subject-bloom-table-wrap {
+    margin: 14px;
+    overflow: hidden;
+    border: 1px solid var(--sp-slate-200);
+    border-radius: 8px;
+  }
+  .sp-subject-bloom-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 9px;
+    text-align: center;
+  }
+  .sp-subject-bloom-table th,
+  .sp-subject-bloom-table td {
+    padding: 10px 4px;
+    border-right: 1px solid var(--sp-slate-100);
+    border-bottom: 1px solid var(--sp-slate-100);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .sp-subject-bloom-table th:last-child,
+  .sp-subject-bloom-table td:last-child { border-right: 0; }
+  .sp-subject-bloom-table tr:last-child th,
+  .sp-subject-bloom-table tr:last-child td { border-bottom: 0; }
+  .sp-subject-bloom-table thead th {
+    color: var(--sp-slate-600);
+    background: var(--sp-slate-50);
+    font-size: 9px;
+  }
+  .sp-subject-bloom-table tbody th {
+    color: var(--sp-navy);
+    background: #fbfdff;
+    text-align: left;
+    white-space: normal;
+  }
+  .sp-subject-bloom-table td strong {
+    display: block;
+    color: var(--sp-slate-700);
+    font-size: 11px;
+  }
+  .sp-subject-bloom-table td small {
+    display: block;
+    margin-top: 3px;
+    color: var(--sp-slate-500);
+    font-size: 8px;
+  }
+  .sp-subject-bloom-insights {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .sp-subject-bloom-insight {
+    padding: 15px 16px;
+    border: 1px solid #dce3ec;
+    border-left: 4px solid #10b981;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .sp-subject-bloom-priority { border-left-color: #f59e0b; }
+  .sp-subject-bloom-insight > span {
+    display: block;
+    color: var(--sp-slate-500);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .sp-subject-bloom-insight strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--sp-navy);
+    font-size: 16px;
+  }
+  .sp-subject-bloom-insight p {
+    margin: 5px 0 0;
+    color: var(--sp-slate-500);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
   .sp-table-panel { overflow: hidden; }
   .sp-table-scroll { width: 100%; overflow: hidden; }
   .sp-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; white-space: normal; }
@@ -2781,76 +4087,121 @@ const DASHBOARD_CSS = `
     display: grid;
     gap: 12px;
   }
-  .sp-detail-summary {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .sp-detail-summary > div {
-    padding: 12px;
-    border: 1px solid var(--sp-slate-200);
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(15,23,42,.045);
-  }
-  .sp-detail-summary span,
-  .sp-detail-subject-card dt {
-    color: var(--sp-slate-500);
-    font-size: 10px;
-    font-weight: 750;
-    text-transform: uppercase;
-    letter-spacing: .03em;
-  }
-  .sp-detail-summary strong {
-    display: block;
-    margin-top: 5px;
-    color: var(--sp-navy);
-    font-size: 18px;
-  }
-  .sp-detail-panel {
+  .sp-exam-cognitive-panel {
     padding-bottom: 14px;
   }
-  .sp-detail-subject-grid {
+  .sp-exam-cognitive-summary {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-    padding: 14px;
+    padding: 14px 14px 0;
   }
-  .sp-detail-subject-card {
+  .sp-exam-cognitive-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
     padding: 12px;
     border: 1px solid var(--sp-slate-200);
+    border-top: 3px solid #2563eb;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .sp-exam-cognitive-lots { border-top-color: #10b981; }
+  .sp-exam-cognitive-hots { border-top-color: #ff7a1a; }
+  .sp-exam-cognitive-level.sp-tone-success { border-top-color: #10b981; }
+  .sp-exam-cognitive-level.sp-tone-warning { border-top-color: #f59e0b; }
+  .sp-exam-cognitive-level.sp-tone-danger { border-top-color: #ef4444; }
+  .sp-exam-cognitive-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: #fff;
+    background: #2563eb;
+  }
+  .sp-exam-cognitive-lots .sp-exam-cognitive-icon { background: #10b981; }
+  .sp-exam-cognitive-hots .sp-exam-cognitive-icon { background: #ff7a1a; }
+  .sp-exam-cognitive-card div { min-width: 0; }
+  .sp-exam-cognitive-card div > span {
+    display: block;
+    color: var(--sp-slate-500);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .sp-exam-cognitive-card strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--sp-navy);
+    font-size: 20px;
+    line-height: 1.15;
+  }
+  .sp-exam-cognitive-level strong {
+    font-size: 17px;
+  }
+  .sp-exam-cognitive-card small {
+    display: block;
+    margin-top: 5px;
+    color: var(--sp-slate-500);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  .sp-exam-cognitive-skills {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 14px 0;
+  }
+  .sp-exam-cognitive-skill {
+    min-width: 0;
+    padding: 9px 8px;
+    border: 1px solid var(--sp-slate-100);
     border-radius: 8px;
     background: var(--sp-slate-50);
   }
-  .sp-detail-subject-card > div:first-child {
+  .sp-exam-cognitive-skill span {
     display: flex;
     align-items: center;
-    gap: 8px;
-  }
-  .sp-detail-subject-card h4 {
-    margin: 0;
+    gap: 6px;
+    min-width: 0;
     color: var(--sp-navy);
-    font-size: 13px;
+    font-size: 10px;
+    font-weight: 850;
   }
-  .sp-detail-subject-dot {
-    width: 9px;
-    height: 9px;
+  .sp-exam-cognitive-skill i {
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
     border-radius: 999px;
   }
-  .sp-detail-subject-card dl {
-    display: grid;
-    gap: 8px;
-    margin: 12px 0 0;
+  .sp-exam-cognitive-skill strong {
+    display: block;
+    margin-top: 7px;
+    color: var(--sp-navy);
+    font-size: 14px;
   }
-  .sp-detail-subject-card dl > div {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
+  .sp-exam-cognitive-skill small {
+    display: block;
+    margin-top: 3px;
+    color: var(--sp-slate-500);
+    font-size: 8.5px;
+    line-height: 1.3;
   }
-  .sp-detail-subject-card dd {
-    margin: 0;
-    color: var(--sp-slate-700);
-    font-weight: 850;
+  .sp-exam-subject-cognitive-panel {
+    padding-bottom: 14px;
+  }
+  .sp-exam-subject-cognitive-cards {
+    padding: 14px 14px 0;
+  }
+  .sp-exam-subject-cognitive-table-wrap {
+    margin-top: 12px;
+  }
+  .sp-detail-panel {
+    padding-bottom: 14px;
   }
   .sp-question-table-wrap {
     max-height: 600px;
@@ -3092,17 +4443,23 @@ const DASHBOARD_CSS = `
   @media (max-width: 1120px) {
     .sp-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .sp-subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .sp-detail-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .sp-detail-subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-exam-cognitive-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-exam-cognitive-skills { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .sp-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sp-chart-wide { grid-column: span 1; }
     .sp-teacher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-cognitive-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-cognitive-evidence dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-subject-bloom-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-subject-bloom-grid { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 860px) {
     .sp-hero-content { grid-template-columns: auto minmax(0,1fr); }
     .sp-status-badge { grid-column: 2; justify-self: start; }
-    .sp-insight-strip, .sp-teacher-insight-grid { grid-template-columns: 1fr; }
+    .sp-insight-strip, .sp-teacher-insight-grid,
+    .sp-cognitive-grid, .sp-cognitive-footer-grid,
+    .sp-subject-bloom-insights { grid-template-columns: 1fr; }
     .sp-chart-grid-main, .sp-chart-grid { grid-template-columns: 1fr; }
     .sp-chart-card { min-height: 270px; }
     .sp-chart-area { height: 210px; }
@@ -3135,8 +4492,8 @@ const DASHBOARD_CSS = `
     .sp-chart-area { height: 195px; padding: 6px 2px 10px; }
     .sp-subject-grid { grid-template-columns: 1fr; }
     .sp-subject-card { border-radius: 15px; }
-    .sp-detail-summary,
-    .sp-detail-subject-grid { grid-template-columns: 1fr; }
+    .sp-exam-cognitive-summary { grid-template-columns: 1fr; }
+    .sp-exam-cognitive-skills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sp-question-table-wrap { margin: 12px; }
     .sp-desktop-results { display: none; }
     .sp-mobile-results { display: grid; gap: 12px; }
@@ -3171,6 +4528,12 @@ const DASHBOARD_CSS = `
     .sp-subject-card-top { grid-template-columns: auto minmax(0, 1fr); }
     .sp-mini-tag { grid-column: 2; justify-self: start; }
     .sp-mobile-result-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-cognitive-summary { grid-template-columns: 1fr; }
+    .sp-cognitive-evidence dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-cognitive-skill-row { grid-template-columns: 78px minmax(0, 1fr); }
+    .sp-cognitive-skill-score { grid-column: 2; text-align: left; }
+    .sp-exam-cognitive-skills { grid-template-columns: 1fr; }
+    .sp-subject-bloom-cards { grid-template-columns: 1fr; }
   }
 
   @media (prefers-reduced-motion: reduce) {

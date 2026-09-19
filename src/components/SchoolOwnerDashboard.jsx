@@ -91,6 +91,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [subjectSummaries, setSubjectSummaries] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [classExamData, setClassExamData] = useState({}); // key: "class|section"
+  const [schoolCognitiveRows, setSchoolCognitiveRows] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -100,22 +101,22 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const activeTab = currentTabObj.id;
 
   const [examLoading, setExamLoading] = useState(false);
-  // 🔄 Navigation State
+  // ?? Navigation State
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState("overview"); // 'overview', 'exam', 'examwise-results', 'student', 'teacher'
   const [selectedClassSection, setSelectedClassSection] = useState(null); // { class, section }
   const [selectedExam, setSelectedExam] = useState(null); // { id, exam_pattern, class, section, school_id, program }
 
-  // For OMR Results (view only — no upload)
+  // For OMR Results (view only � no upload)
   const [examResults, setExamResults] = useState({});
   const [currentOMRExam, setCurrentOMRExam] = useState(null);
-  const [resultsLoading, setResultsLoading] = useState(false); // 👈 New loading state
+  const [resultsLoading, setResultsLoading] = useState(false); // ?? New loading state
   const analysisDownloadButtonRef = useRef(null);
   const studentResultsDownloadButtonRef = useRef(null);
   const [examResultView, setExamResultView] = useState("cognitive");
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
 
-  // 📝 Exam Wise View State (isolated from batch flow)
+  // ?? Exam Wise View State (isolated from batch flow)
   const [examWiseClassSection, setExamWiseClassSection] = useState(null);
   const [examWiseExams, setExamWiseExams] = useState([]);
   const [examWiseLoading, setExamWiseLoading] = useState(false);
@@ -142,7 +143,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     localStorage.getItem("sp_school_id") ||
     userSchoolId;
 
-  // 📥 Fetch School + Analytics
+  // ?? Fetch School + Analytics
   useEffect(() => {
     if (!schoolId) {
       setError("No school ID found. Please log in again.");
@@ -162,7 +163,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         };
         setSchool(schoolWithRelations);
 
-        // ✅ Pass the data directly
+        // ? Pass the data directly
         await loadLatestExamMetrics(schoolWithRelations);
 
         setAnalyticsLoading(true);
@@ -192,6 +193,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     setExamLoading(true);
     const metrics = {};
+    const allSchoolExamRows = [];
 
     try {
       await Promise.all(
@@ -204,6 +206,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           const res = await fetch(`${API_BASE}/api/exams?${params}`);
           const exams = await res.json();
           if (Array.isArray(exams) && exams.length > 0) {
+            allSchoolExamRows.push(...exams);
             const latest = exams.reduce((prev, current) => {
               const prevDate = prev.exam_date
                 ? new Date(prev.exam_date)
@@ -225,9 +228,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
         }),
       );
       setClassExamData(metrics);
+      setSchoolCognitiveRows(allSchoolExamRows);
     } catch (err) {
       console.error("Failed to load exam metrics:", err);
       setError("Failed to load performance data");
+      setSchoolCognitiveRows([]);
     } finally {
       setExamLoading(false);
     }
@@ -349,6 +354,248 @@ export default function SchoolOwnerDashboard({ onBack }) {
     };
   };
 
+  const computeSchoolCognitiveAnalysis = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const bloomSkills = [
+      "Remember",
+      "Understand",
+      "Apply",
+      "Analyse",
+      "Evaluate",
+      "Create",
+    ];
+    const bloomColors = {
+      Remember: "#2f8cff",
+      Understand: "#34c99a",
+      Apply: "#ffc83d",
+      Analyse: "#ff8a45",
+      Evaluate: "#ff5f7d",
+      Create: "#8f6df6",
+    };
+    const normalizeBloomSkill = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (["remember", "remembering"].includes(normalized)) return "Remember";
+      if (["understand", "understanding"].includes(normalized)) return "Understand";
+      if (["apply", "applying"].includes(normalized)) return "Apply";
+      if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+        return "Analyse";
+      }
+      if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+      if (["create", "creating"].includes(normalized)) return "Create";
+      return "";
+    };
+    const parseQuestionResults = (value) => {
+      if (!value) return {};
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value) || {};
+        } catch {
+          return {};
+        }
+      }
+      return typeof value === "object" ? value : {};
+    };
+    const getQuestionResponseStatus = (details = {}) => {
+      const status = String(details?.status || "").toLowerCase();
+      const option = details?.option ?? details?.options ?? "";
+      const marks = Number(details?.marks);
+
+      if (status.includes("incorrect")) return "incorrect";
+      if (status.includes("correct")) return "correct";
+      if (status.includes("not") || status.includes("unattempted") || !option) {
+        return "unattempted";
+      }
+      if (Number.isFinite(marks) && marks > 0) return "correct";
+      if (option) return "incorrect";
+      return "unattempted";
+    };
+    const normalizeDateKey = (value) => {
+      if (!value) return "";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime())
+        ? String(value).trim()
+        : date.toISOString().slice(0, 10);
+    };
+    const percentage = (correct, total) =>
+      total > 0 ? Math.round((correct / total) * 100) : 0;
+    const skillTotals = Object.fromEntries(
+      bloomSkills.map((skill) => [
+        skill,
+        { skill, correct: 0, total: 0, uniqueQuestions: new Set() },
+      ]),
+    );
+    const studentTotals = new Map();
+    const examTotals = new Map();
+
+    rows.forEach((row) => {
+      const questions = parseQuestionResults(row.question_results);
+      const studentKey =
+        row.student_id ||
+        row.studentId ||
+        [row.first_name, row.last_name].filter(Boolean).join(" ") ||
+        `student-${studentTotals.size + 1}`;
+      const examKey = [
+        row.exam_pattern || "Exam",
+        normalizeDateKey(row.exam_date),
+      ].join("|");
+
+      if (!studentTotals.has(studentKey)) {
+        studentTotals.set(studentKey, { correct: 0, total: 0 });
+      }
+      if (!examTotals.has(examKey)) {
+        examTotals.set(examKey, {
+          label: row.exam_pattern || "Exam",
+          order:
+            parseInt(String(row.exam_pattern || "").replace(/[^0-9]/g, ""), 10) ||
+            examTotals.size + 1,
+          lots: { correct: 0, total: 0 },
+          hots: { correct: 0, total: 0 },
+        });
+      }
+
+      Object.entries(questions).forEach(([question, details]) => {
+        const skill = normalizeBloomSkill(
+          details?.blooms_skill ||
+            details?.bloomsSkill ||
+            details?.["Blooms Skill"] ||
+            details?.["Bloom's Skill"],
+        );
+        if (!skill) return;
+
+        const status = getQuestionResponseStatus(details);
+        const isCorrect = status === "correct";
+        const questionKey = [
+          row.class || "",
+          row.section || "",
+          row.exam_pattern || "Exam",
+          normalizeDateKey(row.exam_date),
+          String(question || "").trim(),
+        ].join("|");
+        const bucket = ["Remember", "Understand"].includes(skill)
+          ? "lots"
+          : "hots";
+        const studentRow = studentTotals.get(studentKey);
+        const examRow = examTotals.get(examKey);
+
+        skillTotals[skill].total += 1;
+        skillTotals[skill].uniqueQuestions.add(questionKey);
+        studentRow.total += 1;
+        examRow[bucket].total += 1;
+
+        if (isCorrect) {
+          skillTotals[skill].correct += 1;
+          studentRow.correct += 1;
+          examRow[bucket].correct += 1;
+        }
+      });
+    });
+
+    const totals = bloomSkills.reduce(
+      (acc, skill) => {
+        const item = skillTotals[skill];
+        acc.correct += item.correct;
+        acc.total += item.total;
+        acc.uniqueQuestions += item.uniqueQuestions.size;
+        if (["Remember", "Understand"].includes(skill)) {
+          acc.lots.correct += item.correct;
+          acc.lots.total += item.total;
+          acc.lots.uniqueQuestions += item.uniqueQuestions.size;
+        } else {
+          acc.hots.correct += item.correct;
+          acc.hots.total += item.total;
+          acc.hots.uniqueQuestions += item.uniqueQuestions.size;
+        }
+        return acc;
+      },
+      {
+        correct: 0,
+        total: 0,
+        uniqueQuestions: 0,
+        lots: { correct: 0, total: 0, uniqueQuestions: 0 },
+        hots: { correct: 0, total: 0, uniqueQuestions: 0 },
+      },
+    );
+    const distribution = bloomSkills.map((skill) => {
+      const count = skillTotals[skill].uniqueQuestions.size;
+      return {
+        skill,
+        count,
+        percentage:
+          totals.uniqueQuestions > 0
+            ? Math.round((count / totals.uniqueQuestions) * 100)
+            : 0,
+        performance: percentage(skillTotals[skill].correct, skillTotals[skill].total),
+        color: bloomColors[skill],
+      };
+    });
+    const studentBands = [
+      { label: "Advanced Thinkers", range: "80-100%", min: 80, max: 100, count: 0, color: "#8f6df6" },
+      { label: "Proficient", range: "60-79%", min: 60, max: 79.999, count: 0, color: "#34c99a" },
+      { label: "Developing", range: "40-59%", min: 40, max: 59.999, count: 0, color: "#ffc83d" },
+      { label: "Foundation", range: "0-39%", min: 0, max: 39.999, count: 0, color: "#ff6f8d" },
+    ];
+
+    studentTotals.forEach((student) => {
+      const accuracy = student.total > 0 ? (student.correct / student.total) * 100 : 0;
+      const band =
+        studentBands.find((item) => accuracy >= item.min && accuracy <= item.max) ||
+        studentBands[studentBands.length - 1];
+      band.count += 1;
+    });
+
+    const lotsQuestionPercentage =
+      totals.uniqueQuestions > 0
+        ? Math.round((totals.lots.uniqueQuestions / totals.uniqueQuestions) * 100)
+        : 0;
+    const trend = Array.from(examTotals.values())
+      .sort((a, b) => a.order - b.order)
+      .map((exam) => ({
+        label: exam.label,
+        lots: percentage(exam.lots.correct, exam.lots.total),
+        hots: percentage(exam.hots.correct, exam.hots.total),
+      }));
+    const topSkill = [...distribution].sort((a, b) => b.performance - a.performance)[0];
+    const hotsGap =
+      percentage(totals.lots.correct, totals.lots.total) -
+      percentage(totals.hots.correct, totals.hots.total);
+
+    return {
+      hasData: totals.total > 0,
+      overall: percentage(totals.correct, totals.total),
+      lots: percentage(totals.lots.correct, totals.lots.total),
+      hots: percentage(totals.hots.correct, totals.hots.total),
+      questions: totals.uniqueQuestions,
+      students: studentTotals.size,
+      distribution,
+      lotsQuestionPercentage,
+      hotsQuestionPercentage:
+        totals.uniqueQuestions > 0 ? 100 - lotsQuestionPercentage : 0,
+      studentBands: studentBands.map((band) => ({
+        ...band,
+        percentage:
+          studentTotals.size > 0
+            ? Math.round((band.count / studentTotals.size) * 100)
+            : 0,
+      })),
+      trend,
+      insights: [
+        topSkill && topSkill.count > 0
+          ? `Strongest Bloom skill is ${topSkill.skill} at ${topSkill.performance}%.`
+          : "Bloom-tagged performance data is not available yet.",
+        hotsGap > 0
+          ? `HOTS trails LOTS by ${hotsGap}%, needs focused improvement.`
+          : "HOTS performance is in line with LOTS.",
+        `${studentTotals.size} students analysed across the school.`,
+      ],
+    };
+  };
+
   if (loading)
     return (
       <div className="admin-layout">
@@ -400,7 +647,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       </div>
     );
 
-  // ✅ Reusable student report PDF generator (returns Blob)
+  // ? Reusable student report PDF generator (returns Blob)
   const generateStudentReportPDF = (studentData, schoolData, examResults) => {
     return new Promise((resolve, reject) => {
       try {
@@ -424,21 +671,21 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const margin = 14;
         let y = 20;
 
-        // 🔹 Helper: Get subject percentage
+        // ?? Helper: Get subject percentage
         const getSubjectPct = (marks, max) => {
           if (!max || max <= 0) return 0;
           return ((marks || 0) / max) * 100;
         };
 
         // ======================
-        // 🎨 THEME COLORS
+        // ?? THEME COLORS
         // ======================
         const BLUE = [30, 80, 150];
         const LIGHT_BLUE = [230, 240, 255];
         const WHITE = [255, 255, 255];
 
         // ======================
-        // 🏫 HEADER (Blue Theme)
+        // ?? HEADER (Blue Theme)
         // ======================
 
         doc.setFontSize(16);
@@ -447,7 +694,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.setTextColor(255, 255, 255);
         doc.rect(0, 0, pageWidth, 25, "F"); // Full header bar
         //doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
-        // ✅ Safely add school logo only if valid
+        // ? Safely add school logo only if valid
         if (schoolData.logo_url && typeof schoolData.logo_url === "string") {
           try {
             doc.addImage(schoolData.logo_url, 8, 2.5, 20, 20);
@@ -490,7 +737,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         y = 30;
 
         // ======================
-        // 🧑‍🎓 STUDENT INFO BOXES — SIX INDIVIDUAL ROUNDED BOXES
+        // ????? STUDENT INFO BOXES � SIX INDIVIDUAL ROUNDED BOXES
         // ======================
 
         const boxX = 12;
@@ -500,8 +747,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const gap = 8;
 
         // --- Map program code to name ---
-        const programCode = examResults[0]?.program || "—";
-        let programName = "—";
+        const programCode = examResults[0]?.program || "�";
+        let programName = "�";
         switch (programCode) {
           case "MAE":
             programName = "Maestro";
@@ -550,11 +797,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
             stream = "IIT-MED";
           else if (hasPhysics && hasChemistry && hasMaths) stream = "IIT";
           else if (hasPhysics && hasChemistry && hasBiology) stream = "MED";
-          else stream = "—";
+          else stream = "�";
         }
 
         const fullProgram =
-          stream === "—" ? programName : `${programName}-${stream}`;
+          stream === "�" ? programName : `${programName}-${stream}`;
 
         // --- Calculate strength & weak subjects ---
         const subjKeys = [
@@ -580,8 +827,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
           .sort(([, a], [, b]) => b - a)
           .map(([key, pct]) => ({ key, pct }));
 
-        const strength = sortedSubj[0]?.key || "—";
-        const weak = sortedSubj[sortedSubj.length - 1]?.key || "—";
+        const strength = sortedSubj[0]?.key || "�";
+        const weak = sortedSubj[sortedSubj.length - 1]?.key || "�";
 
         // --- Best Exam ---
         const bestExam = examResults.reduce(
@@ -613,11 +860,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
           // --- Prepare VALUE text ---
           let valueStr = String(value);
-          if (valueStr === "—") {
-            valueStr = "—";
+          if (valueStr === "�") {
+            valueStr = "�";
           }
 
-          // Try to fit value by reducing font size until it fits in 1–2 lines
+          // Try to fit value by reducing font size until it fits in 1�2 lines
           let fontSize = maxFontSize;
           let lines = [];
           let finalFontSize = 8; // min size
@@ -653,7 +900,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         }
 
         // --- Draw all 6 rounded boxes ---
-        //drawRoundedBox(0, "STUDENT NAME", studentData.name || "—", 14);
+        //drawRoundedBox(0, "STUDENT NAME", studentData.name || "�", 14);
         // Box position & size
         const boxWidth = 180;
         const boxHeight = 20; // slightly taller so text fits nicely
@@ -667,10 +914,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.setFont("Times New Roman", "bold");
         doc.setFontSize(16);
         doc.setTextColor(0, 0, 0);
-        // First line — NAME
-        doc.text(`${studentData.name || "—"}`, boxX + 6, boxY + 7);
+        // First line � NAME
+        doc.text(`${studentData.name || "�"}`, boxX + 6, boxY + 7);
 
-        // Second line — ROLL NO
+        // Second line � ROLL NO
         doc.text(
           `${studentData.class}-${studentData.section}`,
           boxX + 6,
@@ -680,14 +927,14 @@ export default function SchoolOwnerDashboard({ onBack }) {
         /*doc.setFont('Times New Roman', 'bold');
       doc.setTextColor( 0, 0, 0);
       doc.setFontSize(16);
-      doc.text(`NAME :    ${studentData.name || "—"}`, 15,35);
+      doc.text(`NAME :    ${studentData.name || "�"}`, 15,35);
       //drawRoundedBox(1, "CLASS SECTION", `${studentData.class}-${studentData.section}`, 14);
       doc.setFont('Times New Roman', 'bold');
       doc.setTextColor( 0, 0, 0);
       doc.setFontSize(14);
       doc.text(`CLASS SECTION : ${studentData.class}-${studentData.section}`, 15,45);*/
 
-        //drawRoundedBox(2, "ROLL NO", studentData.roll_no || "—", 18);
+        //drawRoundedBox(2, "ROLL NO", studentData.roll_no || "�", 18);
         doc.setFont("Times New Roman", "normal");
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(10);
@@ -695,7 +942,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.setFont("Times New Roman", "bold");
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(30);
-        doc.text(`${studentData.roll_no || "—"}`, 135, 43);
+        doc.text(`${studentData.roll_no || "�"}`, 135, 43);
 
         doc.setFillColor(255, 236, 158);
         doc.roundedRect(195, 35, 80, 10, 3, 3, "FD");
@@ -710,7 +957,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         y = boxY + boxH + 10;
 
         // ======================
-        // 📊 SUBJECT WISE PERFORMANCE SUMMARY — GRAPHICAL PROGRESS BARS
+        // ?? SUBJECT WISE PERFORMANCE SUMMARY � GRAPHICAL PROGRESS BARS
         // ======================
 
         doc.setFont("Times New Roman", "bold");
@@ -753,7 +1000,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           doc.setFont("Times New Roman", "bold");
           doc.setFontSize(14);
           doc.setTextColor(0, 0, 0);
-          doc.text(`${subj.label}`, labelX, barY + 8); // ✅ Icon + Subject Name
+          doc.text(`${subj.label}`, labelX, barY + 8); // ? Icon + Subject Name
 
           // Background bar
           doc.setFillColor(240, 240, 240);
@@ -776,10 +1023,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
           doc.text(`${avgPct.toFixed(1)}%`, pctX, barY + 8);
         });
 
-        // ✅ Update y to below the last bar
+        // ? Update y to below the last bar
         y += subjKeys.length * barGap + 10;
         // ======================
-        // 🎯 BEST EXAM DONUT — jsPDF COMPATIBLE (no arc())
+        // ?? BEST EXAM DONUT � jsPDF COMPATIBLE (no arc())
         // ======================
         // Position: to the right of bars
         const donutCenterX = 230;
@@ -796,7 +1043,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.circle(donutCenterX, donutCenterY - 5, 22, "FD");
 
         // Main color fill: simulate progress with a solid color circle scaled visually
-        // Since we can't draw arcs, we’ll just use a solid colored ring for full effect
+        // Since we can't draw arcs, we�ll just use a solid colored ring for full effect
         // and rely on the percentage text for accuracy (common in reports)
         doc.setFillColor(30, 80, 150);
         // Trick: draw full circle if >=95%, otherwise use a workaround (not perfect)
@@ -837,7 +1084,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
         //y = doc.lastAutoTable.finalY + 10;
         // ======================
-        // ✍️ SIGNATURES (at bottom)
+        // ?? SIGNATURES (at bottom)
         // ======================
         const sigY = pageHeight - 30;
         doc.setFontSize(11);
@@ -894,7 +1141,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         //y = graphY + graphH + 15;
         doc.addPage();
         // ======================
-        // 📋 EXAM RESULTS TABLE (Landscape — with 3 Ranks)
+        // ?? EXAM RESULTS TABLE (Landscape � with 3 Ranks)
         // ======================
         doc.setFont("Times New Roman", "bold");
         doc.setFontSize(18);
@@ -912,8 +1159,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
           const bPct = getSubjectPct(r.biology_marks, r.max_marks_biology);
 
           return [
-            r.date || "—",
-            r.exam.replace(/_/g, " ") || "—",
+            r.date || "�",
+            r.exam.replace(/_/g, " ") || "�",
             String(Math.round(r.correct_answers || 0)),
             String(Math.round(r.wrong_answers || 0)),
             String(Math.round(r.unattempted || 0)),
@@ -923,9 +1170,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
             `${(r.biology_marks || 0).toFixed(0)} (${bPct.toFixed(0)}%)`,
             (r.total || 0).toFixed(0),
             `${(r.percentage || 0).toFixed(1)}%`,
-            r.class_rank ?? "—", // Class Rank
-            r.school_rank ?? "—", // School Rank
-            r.all_schools_rank ?? "—", // All Schools Rank
+            r.class_rank ?? "�", // Class Rank
+            r.school_rank ?? "�", // School Rank
+            r.all_schools_rank ?? "�", // All Schools Rank
           ];
         });
 
@@ -986,7 +1233,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           tableWidth: "wrap",
         });
 
-        // ✅ Return blob directly
+        // ? Return blob directly
         resolve(doc.output("blob"));
       } catch (err) {
         reject(err);
@@ -1004,7 +1251,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     const zip = new JSZip();
 
     try {
-      // ✅ Fetch ALL exam records for the school (contains student info)
+      // ? Fetch ALL exam records for the school (contains student info)
       const params = new URLSearchParams({ school_id: schoolId });
       const res = await fetch(`${API_BASE}/api/exams?${params}`);
       const allExamRecords = await res.json();
@@ -1014,7 +1261,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         return;
       }
 
-      // ✅ Deduplicate students by student_id
+      // ? Deduplicate students by student_id
       const studentMap = {};
       for (const record of allExamRecords) {
         if (record.student_id && !studentMap[record.student_id]) {
@@ -1029,11 +1276,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
       }
 
       const uniqueStudents = Object.values(studentMap);
-      console.log("✅ Found", uniqueStudents.length, "unique students");
+      console.log("? Found", uniqueStudents.length, "unique students");
 
       let generatedCount = 0;
 
-      // ✅ Generate report for each student
+      // ? Generate report for each student
       for (const student of uniqueStudents) {
         try {
           // Fetch this student's full exam history
@@ -1044,7 +1291,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
           if (!Array.isArray(examResults) || examResults.length === 0) {
             console.warn(
-              `⚠️ No exam results for student ${student.student_id}`,
+              `?? No exam results for student ${student.student_id}`,
             );
             continue;
           }
@@ -1086,7 +1333,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       const zipBlob = await zip.generateAsync({ type: "blob" });
       saveAs(zipBlob, `All_Student_Reports_${school.school_id}.zip`);
     } catch (err) {
-      console.error("💥 ZIP generation failed:", err);
+      console.error("?? ZIP generation failed:", err);
       alert("Failed to generate ZIP. Check console for details.");
     } finally {
       setExamLoading(false);
@@ -1094,12 +1341,31 @@ export default function SchoolOwnerDashboard({ onBack }) {
   };
 
   // Overview Tab - School Info + Quick Stats + IIT Batches
-  const renderSchoolHeader = () => (
+  const renderSchoolHeader = () => {
+    const schoolCognitiveAnalysis =
+      computeSchoolCognitiveAnalysis(schoolCognitiveRows);
+
+    return (
     <div className="animate-fade-in school-overview-page">
       <div className="page-header school-overview-header">
         <div className="page-header-left">
           <h1 className="page-header-title page-header-title--school school-overview-title">
-            <SchoolIcon size={22} strokeWidth={2.2} />
+            {school.logo_url ? (
+              <img
+                src={school.logo_url}
+                alt={`${school.school_name || "School"} logo`}
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "7px",
+                  objectFit: "contain",
+                  border: "1px solid #dbe3ef",
+                  background: "#ffffff",
+                }}
+              />
+            ) : (
+              <SchoolIcon size={22} strokeWidth={2.2} />
+            )}
             {school.school_name || "School Overview"}
           </h1>
           <p className="page-header-subtitle school-overview-meta">
@@ -1129,10 +1395,6 @@ export default function SchoolOwnerDashboard({ onBack }) {
         </div>
       </div>
       <div className="page-content school-overview-content">
-        <div className="school-overview-welcome">
-          Dear Correspondent, Welcome to your School RA Portal
-        </div>
-
         <div className="school-overview-stats" aria-label="School summary">
           {[
             {
@@ -1171,53 +1433,461 @@ export default function SchoolOwnerDashboard({ onBack }) {
           ))}
         </div>
 
-        <section className="school-overview-section school-overview-section--info">
-          <h3 className="school-overview-section-title">School Information</h3>
-          <div className="school-overview-profile-card">
-            <div className="school-overview-profile-heading">
-              <div className="school-overview-profile-identity">
-                {school.logo_url && (
-                  <img
-                    src={school.logo_url}
-                    alt={`${school.school_name || "School"} logo`}
-                    className="school-overview-profile-name-logo"
-                  />
-                )}
-                <div className="school-overview-profile-name">
-                  <div>{school.school_name || "School Name N/A"}</div>
-                  <div className="school-overview-profile-subtitle">
-                    {school.area || "Area N/A"},{" "}
-                    {school.district || "District N/A"},{" "}
-                    {school.state || "State N/A"}
-                  </div>
-                </div>
-              </div>
-              <span className="school-overview-profile-id">
-                {school.school_id || "ID N/A"}
-              </span>
+        {schoolCognitiveAnalysis?.hasData && (
+          <section
+            className="school-overview-section bloom-analysis"
+            style={{
+              padding: "16px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              background: "#ffffff",
+              boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "14px",
+              }}
+            >
+              <h3 className="school-overview-section-title" style={{ margin: 0 }}>
+                School Cognitive Analysis
+              </h3>
+              <button
+                type="button"
+                className="exam-results-header-download"
+                onClick={() => setView("school-subject-bloom-analytics")}
+                style={{
+                  minHeight: "34px",
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                }}
+              >
+                Subject Analysis
+              </button>
             </div>
-            <div className="school-overview-info-grid">
+
+            <div
+              className="bloom-summary-grid"
+              style={{
+                display: "grid",
+                gap: "12px",
+                marginBottom: "16px",
+              }}
+            >
               {[
-                ["School ID", school.school_id],
-                ["State", school.state],
-                ["District", school.district],
-                ["Area", school.area],
-                ["Academic Year", school.academic_year],
-              ].map(([k, v]) => (
-                <div className="school-overview-info-item" key={k}>
-                  <div className="school-overview-info-label">{k}</div>
-                  <div className="school-overview-info-value">{v || "-"}</div>
+                {
+                  title: "Overall Cognitive Mastery",
+                  value: `${schoolCognitiveAnalysis.overall}%`,
+                  helper: "Across whole school",
+                  Icon: Target,
+                  iconColor: "#1681ff",
+                  valueColor: "#061a4f",
+                  bg: "linear-gradient(135deg, #eef6ff 0%, #f7fbff 100%)",
+                },
+                {
+                  title: "Lower Order Thinking",
+                  value: `${schoolCognitiveAnalysis.lots}%`,
+                  helper: "Remember + Understand",
+                  Icon: Brain,
+                  iconColor: "#10b981",
+                  valueColor: "#061a4f",
+                  bg: "linear-gradient(135deg, #eafbf6 0%, #f7fffc 100%)",
+                },
+                {
+                  title: "Higher Order Thinking",
+                  value: `${schoolCognitiveAnalysis.hots}%`,
+                  helper: "Apply + Analyse + Evaluate + Create",
+                  Icon: Lightbulb,
+                  iconColor: "#ff7a1a",
+                  valueColor: "#a20f2d",
+                  bg: "linear-gradient(135deg, #fff2e8 0%, #fff9f4 100%)",
+                },
+                {
+                  title: "Questions Analysed",
+                  value: schoolCognitiveAnalysis.questions,
+                  helper: "Unique Bloom-tagged questions",
+                  Icon: FileText,
+                  iconColor: "#3b82f6",
+                  valueColor: "#061a4f",
+                  bg: "linear-gradient(135deg, #f0f3ff 0%, #fbfaff 100%)",
+                },
+                {
+                  title: "Students",
+                  value: schoolCognitiveAnalysis.students,
+                  helper: "Unique students in school",
+                  Icon: UsersRound,
+                  iconColor: "#fb5b7b",
+                  valueColor: "#a20f2d",
+                  bg: "linear-gradient(135deg, #fff0f5 0%, #fff7fa 100%)",
+                },
+              ].map(({ Icon, ...card }) => (
+                <div
+                  key={card.title}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "38px minmax(0, 1fr)",
+                    gap: "10px",
+                    alignItems: "center",
+                    minHeight: "96px",
+                    padding: "14px",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    background: card.bg,
+                  }}
+                >
+                  <Icon size={34} color={card.iconColor} strokeWidth={2.4} />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        color: "#0b1f5c",
+                        fontSize: "12px",
+                        fontWeight: "900",
+                      }}
+                    >
+                      {card.title}
+                    </div>
+                    <div
+                      style={{
+                        color: card.valueColor,
+                        fontSize: "26px",
+                        fontWeight: "950",
+                        lineHeight: 1.05,
+                        marginTop: "2px",
+                      }}
+                    >
+                      {card.value}
+                    </div>
+                    <div
+                      style={{
+                        color: "#0b3b78",
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        marginTop: "5px",
+                      }}
+                    >
+                      {card.helper}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        </section>
+
+            <div className="bloom-chart-grid" style={{ display: "grid", gap: "14px" }}>
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Question Distribution by Bloom&apos;s Skill
+                </h4>
+                <div style={{ display: "grid", gap: "9px" }}>
+                  {schoolCognitiveAnalysis.distribution.map((item) => (
+                    <div
+                      key={item.skill}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        gap: "12px",
+                        alignItems: "center",
+                        color: "#0b1f5c",
+                        fontSize: "13px",
+                        fontWeight: "800",
+                      }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: "11px",
+                            height: "11px",
+                            borderRadius: "3px",
+                            background: item.color,
+                          }}
+                        />
+                        {item.skill}
+                      </span>
+                      <span>
+                        {item.percentage}% ({item.count})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Overall Performance by Bloom&apos;s Skill
+                </h4>
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {schoolCognitiveAnalysis.distribution.map((item) => (
+                    <div key={item.skill}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          color: "#0b1f5c",
+                          fontSize: "12px",
+                          fontWeight: "800",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <span>{item.skill}</span>
+                        <span>{item.performance}%</span>
+                      </div>
+                      <div
+                        style={{
+                          height: "10px",
+                          borderRadius: "999px",
+                          background: "#e2e8f0",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${item.performance}%`,
+                            height: "100%",
+                            background: item.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Cognitive Balance
+                </h4>
+                <div
+                  style={{
+                    display: "grid",
+                    justifyItems: "center",
+                    gap: "12px",
+                    color: "#0b1f5c",
+                    fontSize: "13px",
+                    fontWeight: "800",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "140px",
+                      height: "140px",
+                      borderRadius: "50%",
+                      background: `conic-gradient(#22b981 0% ${schoolCognitiveAnalysis.lotsQuestionPercentage}%, #ff7a1a ${schoolCognitiveAnalysis.lotsQuestionPercentage}% 100%)`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: "32px",
+                        display: "grid",
+                        placeItems: "center",
+                        borderRadius: "50%",
+                        background: "#ffffff",
+                        color: "#0b1f5c",
+                        fontWeight: "950",
+                        textAlign: "center",
+                      }}
+                    >
+                      <span style={{ display: "grid", placeItems: "center", gap: "4px", lineHeight: 1 }}>
+                        <span style={{ fontSize: "18px" }}>100%</span>
+                        <span style={{ fontSize: "9px", fontWeight: "900" }}>
+                          Questions
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gap: "8px", width: "100%" }}>
+                    {[
+                      ["LOTS Questions", schoolCognitiveAnalysis.lotsQuestionPercentage, "#22b981"],
+                      ["HOTS Questions", schoolCognitiveAnalysis.hotsQuestionPercentage, "#ff7a1a"],
+                    ].map(([label, value, color]) => (
+                      <div
+                        key={label}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                        }}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "7px" }}>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: "10px",
+                              height: "10px",
+                              borderRadius: "50%",
+                              background: color,
+                            }}
+                          />
+                          {label}
+                        </span>
+                        <span>{value}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="bloom-chart-grid"
+              style={{ display: "grid", gap: "14px", marginTop: "14px" }}
+            >
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Cognitive Performance Trend
+                </h4>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {schoolCognitiveAnalysis.trend.map((exam) => (
+                    <div
+                      key={exam.label}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "10px",
+                        color: "#0b1f5c",
+                        fontSize: "12px",
+                        fontWeight: "800",
+                      }}
+                    >
+                      <span>{exam.label}</span>
+                      <span>
+                        <span style={{ color: "#22b981" }}>LOTS {exam.lots}%</span>
+                        {" | "}
+                        <span style={{ color: "#ff7a1a" }}>HOTS {exam.hots}%</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Student Distribution by Cognitive Level
+                </h4>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {schoolCognitiveAnalysis.studentBands.map((band) => (
+                    <div
+                      key={band.label}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        alignItems: "center",
+                        gap: "12px",
+                        minHeight: "34px",
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        background: `${band.color}22`,
+                        color: "#0b1f5c",
+                        fontSize: "13px",
+                        fontWeight: "800",
+                      }}
+                    >
+                      <span>
+                        {band.label} ({band.range})
+                      </span>
+                      <span style={{ color: band.color, whiteSpace: "nowrap" }}>
+                        {band.percentage}% ({band.count})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                }}
+              >
+                <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                  Key Insights
+                </h4>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {schoolCognitiveAnalysis.insights.map((insight, index) => {
+                    const insightIcons = [
+                      { Icon: Target, color: "#ff3366" },
+                      { Icon: Activity, color: "#22b981" },
+                      { Icon: UsersRound, color: "#2f8cff" },
+                    ];
+                    const { Icon, color } =
+                      insightIcons[index] || insightIcons[0];
+
+                    return (
+                      <div
+                        key={insight}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "28px minmax(0, 1fr)",
+                          alignItems: "start",
+                          gap: "10px",
+                          color: "#0b1f5c",
+                          fontSize: "13px",
+                          fontWeight: "800",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        <Icon size={22} color={color} strokeWidth={2.4} />
+                        <span>{insight}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {renderIITBatches()}
         {renderTeachersTable()}
       </div>
     </div>
   );
+  };
   // renderMetricButtons replaced by sidebar tab navigation
 
   const renderTeachersTable = () => {
@@ -1268,7 +1938,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 <th style={{ width: "150px" }}>CONTACT</th>
                 <th style={{ minWidth: "170px" }}>EMAIL</th>
                 <th style={{ minWidth: "220px" }}>
-                  ALLOTMENTS (CLASS · SECTION · SUBJECT)
+                  ALLOTMENTS (CLASS � SECTION � SUBJECT)
                 </th>
               </tr>
             </thead>
@@ -1298,7 +1968,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                       >
                         {t.teacher_assignments.map((a, i) => (
                           <span key={i} className="assignment-tag">
-                            {a.class} · {a.section} · {a.subject}
+                            {a.class} � {a.section} � {a.subject}
                           </span>
                         ))}
                       </div>
@@ -1329,16 +1999,16 @@ export default function SchoolOwnerDashboard({ onBack }) {
       ? school.classes.reduce((sum, c) => sum + (c.num_students || 0), 0)
       : 0;
 
-    // ✅ Determine global active subjects across all classes
+    // ? Determine global active subjects across all classes
     const globalActiveSubjects = new Set();
     school.classes.forEach((cls) => {
       getActiveSubjects(cls.group).forEach((sub) =>
         globalActiveSubjects.add(sub),
-      ); // 👈 FIXED
+      ); // ?? FIXED
     });
     const globalActive = Array.from(globalActiveSubjects);
 
-    // 📥 Download Performance Analysis + Batches Table as Single A4 PDF
+    // ?? Download Performance Analysis + Batches Table as Single A4 PDF
     const downloadIITAnalysisPDF = () => {
       if (
         !school ||
@@ -1434,13 +2104,13 @@ export default function SchoolOwnerDashboard({ onBack }) {
           value === undefined ||
           value === ""
         ) {
-          return "—";
+          return "�";
         }
 
         const numericValue = parseFloat(value);
 
         if (Number.isNaN(numericValue)) {
-          return "—";
+          return "�";
         }
 
         return `${numericValue.toFixed(2)}%`;
@@ -1523,7 +2193,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           `${safeText(
             school.school_name,
             "Unknown School",
-          ).toUpperCase()} • IIT Foundation Performance Report`,
+          ).toUpperCase()} � IIT Foundation Performance Report`,
           pageMargin,
           pageHeight - 7,
         );
@@ -1774,7 +2444,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         `Area: ${safeText(
           school.area,
           "Not Set",
-        )}  •  IIT Foundation Academic Analytics`,
+        )}  �  IIT Foundation Academic Analytics`,
         schoolTextX,
         20,
       );
@@ -1928,7 +2598,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       const summaryCards = [
         {
           label: "Overall Average",
-          value: overallAverage === "-" ? "—" : `${overallAverage}%`,
+          value: overallAverage === "-" ? "�" : `${overallAverage}%`,
           description: "Combined subject average",
           primaryColor: COLORS.blue,
           backgroundColor: COLORS.lightBlue,
@@ -2392,7 +3062,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             doc.setFontSize(8.5);
 
             doc.text(
-              `${schoolName} — IIT Foundation Batch Analysis`,
+              `${schoolName} � IIT Foundation Batch Analysis`,
               pageMargin,
               8.5,
             );
@@ -2458,8 +3128,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
         {analysis && (
           <div
             style={{
-              marginBottom: "24px",
-              padding: "16px",
+              marginBottom: "14px",
+              padding: "12px",
               background: "#f8fafc",
               borderRadius: "8px",
               border: "1px solid #e2e8f0",
@@ -2467,14 +3137,14 @@ export default function SchoolOwnerDashboard({ onBack }) {
           >
             <h3
               style={{
-                margin: "0 0 12px 0",
+                margin: "0 0 8px 0",
                 color: "#1e293b",
                 textAlign: "center",
               }}
             >
               Performance Analysis
             </h3>
-            <div style={{ marginBottom: "16px", textAlign: "center" }}>
+            <div style={{ marginBottom: "10px", textAlign: "center" }}>
               <strong>Best Subject:</strong> {analysis.bestSubject}
             </div>
             <div
@@ -2482,7 +3152,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 display: "flex",
                 justifyContent: "space-around",
                 flexWrap: "wrap",
-                gap: "16px",
+                gap: "12px",
               }}
             >
               {Object.entries(analysis.subjectAverages)
@@ -2492,7 +3162,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                     key={subject}
                     style={{
                       width: "120px",
-                      padding: "14px",
+                      padding: "10px 12px",
                       background: "white",
                       borderRadius: "8px",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
@@ -2514,7 +3184,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                         fontSize: "20px",
                         fontWeight: "700",
                         color: "#0f172a",
-                        marginTop: "4px",
+                        marginTop: "2px",
                       }}
                     >
                       {avg}%
@@ -2529,7 +3199,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
         )}
 
         {/* ===== IIT FOUNDATION BATCHES TABLE ===== */}
-        <h2 className="school-overview-section-title iit-batches-heading">
+        <h2
+          className="school-overview-section-title iit-batches-heading"
+          style={{ margin: "0 0 10px" }}
+        >
           IIT Foundation Batches (
           {Array.isArray(school.classes) ? school.classes.length : 0})
         </h2>
@@ -2655,7 +3328,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     const classSections = Array.isArray(school.classes)
       ? school.classes.map((c) => ({ class: c.class, section: c.section }))
       : [];
-    // ✅ DEFINE subjectKeyMap HERE — at the top of the function
+    // ? DEFINE subjectKeyMap HERE � at the top of the function
     const subjectKeyMap = {
       Physics: "phy_exam_per_average",
       Chemistry: "chem_exam_per_average",
@@ -2767,13 +3440,13 @@ export default function SchoolOwnerDashboard({ onBack }) {
           }
         });
         subjectAverages[sub.name] =
-          count > 0 ? (total / count).toFixed(2) : "—";
-        subjectTopExams[sub.name] = topExam ? topExam.exam_pattern : "—";
+          count > 0 ? (total / count).toFixed(2) : "�";
+        subjectTopExams[sub.name] = topExam ? topExam.exam_pattern : "�";
       });
       let bestSubject = null;
       let bestAvg = -1;
       for (const [name, avg] of Object.entries(subjectAverages)) {
-        if (avg !== "—") {
+        if (avg !== "�") {
           const numAvg = parseFloat(avg);
           if (numAvg > bestAvg) {
             bestAvg = numAvg;
@@ -2813,6 +3486,251 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     const topStudents =
       allClassExams.length > 0 ? computeTopStudents(allClassExams) : [];
+
+    const computeBatchCognitiveAnalysis = (rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+
+      const bloomSkills = [
+        "Remember",
+        "Understand",
+        "Apply",
+        "Analyse",
+        "Evaluate",
+        "Create",
+      ];
+      const bloomColors = {
+        Remember: "#2f8cff",
+        Understand: "#34c99a",
+        Apply: "#ffc83d",
+        Analyse: "#ff8a45",
+        Evaluate: "#ff5f7d",
+        Create: "#8f6df6",
+      };
+      const normalizeBloomSkill = (value) => {
+        const normalized = String(value || "")
+          .toLowerCase()
+          .replace(/[_-]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        if (["remember", "remembering"].includes(normalized)) return "Remember";
+        if (["understand", "understanding"].includes(normalized)) return "Understand";
+        if (["apply", "applying"].includes(normalized)) return "Apply";
+        if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+          return "Analyse";
+        }
+        if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+        if (["create", "creating"].includes(normalized)) return "Create";
+        return "";
+      };
+      const parseQuestionResults = (value) => {
+        if (!value) return {};
+        if (typeof value === "string") {
+          try {
+            return JSON.parse(value) || {};
+          } catch {
+            return {};
+          }
+        }
+        return typeof value === "object" ? value : {};
+      };
+      const getQuestionResponseStatus = (details = {}) => {
+        const status = String(details?.status || "").toLowerCase();
+        const option = details?.option ?? details?.options ?? "";
+        const marks = Number(details?.marks);
+
+        if (status.includes("incorrect")) return "incorrect";
+        if (status.includes("correct")) return "correct";
+        if (status.includes("not") || status.includes("unattempted") || !option) {
+          return "unattempted";
+        }
+        if (Number.isFinite(marks) && marks > 0) return "correct";
+        if (option) return "incorrect";
+        return "unattempted";
+      };
+      const normalizeDateKey = (value) => {
+        if (!value) return "";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime())
+          ? String(value).trim()
+          : date.toISOString().slice(0, 10);
+      };
+
+      const skillTotals = Object.fromEntries(
+        bloomSkills.map((skill) => [
+          skill,
+          { skill, correct: 0, total: 0, uniqueQuestions: new Set() },
+        ]),
+      );
+      const studentTotals = new Map();
+      const examTotals = new Map();
+
+      rows.forEach((row) => {
+        const questions = parseQuestionResults(row.question_results);
+        const studentKey =
+          row.student_id ||
+          row.studentId ||
+          [row.first_name, row.last_name].filter(Boolean).join(" ") ||
+          `student-${studentTotals.size + 1}`;
+        const examKey = [
+          row.exam_pattern || "Exam",
+          normalizeDateKey(row.exam_date),
+        ].join("|");
+        const examLabel = row.exam_pattern || "Exam";
+
+        if (!studentTotals.has(studentKey)) {
+          studentTotals.set(studentKey, { correct: 0, total: 0 });
+        }
+        if (!examTotals.has(examKey)) {
+          examTotals.set(examKey, {
+            label: examLabel,
+            order:
+              parseInt(String(row.exam_pattern || "").replace(/[^0-9]/g, ""), 10) ||
+              examTotals.size + 1,
+            lots: { correct: 0, total: 0 },
+            hots: { correct: 0, total: 0 },
+          });
+        }
+
+        Object.entries(questions).forEach(([question, details]) => {
+          const skill = normalizeBloomSkill(
+            details?.blooms_skill ||
+              details?.bloomsSkill ||
+              details?.["Blooms Skill"] ||
+              details?.["Bloom's Skill"],
+          );
+          if (!skill) return;
+
+          const status = getQuestionResponseStatus(details);
+          const isCorrect = status === "correct";
+          const questionKey = [
+            row.exam_pattern || "Exam",
+            normalizeDateKey(row.exam_date),
+            String(question || "").trim(),
+          ].join("|");
+          const bucket = ["Remember", "Understand"].includes(skill)
+            ? "lots"
+            : "hots";
+          const studentRow = studentTotals.get(studentKey);
+          const examRow = examTotals.get(examKey);
+
+          skillTotals[skill].total += 1;
+          skillTotals[skill].uniqueQuestions.add(questionKey);
+          studentRow.total += 1;
+          examRow[bucket].total += 1;
+
+          if (isCorrect) {
+            skillTotals[skill].correct += 1;
+            studentRow.correct += 1;
+            examRow[bucket].correct += 1;
+          }
+        });
+      });
+
+      const percentage = (correct, total) =>
+        total > 0 ? Math.round((correct / total) * 100) : 0;
+      const totals = bloomSkills.reduce(
+        (acc, skill) => {
+          const item = skillTotals[skill];
+          acc.correct += item.correct;
+          acc.total += item.total;
+          acc.uniqueQuestions += item.uniqueQuestions.size;
+          if (["Remember", "Understand"].includes(skill)) {
+            acc.lots.correct += item.correct;
+            acc.lots.total += item.total;
+            acc.lots.uniqueQuestions += item.uniqueQuestions.size;
+          } else {
+            acc.hots.correct += item.correct;
+            acc.hots.total += item.total;
+            acc.hots.uniqueQuestions += item.uniqueQuestions.size;
+          }
+          return acc;
+        },
+        {
+          correct: 0,
+          total: 0,
+          uniqueQuestions: 0,
+          lots: { correct: 0, total: 0, uniqueQuestions: 0 },
+          hots: { correct: 0, total: 0, uniqueQuestions: 0 },
+        },
+      );
+      const studentBands = [
+        { label: "Advanced Thinkers", range: "80-100%", min: 80, max: 100, count: 0, color: "#8f6df6" },
+        { label: "Proficient", range: "60-79%", min: 60, max: 79.999, count: 0, color: "#34c99a" },
+        { label: "Developing", range: "40-59%", min: 40, max: 59.999, count: 0, color: "#ffc83d" },
+        { label: "Foundation", range: "0-39%", min: 0, max: 39.999, count: 0, color: "#ff6f8d" },
+      ];
+
+      studentTotals.forEach((student) => {
+        const accuracy = student.total > 0 ? (student.correct / student.total) * 100 : 0;
+        const band =
+          studentBands.find((item) => accuracy >= item.min && accuracy <= item.max) ||
+          studentBands[studentBands.length - 1];
+        band.count += 1;
+      });
+
+      const distribution = bloomSkills.map((skill) => {
+        const count = skillTotals[skill].uniqueQuestions.size;
+        return {
+          skill,
+          count,
+          percentage:
+            totals.uniqueQuestions > 0
+              ? Math.round((count / totals.uniqueQuestions) * 100)
+              : 0,
+          performance: percentage(skillTotals[skill].correct, skillTotals[skill].total),
+          color: bloomColors[skill],
+        };
+      });
+      const lotsQuestionPercentage =
+        totals.uniqueQuestions > 0
+          ? Math.round((totals.lots.uniqueQuestions / totals.uniqueQuestions) * 100)
+          : 0;
+      const trend = Array.from(examTotals.values())
+        .sort((a, b) => a.order - b.order)
+        .map((exam) => ({
+          label: exam.label,
+          lots: percentage(exam.lots.correct, exam.lots.total),
+          hots: percentage(exam.hots.correct, exam.hots.total),
+        }));
+      const topSkill = [...distribution].sort((a, b) => b.performance - a.performance)[0];
+      const hotsGap =
+        percentage(totals.lots.correct, totals.lots.total) -
+        percentage(totals.hots.correct, totals.hots.total);
+
+      return {
+        hasData: totals.total > 0,
+        overall: percentage(totals.correct, totals.total),
+        lots: percentage(totals.lots.correct, totals.lots.total),
+        hots: percentage(totals.hots.correct, totals.hots.total),
+        questions: totals.uniqueQuestions,
+        students: studentTotals.size,
+        distribution,
+        lotsQuestionPercentage,
+        hotsQuestionPercentage:
+          totals.uniqueQuestions > 0 ? 100 - lotsQuestionPercentage : 0,
+        studentBands: studentBands.map((band) => ({
+          ...band,
+          percentage:
+            studentTotals.size > 0
+              ? Math.round((band.count / studentTotals.size) * 100)
+              : 0,
+        })),
+        trend,
+        insights: [
+          topSkill && topSkill.count > 0
+            ? `Strongest Bloom skill is ${topSkill.skill} at ${topSkill.performance}%.`
+            : "Bloom-tagged performance data is not available yet.",
+          hotsGap > 0
+            ? `HOTS trails LOTS by ${hotsGap}%, needs focused improvement.`
+            : "HOTS performance is in line with LOTS.",
+          `${studentTotals.size} students analysed across ${examTotals.size} exams.`,
+        ],
+      };
+    };
+
+    const batchCognitiveAnalysis =
+      allClassExams.length > 0 ? computeBatchCognitiveAnalysis(allClassExams) : null;
 
     const handleGenerateCertificates = async () => {
       if (!topStudents.length || !examWiseClassSection) return;
@@ -2956,7 +3874,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
       const formatPercentage = (value) => {
         if (!isNumericValue(value)) {
-          return "—";
+          return "�";
         }
 
         return `${parseFloat(value).toFixed(2)}%`;
@@ -3111,7 +4029,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             ).toFixed(2)
           : "-";
 
-      const bestSubject = analysis.bestSubject || "—";
+      const bestSubject = analysis.bestSubject || "�";
 
       const bestSubjectAverage = isNumericValue(
         analysis.subjectAverages?.[bestSubject],
@@ -3349,7 +4267,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           `Area: ${safeText(
             school?.area,
             "Not Set",
-          )}  •  IIT Foundation Academic Analytics`,
+          )}  �  IIT Foundation Academic Analytics`,
           schoolTextX,
           20,
           {
@@ -3408,7 +4326,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.setFont("helvetica", "normal");
 
         doc.text(
-          `IIT Foundation • Batch ${cls}-${sec}`,
+          `IIT Foundation � Batch ${cls}-${sec}`,
           pageWidth / 2,
           pageHeight - 7,
           {
@@ -3511,7 +4429,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         },
         {
           label: "Batch Average",
-          value: overallBatchAverage === "-" ? "—" : `${overallBatchAverage}%`,
+          value: overallBatchAverage === "-" ? "�" : `${overallBatchAverage}%`,
           description: "Combined active-subject average",
           primaryColor: COLORS.purple,
           backgroundColor: COLORS.lightPurple,
@@ -3622,9 +4540,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
         safeActiveSubs.forEach((subject, index) => {
           const cardX = pageMargin + index * (subjectCardWidth + subjectGap);
 
-          const average = analysis.subjectAverages?.[subject] ?? "—";
+          const average = analysis.subjectAverages?.[subject] ?? "�";
 
-          const topExam = analysis.subjectTopExams?.[subject] || "—";
+          const topExam = analysis.subjectTopExams?.[subject] || "�";
 
           const subjectColor = getSubjectColor(subject);
 
@@ -3737,7 +4655,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           [
             "Top Exam",
             ...safeActiveSubs.map(
-              (subject) => analysis.subjectTopExams?.[subject] || "—",
+              (subject) => analysis.subjectTopExams?.[subject] || "�",
             ),
           ],
           [
@@ -3745,7 +4663,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             ...safeActiveSubs.map((subject) =>
               isNumericValue(analysis.subjectAverages?.[subject])
                 ? formatValue(analysis.subjectAverages[subject])
-                : "—",
+                : "�",
             ),
           ],
         ];
@@ -3919,7 +4837,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         },
         {
           color: COLORS.amber,
-          label: "50% – 74.99%",
+          label: "50% � 74.99%",
         },
         {
           color: COLORS.red,
@@ -4210,7 +5128,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
       // ===== LOAD BASE IMAGE =====
       try {
-        // ✅ Use the imported asset directly
+        // ? Use the imported asset directly
         doc.addImage(certificateTemplate, "SVG", 0, 0, w, h);
       } catch (err) {
         console.error("Failed to add certificate template:", err);
@@ -4365,15 +5283,517 @@ export default function SchoolOwnerDashboard({ onBack }) {
             </div>
           ) : (
             <>
-              <h3 style={{ marginBottom: "16px", color: "#1e293b" }}>
+              {batchCognitiveAnalysis?.hasData && (
+                <section
+                  className="batchwise-cognitive-section bloom-analysis"
+                  style={{
+                    marginTop: "22px",
+                    marginBottom: "24px",
+                    padding: "16px",
+                    background: "#ffffff",
+                    borderRadius: "10px",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 8px 22px rgba(15, 47, 99, 0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin: 0,
+                        color: "#0b1f5c",
+                        fontSize: "20px",
+                        fontWeight: "900",
+                      }}
+                    >
+                      Cognitive Analysis
+                    </h3>
+                    <button
+                      type="button"
+                      className="exam-results-header-download"
+                      onClick={() => setView("batch-subject-bloom-analytics")}
+                      style={{
+                        minHeight: "34px",
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Subject Analysis
+                    </button>
+                  </div>
+                  <div
+                    className="bloom-summary-grid"
+                    style={{
+                      display: "grid",
+                      gap: "12px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    {[
+                      {
+                        title: "Overall Cognitive Mastery",
+                        value: `${batchCognitiveAnalysis.overall}%`,
+                        helper: "Across all batch exams",
+                        Icon: Target,
+                        iconColor: "#1681ff",
+                        valueColor: "#061a4f",
+                        bg: "linear-gradient(135deg, #eef6ff 0%, #f7fbff 100%)",
+                      },
+                      {
+                        title: "Lower Order Thinking",
+                        value: `${batchCognitiveAnalysis.lots}%`,
+                        helper: "Remember + Understand",
+                        Icon: Brain,
+                        iconColor: "#10b981",
+                        valueColor: "#061a4f",
+                        bg: "linear-gradient(135deg, #eafbf6 0%, #f7fffc 100%)",
+                      },
+                      {
+                        title: "Higher Order Thinking",
+                        value: `${batchCognitiveAnalysis.hots}%`,
+                        helper: "Apply + Analyse + Evaluate + Create",
+                        Icon: Lightbulb,
+                        iconColor: "#ff7a1a",
+                        valueColor: "#a20f2d",
+                        bg: "linear-gradient(135deg, #fff2e8 0%, #fff9f4 100%)",
+                      },
+                      {
+                        title: "Questions Analysed",
+                        value: batchCognitiveAnalysis.questions,
+                        helper: "Unique Bloom-tagged questions",
+                        Icon: FileText,
+                        iconColor: "#3b82f6",
+                        valueColor: "#061a4f",
+                        bg: "linear-gradient(135deg, #f0f3ff 0%, #fbfaff 100%)",
+                      },
+                      {
+                        title: "Students",
+                        value: batchCognitiveAnalysis.students,
+                        helper: "Unique students in batch",
+                        Icon: UsersRound,
+                        iconColor: "#fb5b7b",
+                        valueColor: "#a20f2d",
+                        bg: "linear-gradient(135deg, #fff0f5 0%, #fff7fa 100%)",
+                      },
+                    ].map(({ Icon, ...card }) => (
+                      <div
+                        key={card.title}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "38px minmax(0, 1fr)",
+                          gap: "10px",
+                          alignItems: "center",
+                          minHeight: "96px",
+                          padding: "14px",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          background: card.bg,
+                        }}
+                      >
+                        <Icon size={34} color={card.iconColor} strokeWidth={2.4} />
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              color: "#0b1f5c",
+                              fontSize: "12px",
+                              fontWeight: "900",
+                            }}
+                          >
+                            {card.title}
+                          </div>
+                          <div
+                            style={{
+                              color: card.valueColor,
+                              fontSize: "26px",
+                              fontWeight: "950",
+                              lineHeight: 1.05,
+                              marginTop: "2px",
+                            }}
+                          >
+                            {card.value}
+                          </div>
+                          <div
+                            style={{
+                              color: "#0b3b78",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              marginTop: "5px",
+                            }}
+                          >
+                            {card.helper}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    className="bloom-chart-grid"
+                    style={{
+                      display: "grid",
+                      gap: "14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Question Distribution by Bloom&apos;s Skill
+                      </h4>
+                      <div style={{ display: "grid", gap: "9px" }}>
+                        {batchCognitiveAnalysis.distribution.map((item) => (
+                          <div
+                            key={item.skill}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "minmax(0, 1fr) auto",
+                              gap: "12px",
+                              alignItems: "center",
+                              color: "#0b1f5c",
+                              fontSize: "13px",
+                              fontWeight: "800",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "11px",
+                                  height: "11px",
+                                  borderRadius: "3px",
+                                  background: item.color,
+                                }}
+                              />
+                              {item.skill}
+                            </span>
+                            <span>
+                              {item.percentage}% ({item.count})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Overall Performance by Bloom&apos;s Skill
+                      </h4>
+                      <div style={{ display: "grid", gap: "10px" }}>
+                        {batchCognitiveAnalysis.distribution.map((item) => (
+                          <div key={item.skill}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "10px",
+                                color: "#0b1f5c",
+                                fontSize: "12px",
+                                fontWeight: "800",
+                                marginBottom: "4px",
+                              }}
+                            >
+                              <span>{item.skill}</span>
+                              <span>{item.performance}%</span>
+                            </div>
+                            <div
+                              style={{
+                                height: "10px",
+                                borderRadius: "999px",
+                                background: "#e2e8f0",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${item.performance}%`,
+                                  height: "100%",
+                                  background: item.color,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Cognitive Balance
+                      </h4>
+                      <div
+                        style={{
+                          display: "grid",
+                          justifyItems: "center",
+                          gap: "12px",
+                          color: "#0b1f5c",
+                          fontSize: "13px",
+                          fontWeight: "800",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "relative",
+                            width: "140px",
+                            height: "140px",
+                            borderRadius: "50%",
+                            background: `conic-gradient(#22b981 0% ${batchCognitiveAnalysis.lotsQuestionPercentage}%, #ff7a1a ${batchCognitiveAnalysis.lotsQuestionPercentage}% 100%)`,
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: "32px",
+                              display: "grid",
+                              placeItems: "center",
+                              borderRadius: "50%",
+                              background: "#ffffff",
+                              color: "#0b1f5c",
+                              fontWeight: "950",
+                              textAlign: "center",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "grid",
+                                placeItems: "center",
+                                gap: "4px",
+                                lineHeight: 1,
+                              }}
+                            >
+                              <span style={{ fontSize: "18px" }}>100%</span>
+                              <span style={{ fontSize: "9px", fontWeight: "900" }}>
+                                Questions
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "8px",
+                            width: "100%",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "10px",
+                            }}
+                          >
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "7px" }}>
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "10px",
+                                  height: "10px",
+                                  borderRadius: "50%",
+                                  background: "#22b981",
+                                }}
+                              />
+                              LOTS Questions
+                            </span>
+                            <span>{batchCognitiveAnalysis.lotsQuestionPercentage}%</span>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "10px",
+                            }}
+                          >
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "7px" }}>
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "10px",
+                                  height: "10px",
+                                  borderRadius: "50%",
+                                  background: "#ff7a1a",
+                                }}
+                              />
+                              HOTS Questions
+                            </span>
+                            <span>{batchCognitiveAnalysis.hotsQuestionPercentage}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="bloom-chart-grid"
+                    style={{
+                      display: "grid",
+                      gap: "14px",
+                      marginTop: "14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Cognitive Performance Trend
+                      </h4>
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        {batchCognitiveAnalysis.trend.map((exam) => (
+                          <div key={exam.label}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "10px",
+                                color: "#0b1f5c",
+                                fontSize: "12px",
+                                fontWeight: "800",
+                              }}
+                            >
+                              <span>{exam.label}</span>
+                              <span>
+                                <span style={{ color: "#22b981" }}>LOTS {exam.lots}%</span>
+                                {" | "}
+                                <span style={{ color: "#ff7a1a" }}>HOTS {exam.hots}%</span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Student Distribution by Cognitive Level
+                      </h4>
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        {batchCognitiveAnalysis.studentBands.map((band) => (
+                          <div
+                            key={band.label}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "minmax(0, 1fr) auto",
+                              alignItems: "center",
+                              gap: "12px",
+                              minHeight: "34px",
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              background: `${band.color}22`,
+                              color: "#0b1f5c",
+                              fontSize: "13px",
+                              fontWeight: "800",
+                            }}
+                          >
+                            <span>
+                              {band.label} ({band.range})
+                            </span>
+                            <span style={{ color: band.color, whiteSpace: "nowrap" }}>
+                              {band.percentage}% ({band.count})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 12px", color: "#0b1f5c" }}>
+                        Key Insights
+                      </h4>
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        {batchCognitiveAnalysis.insights.map((insight, index) => {
+                          const insightIcons = [
+                            { Icon: Target, color: "#ff3366" },
+                            { Icon: Activity, color: "#22b981" },
+                            { Icon: UsersRound, color: "#2f8cff" },
+                          ];
+                          const { Icon, color } =
+                            insightIcons[index] || insightIcons[0];
+
+                          return (
+                          <div
+                            key={insight}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "28px minmax(0, 1fr)",
+                              alignItems: "start",
+                              gap: "10px",
+                              color: "#0b1f5c",
+                              fontSize: "13px",
+                              fontWeight: "800",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <Icon size={22} color={color} strokeWidth={2.4} />
+                            <span>{insight}</span>
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+              <h3 style={{ margin: "0 0 8px", color: "#1e293b" }}>
                 Exams for {examWiseClassSection.class} -{" "}
                 {examWiseClassSection.section}
               </h3>
               {examWiseExams.length > 0 && analysis && (
                 <div
                   style={{
-                    marginBottom: "24px",
-                    padding: "16px",
+                    marginBottom: "16px",
+                    padding: "12px",
                     background: "#f8fafc",
                     borderRadius: "8px",
                     border: "1px solid #e2e8f0",
@@ -4381,19 +5801,19 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 >
                   <h3
                     style={{
-                      margin: "0 0 12px 0",
+                      margin: "0 0 8px 0",
                       color: "#1e293b",
                       textAlign: "center",
                     }}
                   >
                     Performance Analysis
                   </h3>
-                  <div style={{ marginBottom: "16px", textAlign: "center" }}>
-                    <strong>Best Subject:</strong> {analysis.bestSubject || "—"}
+                  <div style={{ marginBottom: "10px", textAlign: "center" }}>
+                    <strong>Best Subject:</strong> {analysis.bestSubject || "�"}
                   </div>
                   <h4
                     style={{
-                      marginBottom: "12px",
+                      margin: "0 0 8px",
                       color: "#1e293b",
                     }}
                   >
@@ -4407,8 +5827,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
                       display: "flex",
                       justifyContent: "space-around",
                       flexWrap: "wrap",
-                      gap: "16px",
-                      marginTop: "12px",
+                      gap: "12px",
+                      marginTop: "8px",
                     }}
                   >
                     {Object.entries(analysis.subjectAverages).map(
@@ -4418,7 +5838,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                           className="batchwise-subject-average-card"
                           style={{
                             width: "140px",
-                            padding: "16px",
+                            padding: "10px 12px",
                             background: "white",
                             borderRadius: "8px",
                             boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
@@ -4440,7 +5860,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                               fontSize: "20px",
                               fontWeight: "700",
                               color: "#0f172a",
-                              marginTop: "4px",
+                              marginTop: "2px",
                             }}
                           >
                             {avg}%
@@ -4456,7 +5876,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                   {/* Subject-wise Top Exam */}
                   <div
                     className="batchwise-analysis-table-wrap"
-                    style={{ overflowX: "auto", marginTop: "20px" }}
+                    style={{ overflowX: "auto", marginTop: "14px" }}
                   >
                     <strong>Subject-wise Top Exam:</strong>
                     <table
@@ -4547,7 +5967,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                         <tr>
                           <td
                             style={{
-                              padding: "8px",
+                              padding: "6px",
                               border: "1px solid #cbd5e1",
                             }}
                           >
@@ -4561,7 +5981,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                           </td>
                           <td
                             style={{
-                              padding: "8px",
+                              padding: "6px",
                               border: "1px solid #cbd5e1",
                             }}
                           >
@@ -4575,7 +5995,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                           </td>
                           <td
                             style={{
-                              padding: "8px",
+                              padding: "6px",
                               border: "1px solid #cbd5e1",
                             }}
                           >
@@ -4589,7 +6009,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                           </td>
                           <td
                             style={{
-                              padding: "8px",
+                              padding: "6px",
                               border: "1px solid #cbd5e1",
                             }}
                           >
@@ -4608,9 +6028,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
                   {topStudents.length > 0 && (
                     <div
                       className="batchwise-analysis-table-wrap"
-                      style={{ marginTop: "24px", overflowX: "auto" }}
+                      style={{ marginTop: "16px", overflowX: "auto" }}
                     >
-                      <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>
+                      <h4 style={{ margin: "0 0 8px", color: "#1e293b" }}>
                         Top 5 Students (Cumulative Performance)
                       </h4>
                       <table
@@ -4626,7 +6046,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                           <tr style={{ background: "#e2e8f0" }}>
                             <th
                               style={{
-                                padding: "10px",
+                                padding: "8px",
                                 border: "1px solid #cbd5e1",
                               }}
                             >
@@ -4634,7 +6054,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                             </th>
                             <th
                               style={{
-                                padding: "10px",
+                                padding: "8px",
                                 border: "1px solid #cbd5e1",
                               }}
                             >
@@ -4642,7 +6062,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                             </th>
                             <th
                               style={{
-                                padding: "10px",
+                                padding: "8px",
                                 border: "1px solid #cbd5e1",
                               }}
                             >
@@ -4650,7 +6070,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                             </th>
                             <th
                               style={{
-                                padding: "10px",
+                                padding: "8px",
                                 border: "1px solid #cbd5e1",
                               }}
                             >
@@ -4666,7 +6086,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                             >
                               <td
                                 style={{
-                                  padding: "10px",
+                                  padding: "8px",
                                   border: "1px solid #cbd5e1",
                                   fontWeight: "600",
                                 }}
@@ -4675,7 +6095,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                               </td>
                               <td
                                 style={{
-                                  padding: "10px",
+                                  padding: "8px",
                                   border: "1px solid #cbd5e1",
                                 }}
                               >
@@ -4683,7 +6103,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                               </td>
                               <td
                                 style={{
-                                  padding: "10px",
+                                  padding: "8px",
                                   border: "1px solid #cbd5e1",
                                 }}
                               >
@@ -4691,7 +6111,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                               </td>
                               <td
                                 style={{
-                                  padding: "10px",
+                                  padding: "8px",
                                   border: "1px solid #cbd5e1",
                                 }}
                               >
@@ -4858,7 +6278,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                                   {exam.exam_pattern || "-"}
                                 </div>
                                 <div className="batchwise-exam-card__meta">
-                                  {exam.program || "-"} ·{" "}
+                                  {exam.program || "-"} �{" "}
                                   {exam.exam_date
                                     ? new Date(
                                         exam.exam_date,
@@ -5048,7 +6468,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           ).toFixed(2)
         : "0.00";
 
-    // ===== 2. SUBJECT-WISE TOPPERS — SINGLE MERGED TABLE =====
+    // ===== 2. SUBJECT-WISE TOPPERS � SINGLE MERGED TABLE =====
     const getTopStudents = (subjectKey) => {
       return [...results]
         .sort((a, b) => (b[subjectKey] || 0) - (a[subjectKey] || 0))
@@ -5791,6 +7211,636 @@ export default function SchoolOwnerDashboard({ onBack }) {
         },
       ];
     })();
+
+    const normalizeSubjectNameForCognitivePdf = (value) => {
+      const normalized = String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (normalized.includes("math")) return "Maths";
+      if (normalized.includes("physics")) return "Physics";
+      if (normalized.includes("chemistry")) return "Chemistry";
+      if (normalized.includes("biology")) return "Biology";
+      return "";
+    };
+    const getSubjectForCognitivePdf = (question, details = {}) => {
+      const storedSubject = details?.subject || details?.Subject;
+      const normalizedStoredSubject = normalizeSubjectNameForCognitivePdf(storedSubject);
+      if (normalizedStoredSubject) return normalizedStoredSubject;
+
+      const questionNumber = getQuestionNumber(question);
+      if (!questionNumber || !activeSubs.length) return "General";
+
+      const questionsPerSubject = Math.max(
+        1,
+        Math.ceil((totalQuestionCountForMapping || questionNumber) / activeSubs.length),
+      );
+      const subjectIndex = Math.min(
+        activeSubs.length - 1,
+        Math.floor((questionNumber - 1) / questionsPerSubject),
+      );
+
+      return activeSubs[subjectIndex] || "General";
+    };
+    const subjectBloomReportData = (() => {
+      const subjectTotals = activeSubs.reduce((acc, subject) => {
+        acc[subject] = {
+          subject,
+          correct: 0,
+          total: 0,
+          lotsCorrect: 0,
+          lotsTotal: 0,
+          hotsCorrect: 0,
+          hotsTotal: 0,
+          questionKeys: new Set(),
+          skills: Object.fromEntries(
+            bloomSkills.map((skill) => [skill, { correct: 0, total: 0 }]),
+          ),
+        };
+        return acc;
+      }, {});
+
+      results.forEach((studentResult) => {
+        const questions = parseQuestionResults(studentResult.question_results);
+        Object.entries(questions).forEach(([question, details]) => {
+          const skill = normalizeBloomSkill(
+            details?.blooms_skill ||
+              details?.bloomsSkill ||
+              details?.["Blooms Skill"] ||
+              details?.["Bloom's Skill"],
+          );
+          if (!skill) return;
+
+          const subject = getSubjectForCognitivePdf(question, details);
+          if (!subjectTotals[subject]) return;
+
+          const responseStatus = getQuestionResponseStatus(details);
+          const isCorrect = responseStatus === "correct";
+          const subjectTotal = subjectTotals[subject];
+
+          subjectTotal.total += 1;
+          subjectTotal.questionKeys.add(`${subject}|${String(question || "").trim()}`);
+          subjectTotal.skills[skill].total += 1;
+
+          if (isCorrect) {
+            subjectTotal.correct += 1;
+            subjectTotal.skills[skill].correct += 1;
+          }
+
+          if (["Remember", "Understand"].includes(skill)) {
+            subjectTotal.lotsTotal += 1;
+            if (isCorrect) subjectTotal.lotsCorrect += 1;
+          } else {
+            subjectTotal.hotsTotal += 1;
+            if (isCorrect) subjectTotal.hotsCorrect += 1;
+          }
+        });
+      });
+
+      const toPercent = (correct, total) =>
+        total > 0 ? Math.round((correct / total) * 100) : 0;
+
+      return activeSubs.map((subject) => {
+        const totals = subjectTotals[subject];
+        return {
+          subject: subject === "Maths" ? "Mathematics" : subject,
+          mastery: toPercent(totals.correct, totals.total),
+          lots: toPercent(totals.lotsCorrect, totals.lotsTotal),
+          hots: toPercent(totals.hotsCorrect, totals.hotsTotal),
+          questions: totals.questionKeys.size,
+          skills: bloomSkills.map((skill) => ({
+            skill,
+            percentage: toPercent(
+              totals.skills[skill].correct,
+              totals.skills[skill].total,
+            ),
+          })),
+        };
+      });
+    })();
+
+    const handleDownloadCognitivePdf = () => {
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 12;
+      const titleColor = [11, 31, 92];
+      const mutedColor = [71, 85, 105];
+      const blue = [37, 99, 235];
+      const green = [34, 185, 129];
+      const orange = [255, 122, 26];
+      const white = [255, 255, 255];
+      const background = [248, 250, 252];
+      const border = [226, 232, 240];
+      let y = 14;
+
+      const setText = (color) => doc.setTextColor(color[0], color[1], color[2]);
+      const setFill = (color) => doc.setFillColor(color[0], color[1], color[2]);
+      const setDraw = (color) => doc.setDrawColor(color[0], color[1], color[2]);
+      const safeText = (value, fallback = "-") => {
+        if (value === null || value === undefined || value === "") return fallback;
+        return String(value);
+      };
+      const fitTextToWidth = ({ text, maxWidth, maximumFontSize, minimumFontSize }) => {
+        let fontSize = maximumFontSize;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(fontSize);
+        while (doc.getTextWidth(String(text)) > maxWidth && fontSize > minimumFontSize) {
+          fontSize -= 0.5;
+          doc.setFontSize(fontSize);
+        }
+        return fontSize;
+      };
+      const drawSpectropyBrand = () => {
+        const containerWidth = 51;
+        const containerHeight = 15;
+        const containerX = pageWidth - margin - containerWidth;
+        const containerY = 3.5;
+        const logoPanelWidth = 16;
+        const logoSize = 10;
+
+        setFill(white);
+        setDraw([190, 211, 239]);
+        doc.setLineWidth(0.25);
+        doc.roundedRect(containerX, containerY, containerWidth, containerHeight, 3, 3, "FD");
+
+        const dividerX = containerX + logoPanelWidth;
+        setDraw([218, 226, 238]);
+        doc.line(dividerX, containerY + 2.5, dividerX, containerY + containerHeight - 2.5);
+
+        const logoX = containerX + (logoPanelWidth - logoSize) / 2;
+        const logoY = containerY + (containerHeight - logoSize) / 2;
+        let logoLoaded = false;
+
+        try {
+          doc.addImage(spectropyLogoUrl, "PNG", logoX, logoY, logoSize, logoSize);
+          logoLoaded = true;
+        } catch (error) {
+          console.warn("Failed to load Spectropy logo:", error);
+        }
+
+        if (!logoLoaded) {
+          setFill(blue);
+          doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, "F");
+          setText(white);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(6);
+          doc.text("S", logoX + logoSize / 2, logoY + 6.7, { align: "center" });
+        }
+
+        const textX = dividerX + 3;
+        setText([91, 121, 164]);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(4.3);
+        doc.text("Powered by", textX, containerY + 4.2);
+
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.text("SPECTROPY", textX, containerY + 9.1);
+
+        setText([113, 135, 166]);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(3.6);
+        doc.text("Learning Analytics", textX, containerY + 12.5);
+      };
+      const drawReportHeader = () => {
+        setFill(background);
+        doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+        const headerHeight = 22;
+        setFill(titleColor);
+        doc.rect(0, 0, pageWidth, headerHeight, "F");
+        setFill(blue);
+        doc.rect(0, headerHeight - 2, pageWidth, 2, "F");
+
+        const schoolLogoBoxX = margin;
+        const schoolLogoBoxY = 3;
+        const schoolLogoBoxSize = 16;
+        setFill(white);
+        doc.roundedRect(schoolLogoBoxX, schoolLogoBoxY, schoolLogoBoxSize, schoolLogoBoxSize, 2.5, 2.5, "F");
+
+        let schoolLogoLoaded = false;
+        if (school?.logo_url) {
+          try {
+            doc.addImage(school.logo_url, "PNG", schoolLogoBoxX + 1.5, schoolLogoBoxY + 1.5, schoolLogoBoxSize - 3, schoolLogoBoxSize - 3);
+            schoolLogoLoaded = true;
+          } catch (error) {
+            console.warn("Failed to load school logo:", error);
+          }
+        }
+
+        const schoolName = safeText(school?.school_name, "Unknown School").toUpperCase();
+        if (!schoolLogoLoaded) {
+          setFill([239, 246, 255]);
+          doc.circle(schoolLogoBoxX + schoolLogoBoxSize / 2, schoolLogoBoxY + schoolLogoBoxSize / 2, 5.2, "F");
+          setText(blue);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.text(schoolName.charAt(0) || "S", schoolLogoBoxX + schoolLogoBoxSize / 2, schoolLogoBoxY + 10.8, { align: "center" });
+        }
+
+        drawSpectropyBrand();
+
+        const schoolTextX = schoolLogoBoxX + schoolLogoBoxSize + 5;
+        const brandX = pageWidth - margin - 51;
+        const schoolNameFontSize = fitTextToWidth({
+          text: schoolName,
+          maxWidth: brandX - schoolTextX - 7,
+          maximumFontSize: 13,
+          minimumFontSize: 8,
+        });
+
+        setText(white);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(schoolNameFontSize);
+        doc.text(schoolName, schoolTextX, 9);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(219, 234, 254);
+        doc.text(`Area: ${safeText(school?.area, "Not Set")}`, schoolTextX, 15);
+      };
+      const addTitle = (text) => {
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text(text, margin, y);
+        y += 8;
+      };
+      const addSectionTitle = (text) => {
+        y += 3;
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(text, margin, y);
+        y += 5;
+      };
+      const addExamInfoStrip = () => {
+        setFill(white);
+        setDraw(border);
+        doc.setLineWidth(0.25);
+        doc.roundedRect(margin, y, pageWidth - margin * 2, 11, 2.5, 2.5, "FD");
+
+        setText(mutedColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.7);
+        doc.text("CLASS & SECTION", margin + 5, y + 4);
+        doc.text("EXAM PATTERN", margin + 57, y + 4);
+        doc.text("EXAM DATE", margin + 150, y + 4);
+        doc.text("STUDENTS", margin + 205, y + 4);
+        doc.text("QUESTIONS", margin + 237, y + 4);
+
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.4);
+        doc.text(`${currentOMRExam.class}-${currentOMRExam.section || "-"}`, margin + 5, y + 8.5);
+        doc.text(safeText(currentOMRExam.exam_pattern), margin + 57, y + 8.5);
+        doc.text(
+          currentOMRExam.exam_date ? new Date(currentOMRExam.exam_date).toLocaleDateString() : "-",
+          margin + 150,
+          y + 8.5,
+        );
+        doc.text(String(results.length || totalStudents || 0), margin + 205, y + 8.5);
+        doc.text(String(bloomTaggedQuestions.length), margin + 237, y + 8.5);
+
+        y += 20;
+      };
+      const ensureSpace = (height = 35) => {
+        if (y + height > 190) {
+          doc.addPage();
+          drawReportHeader();
+          y = 29;
+        }
+      };
+      const autoTable = (options) => {
+        doc.autoTable({
+          startY: y,
+          margin: { left: margin, right: margin },
+          theme: "grid",
+          styles: {
+            font: "helvetica",
+            fontSize: 8,
+            cellPadding: 2,
+            textColor: [15, 23, 42],
+            lineColor: border,
+            lineWidth: 0.2,
+          },
+          headStyles: {
+            fillColor: titleColor,
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+          },
+          alternateRowStyles: {
+            fillColor: background,
+          },
+          ...options,
+        });
+        y = doc.lastAutoTable.finalY + 7;
+      };
+
+      const pageContentTop = 29;
+      const availableWidth = pageWidth - margin * 2;
+      const columnGap = 6;
+      const columnWidth = (availableWidth - columnGap) / 2;
+      const tableBaseStyles = {
+        font: "helvetica",
+        fontSize: 7.2,
+        cellPadding: 1.35,
+        textColor: [15, 23, 42],
+        lineColor: border,
+        lineWidth: 0.16,
+        overflow: "linebreak",
+      };
+      const tableHeadStyles = {
+        fillColor: titleColor,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 7,
+        cellPadding: 1.35,
+      };
+      const addPageHeading = (title, showExamInfo = true) => {
+        drawReportHeader();
+        y = pageContentTop;
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13.5);
+        doc.text(title, margin, y);
+        doc.setFontSize(6.2);
+        setText(mutedColor);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, y, {
+          align: "right",
+        });
+        y += 7;
+        if (showExamInfo) {
+          addExamInfoStrip();
+        }
+      };
+      const drawCompactTitle = (text, x, topY) => {
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.text(text, x, topY);
+      };
+      const compactTable = ({ title, x, startY, tableWidth, head, body, columnStyles = {}, didParseCell }) => {
+        drawCompactTitle(title, x, startY);
+        doc.autoTable({
+          startY: startY + 3.8,
+          margin: { left: x, right: pageWidth - x - tableWidth },
+          tableWidth,
+          theme: "grid",
+          head,
+          body,
+          styles: tableBaseStyles,
+          headStyles: tableHeadStyles,
+          alternateRowStyles: { fillColor: background },
+          columnStyles,
+          didParseCell,
+        });
+        return doc.lastAutoTable.finalY;
+      };
+      const colorLotsHotsCells = (data, lotsIndex, hotsIndex) => {
+        if (data.section !== "body") return;
+        if (data.column.index === lotsIndex) {
+          data.cell.styles.textColor = green;
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (data.column.index === hotsIndex) {
+          data.cell.styles.textColor = orange;
+          data.cell.styles.fontStyle = "bold";
+        }
+      };
+
+      addPageHeading("IIT Foundation Cognitive Analysis & Subject Wise Analysis Reports");
+      setText(titleColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Exam-wise Cognitive Analysis", margin, y);
+      y += 6;
+
+      autoTable({
+        startY: y,
+        head: [["Metric", "Value", "Description"]],
+        body: bloomSummaryCards.map((card) => [card.title, card.value, card.helper]),
+        styles: { ...tableBaseStyles, fontSize: 6.8, cellPadding: 1.05 },
+        headStyles: tableHeadStyles,
+        columnStyles: {
+          0: { cellWidth: 64 },
+          1: { cellWidth: 34, halign: "center", fontStyle: "bold" },
+          2: { cellWidth: availableWidth - 98 },
+        },
+      });
+
+      const firstRowY = y;
+      const distributionEndY = compactTable({
+        title: "Question Distribution by Bloom Skill",
+        x: margin,
+        startY: firstRowY,
+        tableWidth: columnWidth,
+        head: [["Bloom Skill", "Questions", "%"]],
+        body: bloomDistribution.map((item) => [item.skill, item.count, `${item.percentage}%`]),
+        columnStyles: {
+          0: { cellWidth: 55 },
+          1: { cellWidth: 32, halign: "center" },
+          2: { cellWidth: columnWidth - 87, halign: "center" },
+        },
+      });
+      const performanceEndY = compactTable({
+        title: "Overall Performance by Bloom Skill",
+        x: margin + columnWidth + columnGap,
+        startY: firstRowY,
+        tableWidth: columnWidth,
+        head: [["Bloom Skill", "Performance %"]],
+        body: bloomPerformance.map((item) => [item.skill, `${item.percentage}%`]),
+        columnStyles: {
+          0: { cellWidth: 76 },
+          1: { cellWidth: columnWidth - 76, halign: "center", fontStyle: "bold" },
+        },
+      });
+
+      const secondRowY = Math.max(distributionEndY, performanceEndY) + 8;
+      const balanceEndY = compactTable({
+        title: "Cognitive Balance",
+        x: margin,
+        startY: secondRowY,
+        tableWidth: columnWidth,
+        head: [["Level", "Questions", "%"]],
+        body: [
+          ["LOTS (Remember + Understand)", cognitiveBalance.lotsCount, `${cognitiveBalance.lotsPercentage}%`],
+          ["HOTS (Apply + Analyse + Evaluate + Create)", cognitiveBalance.hotsCount, `${cognitiveBalance.hotsPercentage}%`],
+        ],
+        columnStyles: {
+          0: { cellWidth: 78 },
+          1: { cellWidth: 30, halign: "center" },
+          2: { cellWidth: columnWidth - 108, halign: "center", fontStyle: "bold" },
+        },
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 0) {
+            data.cell.styles.textColor = data.row.index === 0 ? green : orange;
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+      const studentEndY = compactTable({
+        title: "Student Distribution by Cognitive Level",
+        x: margin + columnWidth + columnGap,
+        startY: secondRowY,
+        tableWidth: columnWidth,
+        head: [["Level", "Range", "Students", "%"]],
+        body: studentCognitiveDistribution.map((band) => [
+          band.label,
+          band.range,
+          band.count,
+          `${band.percentage}%`,
+        ]),
+        columnStyles: {
+          0: { cellWidth: 58 },
+          1: { cellWidth: 31, halign: "center" },
+          2: { cellWidth: 28, halign: "center" },
+          3: { cellWidth: columnWidth - 117, halign: "center", fontStyle: "bold" },
+        },
+      });
+
+      const insightsY = Math.max(balanceEndY, studentEndY) + 8;
+      compactTable({
+        title: "Key Insights",
+        x: margin,
+        startY: insightsY,
+        tableWidth: availableWidth,
+        head: [["Insight"]],
+        body: cognitiveKeyInsights.map((insight) => [insight.text]),
+        columnStyles: {
+          0: { cellWidth: availableWidth },
+        },
+      });
+
+      doc.addPage();
+      addPageHeading("", false);
+      setText(titleColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Subject-wise Bloom's Taxonomy Analysis", margin, y);
+      y += 6;
+
+      autoTable({
+        startY: y,
+        head: [["Subject", "Cognitive Mastery", "LOTS", "HOTS", "Questions"]],
+        body: subjectBloomReportData.map((subject) => [
+          subject.subject,
+          `${subject.mastery}%`,
+          `${subject.lots}%`,
+          `${subject.hots}%`,
+          subject.questions,
+        ]),
+        styles: { ...tableBaseStyles, fontSize: 7.2, cellPadding: 1.35 },
+        headStyles: tableHeadStyles,
+        columnStyles: {
+          0: { cellWidth: 64 },
+          1: { cellWidth: 54, halign: "center", fontStyle: "bold" },
+          2: { cellWidth: 45, halign: "center", fontStyle: "bold" },
+          3: { cellWidth: 45, halign: "center", fontStyle: "bold" },
+          4: { cellWidth: availableWidth - 208, halign: "center" },
+        },
+        didParseCell: (data) => colorLotsHotsCells(data, 2, 3),
+      });
+
+      const subjectStrengthGapRows = subjectBloomReportData.map((subject) => {
+        const sortedSkills = [...subject.skills].sort(
+          (first, second) => second.percentage - first.percentage,
+        );
+        const strongestSkill = sortedSkills[0] || { skill: "-", percentage: 0 };
+        const weakestSkill =
+          [...subject.skills]
+            .filter((skill) => Number(skill.percentage) > 0)
+            .sort((first, second) => first.percentage - second.percentage)[0] ||
+          sortedSkills[sortedSkills.length - 1] ||
+          { skill: "-", percentage: 0 };
+
+        return [
+          subject.subject,
+          `${strongestSkill.skill} (${strongestSkill.percentage}%)`,
+          `${weakestSkill.skill} (${weakestSkill.percentage}%)`,
+          `${Math.max(0, strongestSkill.percentage - weakestSkill.percentage)}%`,
+        ];
+      });
+
+      const subjectRowY = y;
+      const strengthGapEndY = compactTable({
+        title: "Subject-wise Cognitive Strengths & Gaps",
+        x: margin,
+        startY: subjectRowY,
+        tableWidth: columnWidth,
+        head: [["Subject", "Strength", "Gap", "Difference"]],
+        body: subjectStrengthGapRows,
+        columnStyles: {
+          0: { cellWidth: 34 },
+          1: { cellWidth: 44 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: columnWidth - 118, halign: "center", fontStyle: "bold" },
+        },
+      });
+      const heatmapEndY = compactTable({
+        title: "Subject x Bloom Skill Mastery",
+        x: margin + columnWidth + columnGap,
+        startY: subjectRowY,
+        tableWidth: columnWidth,
+        head: [["Subject", ...bloomSkills]],
+        body: subjectBloomReportData.map((subject) => [
+          subject.subject,
+          ...subject.skills.map((skill) => `${skill.percentage}%`),
+        ]),
+        columnStyles: {
+          0: { cellWidth: 33 },
+          1: { cellWidth: 20, halign: "center" },
+          2: { cellWidth: 23, halign: "center" },
+          3: { cellWidth: 19, halign: "center" },
+          4: { cellWidth: 20, halign: "center" },
+          5: { cellWidth: 20, halign: "center" },
+          6: { cellWidth: columnWidth - 135, halign: "center" },
+        },
+        didParseCell: (data) => {
+          if (data.section !== "body" || data.column.index === 0) return;
+          const percentage = Number(String(data.cell.raw).replace("%", ""));
+          if (percentage >= 50) data.cell.styles.fillColor = [216, 239, 65];
+          else if (percentage >= 30) data.cell.styles.fillColor = [255, 143, 76];
+          else data.cell.styles.fillColor = [248, 96, 129];
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.halign = "center";
+        },
+      });
+
+      const lotsHotsY = Math.max(strengthGapEndY, heatmapEndY) + 8;
+      compactTable({
+        title: "Subject-wise LOTS vs HOTS",
+        x: margin,
+        startY: lotsHotsY,
+        tableWidth: availableWidth,
+        head: [["Subject", "Cognitive Mastery", "LOTS %", "HOTS %", "Questions"]],
+        body: subjectBloomReportData.map((subject) => [
+          subject.subject,
+          `${subject.mastery}%`,
+          `${subject.lots}%`,
+          `${subject.hots}%`,
+          subject.questions,
+        ]),
+        columnStyles: {
+          0: { cellWidth: 65 },
+          1: { cellWidth: 55, halign: "center", fontStyle: "bold" },
+          2: { cellWidth: 55, halign: "center", fontStyle: "bold" },
+          3: { cellWidth: 55, halign: "center", fontStyle: "bold" },
+          4: { cellWidth: availableWidth - 230, halign: "center" },
+        },
+        didParseCell: (data) => colorLotsHotsCells(data, 2, 3),
+      });
+
+      doc.save(`Cognitive_Analysis_${currentOMRExam.id}.pdf`);
+    };
 
     const subjectDifficultySummary = activeSubs.map((subject) => {
       const subjectQuestions = questionAnalytics.filter(
@@ -6670,11 +8720,12 @@ export default function SchoolOwnerDashboard({ onBack }) {
                               band.label === "Foundation"
                                 ? "#a20f2d"
                                 : band.color,
-                            fontSize: "20px",
+                            fontSize: "18px",
                             fontWeight: "900",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {band.percentage}%
+                          {band.percentage}% ({band.count})
                         </span>
                       </div>
                     </div>
@@ -6836,7 +8887,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
         <section id="exam-view-cognitive" className="exam-view-panel" aria-label="Cognitive Analysis" hidden={examResultView !== "cognitive"}>
           <div className="exam-view-actions">
             <button type="button" className="exam-results-header-download" onClick={() => setView("subject-bloom-analytics")}>
-              Detailed Analysis
+              Subject Wise Analysis
+            </button>
+            <button type="button" className="exam-results-header-download" onClick={handleDownloadCognitivePdf}>
+              <Download size={14} />
+              Cognitive Analysis PDF
             </button>
           </div>
           {bloomTaxonomyAnalyticsSection}
@@ -6917,7 +8972,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             </div>
           </div>
 
-          {/* 2. Subject-wise Toppers — SINGLE TABLE */}
+          {/* 2. Subject-wise Toppers � SINGLE TABLE */}
           <div
             className="exam-results-analysis-section exam-results-analysis-section--toppers"
             style={{
@@ -7080,7 +9135,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 textAlign: "center",
               }}
             >
-              📈 Grade-wise Distribution (Per Subject)
+              ?? Grade-wise Distribution (Per Subject)
             </h3>
             <div
               className="exam-results-table-scroll"
@@ -7251,7 +9306,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
             const formatPercentage = (value) => {
               if (!isNumericValue(value)) {
-                return "—";
+                return "�";
               }
 
               return `${parseFloat(value).toFixed(2)}%`;
@@ -7379,7 +9434,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                   ).toFixed(2)
                 : "-";
 
-            let bestSubject = "—";
+            let bestSubject = "�";
             let bestSubjectAverage = -Infinity;
 
             safeActiveSubs.forEach((subject) => {
@@ -7682,7 +9737,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             doc.text(String(safeResults.length), margin + 205, yPos + 8.5);
 
             doc.text(
-              overallAverage === "-" ? "—" : `${overallAverage}%`,
+              overallAverage === "-" ? "�" : `${overallAverage}%`,
               margin + 237,
               yPos + 8.5,
             );
@@ -7754,7 +9809,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
               body:
                 averageTableData.length > 0
                   ? averageTableData
-                  : [["No active subjects", "—"]],
+                  : [["No active subjects", "�"]],
 
               theme: "grid",
               tableWidth: subjectAverageWidth,
@@ -7828,7 +9883,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
               body:
                 overallToppers.length > 0
                   ? overallToppers
-                  : [["-", "No result records", "—"]],
+                  : [["-", "No result records", "�"]],
 
               theme: "grid",
               tableWidth: overallTopperWidth,
@@ -8165,7 +10220,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             doc.setFont("helvetica", "normal");
 
             doc.text(
-              `IIT Foundation • ${safeText(currentOMRExam?.class)}-${safeText(
+              `IIT Foundation � ${safeText(currentOMRExam?.class)}-${safeText(
                 currentOMRExam?.section,
               )}`,
               pageWidth / 2,
@@ -8687,7 +10742,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                     doc.setFontSize(7.5);
 
                     doc.text(
-                      `${schoolName} — IIT Foundation Exam Results`,
+                      `${schoolName} � IIT Foundation Exam Results`,
                       margin,
                       8.8,
                       {
@@ -9093,7 +11148,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                       doc.setFont("helvetica", "normal");
 
                       doc.text(
-                        `IIT Foundation • ${safeText(
+                        `IIT Foundation � ${safeText(
                           currentOMRExam?.class,
                         )}-${safeText(currentOMRExam?.section)}`,
                         pageWidth / 2,
@@ -9220,7 +11275,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           </div>
         ) : (
           <div style={{ padding: "40px", textAlign: "center", color: "#666" }}>
-            📭 No results available.
+            ?? No results available.
           </div>
         )}
         </section>
@@ -9421,16 +11476,33 @@ export default function SchoolOwnerDashboard({ onBack }) {
     );
   };
 
-  const renderSubjectBloomAnalyticsView = () => {
-    if (!currentOMRExam) {
+  const renderSubjectBloomAnalyticsView = (scope = "exam") => {
+    const isBatchSubjectBloom = scope === "batch";
+    const isSchoolSubjectBloom = scope === "school";
+
+    if (isBatchSubjectBloom && !examWiseClassSection) {
+      setView("batchwise");
+      return null;
+    }
+
+    if (!isBatchSubjectBloom && !isSchoolSubjectBloom && !currentOMRExam) {
       setView("examwise-results");
       return null;
     }
 
-    const results = examResults[currentOMRExam.id] || [];
-    const activeSubs = getActiveSubjects(
-      getGroupByClassSection(currentOMRExam.class, currentOMRExam.section),
-    );
+    const results = isSchoolSubjectBloom
+      ? schoolCognitiveRows
+      : isBatchSubjectBloom
+        ? allClassExams
+        : examResults[currentOMRExam.id] || [];
+    const activeSubs = isSchoolSubjectBloom
+      ? ["Physics", "Chemistry", "Maths", "Biology"]
+      : getActiveSubjects(
+          getGroupByClassSection(
+            isBatchSubjectBloom ? examWiseClassSection.class : currentOMRExam.class,
+            isBatchSubjectBloom ? examWiseClassSection.section : currentOMRExam.section,
+          ),
+        );
     const parseQuestionResults = (value) => {
       if (!value) return {};
       if (typeof value === "string") {
@@ -9591,7 +11663,25 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const isCorrect = responseStatus === "correct";
         const subjectTotal = subjectTotals[subject];
         subjectTotal.total += 1;
-        subjectTotal.questionKeys.add(String(question || "").trim());
+        subjectTotal.questionKeys.add(
+          isSchoolSubjectBloom
+            ? [
+                studentResult.class || "",
+                studentResult.section || "",
+                studentResult.exam_pattern || "Exam",
+                studentResult.exam_date || "",
+                subject,
+                String(question || "").trim(),
+              ].join("|")
+            : isBatchSubjectBloom
+            ? [
+                studentResult.exam_pattern || "Exam",
+                studentResult.exam_date || "",
+                subject,
+                String(question || "").trim(),
+              ].join("|")
+            : String(question || "").trim(),
+        );
         if (isCorrect) subjectTotal.correct += 1;
         subjectTotal.skills[skill].total += 1;
         if (isCorrect) subjectTotal.skills[skill].correct += 1;
@@ -9756,7 +11846,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 fontWeight: "900",
               }}
             >
-              Subject-wise Bloom&apos;s Taxonomy Analytics
+              {isBatchSubjectBloom
+                ? "Batch-wise Subject Bloom's Taxonomy Analytics"
+                : isSchoolSubjectBloom
+                  ? "School-wise Subject Bloom's Taxonomy Analytics"
+                : "Subject-wise Bloom's Taxonomy Analytics"}
             </h2>
             <div
               style={{
@@ -9765,7 +11859,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 fontSize: "14px",
               }}
             >
-              Compare cognitive performance across subjects
+              {isBatchSubjectBloom
+                ? `Cumulative cognitive performance across all exams for ${examWiseClassSection.class}-${examWiseClassSection.section}`
+                : isSchoolSubjectBloom
+                  ? "Cumulative cognitive performance across all classes, sections, and exams"
+                : "Compare cognitive performance across subjects"}
             </div>
           </div>
 
@@ -9778,9 +11876,21 @@ export default function SchoolOwnerDashboard({ onBack }) {
           >
             <button
               className="page-back-nav exam-results-back"
-              onClick={() => setView("examwise-results")}
+              onClick={() =>
+                setView(
+                  isSchoolSubjectBloom
+                    ? "overview"
+                    : isBatchSubjectBloom
+                      ? "batchwise"
+                      : "examwise-results",
+                )
+              }
             >
-              Back to Exam Result
+              {isSchoolSubjectBloom
+                ? "Back to Overview"
+                : isBatchSubjectBloom
+                  ? "Back to Batch Wise Results"
+                  : "Back to Exam Result"}
             </button>
           </div>
         </div>
@@ -10451,7 +12561,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     );
   };
 
-  // ── Nav helper: set tab + matching view ──
+  // -- Nav helper: set tab + matching view --
   const goTab = (tabId) => {
     const tab = OWNER_TABS.find((t) => t.id === tabId);
     if (tab) navigate(`/school/${tab.path}`);
@@ -10471,7 +12581,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     }
   };
 
-  // ── Logout handler ──
+  // -- Logout handler --
   const handleLogout = () => {
     sessionStorage.clear();
     localStorage.removeItem("sp_user");
@@ -10497,7 +12607,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         />
       )}
 
-      {/* ── Sidebar Rail ── */}
+      {/* -- Sidebar Rail -- */}
       <aside
         className={`sidebar-rail${sidebarOpen ? " sidebar-rail--open" : ""}`}
         aria-label="School Admin navigation"
@@ -10507,7 +12617,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation"
         >
-          ✕
+          ?
         </button>
 
         <span className="sidebar-section-label">Navigation</span>
@@ -10555,7 +12665,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           </div>
 
           <button className="sidebar-logout-btn" onClick={handleLogout}>
-            <span>⏻</span>
+            <span>?</span>
             <span className="sidebar-nav-label">Sign Out</span>
           </button>
 
@@ -10565,15 +12675,24 @@ export default function SchoolOwnerDashboard({ onBack }) {
         </div>
       </aside>
 
-      {/* ── Page Canvas ── */}
+      {/* -- Page Canvas -- */}
       <div className="page-canvas">
         <Routes>
           <Route index element={<Navigate to="overview" replace />} />
-          <Route path="overview" element={renderSchoolHeader()} />
+          <Route
+            path="overview"
+            element={
+              view === "school-subject-bloom-analytics"
+                ? renderSubjectBloomAnalyticsView("school")
+                : renderSchoolHeader()
+            }
+          />
           <Route
             path="batchwise"
             element={
-              view === "subject-bloom-analytics"
+              view === "batch-subject-bloom-analytics"
+                ? renderSubjectBloomAnalyticsView("batch")
+                : view === "subject-bloom-analytics"
                 ? renderSubjectBloomAnalyticsView()
                 : view === "examwise-results"
                 ? renderExamWiseResultsView()
@@ -10594,7 +12713,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                     </p>
                   </div>
                   <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
-                    ← Back to Top Students
+                    ? Back to Top Students
                   </button>
                 </div>
                 <div className="page-content">
@@ -10631,7 +12750,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                     <p className="page-header-subtitle">Select a template and export the selected exam poster.</p>
                   </div>
                   <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
-                    ← Back to Top Students by Exam
+                    ? Back to Top Students by Exam
                   </button>
                 </div>
                 <div className="page-content">
@@ -10647,7 +12766,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   );
 }
 
-// ✅ Styles
+// ? Styles
 const card = {
   border: "1px solid #d3d8e6",
   borderRadius: 12,
