@@ -1,14 +1,22 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Award,
+  BarChart3,
   Brain,
   Calculator,
   FileDown,
   FlaskConical,
+  Hash,
   Leaf,
   Lightbulb,
+  Settings,
+  Star,
   Target,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  Users,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -36,6 +44,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 const COLORS = {
   blue: "#2563eb",
@@ -104,12 +114,6 @@ const getTrendText = (change) => {
   if (change > 0.4) return `+${round(change)}% from previous exam`;
   if (change < -0.4) return `${round(change)}% from previous exam`;
   return "Stable from previous exam";
-};
-
-const getTrendIcon = (change) => {
-  if (change > 0.4) return "↗";
-  if (change < -0.4) return "↘";
-  return "→";
 };
 
 const standardDeviation = (values) => {
@@ -243,6 +247,28 @@ const BLOOM_SKILLS = [
   { key: "Evaluate", color: "#ff5f7d", group: "HOTS" },
   { key: "Create", color: "#8f6df6", group: "HOTS" },
 ];
+
+const BLOOM_SKILL_ICONS = {
+  Remember: Brain,
+  Understand: Award,
+  Apply: Lightbulb,
+  Analyse: BarChart3,
+  Evaluate: Target,
+  Create: Settings,
+};
+
+const normalizeQuestionLabel = (value) =>
+  String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+
+const getSubjectMasteryBand = (percentage) => {
+  if (percentage === null || percentage === undefined) {
+    return { key: "unassessed", label: "Not assessed" };
+  }
+  if (percentage >= 80) return { key: "excellent", label: "Excellent" };
+  if (percentage >= 60) return { key: "proficient", label: "Proficient" };
+  if (percentage >= 40) return { key: "developing", label: "Developing" };
+  return { key: "support", label: "Needs Support" };
+};
 
 function BloomSkillLegend() {
   return (
@@ -630,10 +656,10 @@ const downloadExamAnalyticsReport = async ({
   studentData,
   schoolData,
   result,
-  subjectRows,
   questionRows,
+  cognitiveAnalysis,
 }) => {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
@@ -653,7 +679,7 @@ const downloadExamAnalyticsReport = async ({
 
   doc.setProperties({
     title: `${title} Analytics Report`,
-    subject: "Student subject-wise and question-wise analytics",
+    subject: "Student cognitive and question-wise analytics",
     creator: "SPECTROPY Result Analysis Portal",
   });
 
@@ -789,7 +815,7 @@ const downloadExamAnalyticsReport = async ({
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.2);
     doc.setTextColor(190, 213, 240);
-    doc.text("SUBJECT & QUESTION ANALYSIS", pageWidth / 2, 23, {
+    doc.text("COGNITIVE & QUESTION ANALYSIS", pageWidth / 2, 23, {
       align: "center",
     });
 
@@ -836,6 +862,99 @@ const downloadExamAnalyticsReport = async ({
         align: "right",
       });
     }
+  };
+
+  const contentWidth = pageWidth - margin * 2;
+  const pdfBandStyle = (percentage) => {
+    const band = getSubjectMasteryBand(percentage);
+    if (band.key === "excellent") {
+      return {
+        ...band,
+        fill: [217, 248, 230],
+        text: [4, 120, 87],
+        accent: [16, 185, 129],
+      };
+    }
+    if (band.key === "proficient") {
+      return {
+        ...band,
+        fill: [232, 250, 239],
+        text: [21, 128, 61],
+        accent: [73, 214, 135],
+      };
+    }
+    if (band.key === "developing") {
+      return {
+        ...band,
+        fill: [255, 246, 214],
+        text: [146, 64, 14],
+        accent: [245, 197, 24],
+      };
+    }
+    if (band.key === "support") {
+      return {
+        ...band,
+        fill: [255, 231, 237],
+        text: [190, 18, 60],
+        accent: [244, 63, 104],
+      };
+    }
+    return {
+      ...band,
+      fill: [242, 246, 250],
+      text: [71, 85, 105],
+      accent: [148, 163, 184],
+    };
+  };
+
+  const formatPdfPercent = (value) =>
+    value === null || value === undefined ? "-" : `${value}%`;
+
+  const ensureSpace = (neededHeight, currentY) => {
+    if (currentY + neededHeight <= pageHeight - 16) return currentY;
+    doc.addPage();
+    drawHeader();
+    return 43;
+  };
+
+  const drawSectionTitle = (label, description, y, rightText = "") => {
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11.5);
+    doc.text(label, margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(description, margin, y + 5);
+    if (rightText) {
+      doc.setFillColor(239, 246, 255);
+      doc.setTextColor(0, 53, 122);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      const pillWidth = Math.max(22, doc.getTextWidth(rightText) + 8);
+      doc.roundedRect(pageWidth - margin - pillWidth, y - 4.5, pillWidth, 8, 3, 3, "F");
+      doc.text(rightText, pageWidth - margin - pillWidth / 2, y + 0.7, {
+        align: "center",
+      });
+    }
+  };
+
+  const drawMiniCard = ({ x, y, w, h, label, value, note, border, fill }) => {
+    doc.setFillColor(...fill);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.55);
+    doc.roundedRect(x, y, w, h, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.7);
+    doc.setTextColor(0, 53, 122);
+    doc.text(String(label || "").toUpperCase(), x + 4, y + 5.2);
+    doc.setFontSize(13.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(value || "-"), x + 4, y + 13);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(doc.splitTextToSize(String(note || ""), w - 8), x + 4, y + h - 4.5);
   };
 
   drawHeader();
@@ -941,13 +1060,16 @@ const downloadExamAnalyticsReport = async ({
     theme: "grid",
     margin: { left: margin, right: margin },
     tableWidth: "auto",
-    head: [["Question", "Option", "Key", "Marks", "Status"]],
+    head: [["Question", "Option", "Key", "Marks", "Status", "Peer correct %"]],
     body: questionRows.map((question) => [
       question.question,
       question.option || "—",
       question.key || "—",
       question.marks === "" ? "—" : question.marks,
       question.status || "—",
+      question.peerCorrectPercentage === null
+        ? "—"
+        : `${question.peerCorrectPercentage}%`,
     ]),
     styles: {
       font: "helvetica",
@@ -963,11 +1085,12 @@ const downloadExamAnalyticsReport = async ({
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 39 },
-      2: { cellWidth: 39 },
-      3: { cellWidth: 28, halign: "center" },
-      4: { cellWidth: "auto" },
+      0: { cellWidth: 24 },
+      1: { cellWidth: 27 },
+      2: { cellWidth: 27 },
+      3: { cellWidth: 22, halign: "center" },
+      4: { cellWidth: 38 },
+      5: { cellWidth: "auto", halign: "center" },
     },
     didParseCell: (data) => {
       if (data.section !== "body" || data.column.index !== 4) return;
@@ -986,6 +1109,24 @@ const downloadExamAnalyticsReport = async ({
         data.cell.styles.fillColor = [254, 249, 195];
         data.cell.styles.textColor = [133, 77, 14];
       }
+
+      return;
+    },
+    didDrawCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 5) return;
+
+      const percentage = Number.parseFloat(String(data.cell.raw || ""));
+      if (!Number.isFinite(percentage)) return;
+
+      const x = data.cell.x + 2;
+      const y = data.cell.y + data.cell.height - 2.4;
+      const width = Math.max(0, data.cell.width - 4);
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(x, y, width, 1.2, 0.6, 0.6, "F");
+      if (percentage > 0) {
+        doc.setFillColor(59, 130, 246);
+        doc.roundedRect(x, y, width * clamp(percentage, 0, 100) / 100, 1.2, 0.6, 0.6, "F");
+      }
     },
   });
 
@@ -998,6 +1139,852 @@ const downloadExamAnalyticsReport = async ({
   ].join("_");
 
   doc.save(fileName);
+};
+
+const downloadExamAnalyticsLandscapeReport = ({
+  studentName,
+  studentData,
+  result,
+  questionRows,
+  cognitiveAnalysis,
+}) => {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 8;
+  const contentWidth = pageWidth - margin * 2;
+  const title = formatExamName(result.exam, "Exam");
+  const analysis = cognitiveAnalysis || buildStudentCognitiveAnalysis([result]);
+  const navy = [15, 47, 99];
+  const softBorder = [203, 213, 225];
+  const generatedOn = new Date().toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  doc.setProperties({
+    title: `${title} Analytics Report`,
+    subject: "Student cognitive and question-wise analytics",
+    creator: "SPECTROPY Result Analysis Portal",
+  });
+
+  const bandStyle = (percentage) => {
+    const band = getSubjectMasteryBand(percentage);
+    if (band.key === "excellent") return { ...band, fill: [217, 248, 230], text: [4, 120, 87], bar: [16, 185, 129] };
+    if (band.key === "proficient") return { ...band, fill: [232, 250, 239], text: [21, 128, 61], bar: [73, 214, 135] };
+    if (band.key === "developing") return { ...band, fill: [255, 246, 214], text: [146, 64, 14], bar: [245, 197, 24] };
+    if (band.key === "support") return { ...band, fill: [255, 231, 237], text: [190, 18, 60], bar: [244, 63, 104] };
+    return { ...band, fill: [242, 246, 250], text: [71, 85, 105], bar: [148, 163, 184] };
+  };
+
+  const pct = (value) => (value === null || value === undefined ? "-" : `${value}%`);
+  const ensureSpace = (needed, y) => {
+    if (y + needed <= pageHeight - 12) return y;
+    doc.addPage();
+    return margin + 4;
+  };
+
+  const drawPill = (text, x, y) => {
+    const width = Math.max(22, doc.getTextWidth(text) + 7);
+    doc.setFillColor(239, 246, 255);
+    doc.roundedRect(x - width, y - 4.5, width, 7.5, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(0, 53, 122);
+    doc.text(text, x - width / 2, y + 0.6, { align: "center" });
+  };
+
+  const drawSection = (heading, description, y, rightText = "", pillYOffset = 0) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12.4);
+    doc.setTextColor(15, 23, 42);
+    doc.text(heading, margin + 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(description, margin + 3, y + 5);
+    if (rightText) drawPill(rightText, pageWidth - margin - 3, y);
+  };
+
+  const drawCard = ({ x, y, w, h, label, value, note, border, fill }) => {
+    doc.setFillColor(...fill);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.45);
+    doc.roundedRect(x, y, w, h, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5);
+    doc.setTextColor(0, 53, 122);
+    doc.text(String(label).toUpperCase(), x + 3, y + 4.2);
+    doc.setFontSize(11.8);
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(value), x + 3, y + 11);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.2);
+    doc.setTextColor(71, 85, 105);
+    doc.text(doc.splitTextToSize(String(note), w - 6), x + 3, y + h - 3.5);
+  };
+
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.roundedRect(margin, 7, contentWidth, 20, 2.5, 2.5, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...navy);
+  doc.text("STUDENT ANALYTICS REPORT", margin + 5, 15);
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(title, pageWidth - margin - 5, 14, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text(getStudentDetailsLine({ ...studentData, name: studentName }, result), margin + 5, 22);
+  doc.text(`Generated on ${generatedOn}`, pageWidth - margin - 5, 21, { align: "right" });
+
+  let y = 36;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.roundedRect(margin, y - 8, contentWidth, 38, 2, 2, "FD");
+  drawSection(
+    "Cognitive Analysis",
+    "Bloom-tagged mastery for this exam only.",
+    y - 2,
+    `${analysis.overall.total} tagged response${analysis.overall.total === 1 ? "" : "s"}`,
+  );
+
+  if (analysis.hasData) {
+    const gap = 4;
+    const cardW = (contentWidth - 18 - gap * 3) / 4;
+    const cardY = y + 6;
+    [
+      ["Overall mastery", pct(analysis.overall.percentage), `${analysis.overall.correct}/${analysis.overall.total} correct`, [59, 130, 246], [239, 246, 255]],
+      ["LOTS", pct(analysis.lots.percentage), "Remember + Understand", [16, 185, 129], [236, 253, 245]],
+      ["HOTS", pct(analysis.hots.percentage), "Apply + Analyse + Evaluate + Create", [245, 158, 11], [255, 251, 235]],
+      [
+        "Cognitive level",
+        analysis.level.label,
+        analysis.gap === null ? "LOTS/HOTS gap unavailable" : `${Math.abs(analysis.gap)} point LOTS/HOTS gap`,
+        [37, 99, 235],
+        [248, 250, 252],
+      ],
+    ].forEach(([label, value, note, border, fill], index) => {
+      drawCard({
+        x: margin + 9 + (cardW + gap) * index,
+        y: cardY,
+        w: cardW,
+        h: 17,
+        label,
+        value,
+        note,
+        border,
+        fill,
+      });
+    });
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Cognitive analysis is unavailable because this exam does not have Bloom-tagged questions.", margin + 12, y + 12);
+  }
+
+  y = 70;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.roundedRect(margin, y - 8, contentWidth, 86, 2, 2, "FD");
+  drawSection(
+    "Subject-wise Cognitive Analytics",
+    "Subject mastery calculated from this exam's Bloom-tagged questions.",
+    y - 2,
+    `${analysis.subjectPerformance.length} subject${analysis.subjectPerformance.length === 1 ? "" : "s"}`,
+  );
+
+  if (analysis.subjectPerformance.length > 0) {
+    const subjectGap = 4;
+    const subjectW = (contentWidth - 18 - subjectGap * 3) / 4;
+    const subjectY = y + 7;
+    const subjectColors = [[139, 92, 246], [6, 182, 212], [37, 99, 235], [244, 63, 94]];
+    analysis.subjectPerformance.slice(0, 4).forEach((subject, index) => {
+      const x = margin + 9 + (subjectW + subjectGap) * index;
+      const color = subjectColors[index] || [37, 99, 235];
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...softBorder);
+      doc.roundedRect(x, subjectY, subjectW, 23, 2, 2, "FD");
+      doc.setFillColor(...color);
+      doc.circle(x + 6, subjectY + 7, 3.2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(15, 23, 42);
+      doc.text(subject.label, x + 11, subjectY + 8);
+      doc.setFontSize(11.5);
+      doc.setTextColor(...color);
+      doc.text(pct(subject.overall), x + subjectW - 5, subjectY + 8, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.3);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`${subject.correct}/${subject.total} tagged questions correct`, x + 5, subjectY + 14);
+      doc.setFillColor(232, 250, 239);
+      doc.setDrawColor(187, 247, 208);
+      doc.roundedRect(x + 5, subjectY + 16.5, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(4.9);
+      doc.setTextColor(0, 121, 90);
+      doc.text(`LOTS ${pct(subject.lots)}`, x + subjectW / 4 + 1, subjectY + 20, { align: "center" });
+      doc.setFillColor(255, 237, 213);
+      doc.setDrawColor(253, 186, 116);
+      doc.roundedRect(x + subjectW / 2 + 2, subjectY + 16.5, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
+      doc.setTextColor(194, 65, 12);
+      doc.text(`HOTS ${pct(subject.hots)}`, x + subjectW * 0.75 - 1, subjectY + 20, { align: "center" });
+    });
+
+    doc.autoTable({
+      startY: subjectY + 29,
+      theme: "grid",
+      margin: { left: margin + 5, right: margin + 5 },
+      tableWidth: contentWidth - 10,
+      head: [["Subject", ...BLOOM_SKILLS.map((skill) => skill.key), "Subject Level"]],
+      body: analysis.subjectPerformance.map((subject) => {
+        const subjectBand = bandStyle(subject.overall);
+        return [
+          subject.label,
+          ...BLOOM_SKILLS.map(({ key }) => {
+            const skill = subject.skills.find((item) => item.skill === key);
+            return skill?.percentage === null ? "-\nN/A" : `${skill.percentage}%\n${skill.correct}/${skill.total}`;
+          }),
+          `${subjectBand.label}\n${pct(subject.overall)}`,
+        ];
+      }),
+      styles: {
+        font: "helvetica",
+        fontSize: 5.8,
+        cellPadding: 1.8,
+        halign: "center",
+        valign: "middle",
+        lineColor: [226, 232, 240],
+        textColor: [15, 23, 42],
+      },
+      headStyles: {
+        fillColor: [239, 246, 255],
+        textColor: [15, 23, 42],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: 31, halign: "left", fontStyle: "bold" },
+        7: { cellWidth: 33, fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.section === "head" && data.column.index > 0 && data.column.index < 7) {
+          const color = BLOOM_SKILLS[data.column.index - 1].color.replace("#", "");
+          const red = Number.parseInt(color.slice(0, 2), 16);
+          const green = Number.parseInt(color.slice(2, 4), 16);
+          const blue = Number.parseInt(color.slice(4, 6), 16);
+          data.cell.styles.fillColor = [
+            Math.round(red + (255 - red) * 0.78),
+            Math.round(green + (255 - green) * 0.78),
+            Math.round(blue + (255 - blue) * 0.78),
+          ];
+        }
+        if (data.section !== "body") return;
+        if (data.column.index > 0 && data.column.index < 7) {
+          const subject = analysis.subjectPerformance[data.row.index];
+          const skill = subject.skills[data.column.index - 1];
+          const style = bandStyle(skill?.percentage);
+          data.cell.styles.fillColor = style.fill;
+          data.cell.styles.fontStyle = skill?.percentage === null ? "normal" : "bold";
+        }
+        if (data.column.index === 7) {
+          const style = bandStyle(analysis.subjectPerformance[data.row.index].overall);
+          data.cell.styles.fillColor = style.fill;
+          data.cell.styles.textColor = style.text;
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("No subject-level Bloom-tagged data is available for this exam.", margin + 12, y + 18);
+    y += 28;
+  }
+
+  y = ensureSpace(45, y);
+  drawSection(
+    "Question-wise Analytics",
+    "Stored response evidence and the percentage of other students who answered each question correctly.",
+    y,
+    `${questionRows.length} questions`,
+  );
+
+  doc.autoTable({
+    startY: y + 9,
+    theme: "grid",
+    margin: { left: margin, right: margin },
+    tableWidth: contentWidth,
+    head: [["Question", "Option", "Key", "Marks", "Status", "Peer correct %"]],
+    body: questionRows.map((question) => [
+      question.question,
+      question.option || "-",
+      question.key || "-",
+      question.marks === "" ? "-" : question.marks,
+      question.status || "-",
+      question.peerCorrectPercentage === null ? "-" : `${question.peerCorrectPercentage}%`,
+    ]),
+    styles: {
+      font: "helvetica",
+      fontSize: 7.2,
+      cellPadding: 2.5,
+      valign: "middle",
+      lineColor: [226, 232, 240],
+    },
+    headStyles: {
+      fillColor: [239, 246, 255],
+      textColor: [51, 65, 85],
+      fontStyle: "bold",
+    },
+    columnStyles: {
+      0: { cellWidth: 32 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 25, halign: "center" },
+      4: { cellWidth: 40, halign: "center" },
+      5: { cellWidth: "auto", halign: "center", fontStyle: "bold" },
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      if (data.column.index === 4) {
+        const status = String(data.cell.raw || "").toLowerCase();
+        data.cell.styles.fontStyle = "bold";
+        if (status.includes("incorrect")) {
+          data.cell.styles.fillColor = [254, 226, 226];
+          data.cell.styles.textColor = [220, 38, 38];
+        } else if (status.includes("correct")) {
+          data.cell.styles.fillColor = [220, 252, 231];
+          data.cell.styles.textColor = [5, 150, 105];
+        } else {
+          data.cell.styles.fillColor = [254, 249, 195];
+          data.cell.styles.textColor = [133, 77, 14];
+        }
+      }
+      if (data.column.index === 5) {
+        const tones = [
+          { fill: [239, 246, 255], text: [37, 99, 235] },
+          { fill: [236, 253, 245], text: [5, 150, 105] },
+          { fill: [255, 247, 237], text: [249, 115, 22] },
+          { fill: [250, 245, 255], text: [147, 51, 234] },
+          { fill: [255, 241, 242], text: [244, 63, 94] },
+        ];
+        const tone = tones[data.row.index % tones.length];
+        data.cell.styles.fillColor = tone.fill;
+        data.cell.styles.textColor = tone.text;
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 5) return;
+      const percentage = Number.parseFloat(String(data.cell.raw || ""));
+      if (!Number.isFinite(percentage)) return;
+      const tones = [[37, 99, 235], [5, 150, 105], [249, 115, 22], [147, 51, 234], [244, 63, 94]];
+      const x = data.cell.x + data.cell.width * 0.42;
+      const yBar = data.cell.y + data.cell.height / 2 + 1.4;
+      const width = data.cell.width * 0.48;
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(x, yBar, width, 1.2, 0.6, 0.6, "F");
+      doc.setFillColor(...tones[data.row.index % tones.length]);
+      doc.roundedRect(x, yBar, width * clamp(percentage, 0, 100) / 100, 1.2, 0.6, 0.6, "F");
+    },
+  });
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 5, {
+      align: "right",
+    });
+  }
+
+  doc.save(
+    [
+      sanitizeFileName(studentName),
+      sanitizeFileName(formatExamName(result.exam, "Exam")),
+      "analytics_report.pdf",
+    ].join("_"),
+  );
+};
+
+const downloadExamAnalyticsPerfectLayoutReport = async ({
+  studentName,
+  studentData,
+  schoolData,
+  result,
+  questionRows,
+  cognitiveAnalysis,
+}) => {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const title = formatExamName(result.exam, "Exam");
+  const analysis = cognitiveAnalysis || buildStudentCognitiveAnalysis([result]);
+  const navy = [15, 47, 99];
+  const pageBg = [245, 248, 252];
+  const softBorder = [203, 213, 225];
+  const mutedText = [71, 85, 105];
+  const [schoolLogo, spectropyLogo] = await Promise.all([
+    toDataUrl(
+      schoolData?.logo_base64 || schoolData?.logo_data_url || schoolData?.logo_url,
+    ),
+    toDataUrl(spectropyLogoUrl),
+  ]);
+
+  doc.setProperties({
+    title: `${title} Analytics Report`,
+    subject: "Student cognitive and question-wise analytics",
+    creator: "SPECTROPY Result Analysis Portal",
+  });
+
+  const getImageFormat = (dataUrl) => {
+    if (/^data:image\/jpe?g/i.test(dataUrl)) return "JPEG";
+    if (/^data:image\/webp/i.test(dataUrl)) return "WEBP";
+    return "PNG";
+  };
+
+  const drawImageCoverCircle = (dataUrl, cx, cy, r) => {
+    if (!dataUrl) return false;
+    try {
+      const props = doc.getImageProperties(dataUrl);
+      const box = r * 2;
+      const scale = Math.max(box / props.width, box / props.height);
+      const dw = props.width * scale;
+      const dh = props.height * scale;
+      doc.saveGraphicsState();
+      doc.circle(cx, cy, r, null);
+      doc.clip();
+      doc.discardPath();
+      doc.addImage(
+        dataUrl,
+        getImageFormat(dataUrl),
+        cx - dw / 2,
+        cy - dh / 2,
+        dw,
+        dh,
+      );
+      doc.restoreGraphicsState();
+      return true;
+    } catch (error) {
+      console.warn("Unable to draw analytics report image:", error);
+      return false;
+    }
+  };
+
+  const pct = (value) => (value === null || value === undefined ? "-" : `${value}%`);
+  const bandStyle = (percentage) => {
+    const band = getSubjectMasteryBand(percentage);
+    if (band.key === "excellent") return { ...band, fill: [217, 248, 230], text: [4, 120, 87] };
+    if (band.key === "proficient") return { ...band, fill: [232, 250, 239], text: [21, 128, 61] };
+    if (band.key === "developing") return { ...band, fill: [255, 246, 214], text: [146, 64, 14] };
+    if (band.key === "support") return { ...band, fill: [255, 231, 237], text: [190, 18, 60] };
+    return { ...band, fill: [242, 246, 250], text: [71, 85, 105] };
+  };
+
+  const drawPill = (text, x, y) => {
+    const width = Math.max(22, doc.getTextWidth(text) + 7);
+    doc.setFillColor(239, 246, 255);
+    doc.roundedRect(x - width, y - 4.5, width, 7.5, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(0, 53, 122);
+    doc.text(text, x - width / 2, y + 0.6, { align: "center" });
+  };
+
+  const drawSection = (heading, description, y, rightText = "", pillYOffset = 0) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(heading, 20, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.2);
+    doc.setTextColor(...mutedText);
+    doc.text(description, 20, y + 5);
+    if (rightText) drawPill(rightText, pageWidth - 20, y + pillYOffset);
+  };
+
+  const drawMetricCard = ({ x, y, w, label, value, note, border, fill }) => {
+    doc.setFillColor(...fill);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(x, y, w, 19.5, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.4);
+    doc.setTextColor(0, 53, 122);
+    doc.text(String(label).toUpperCase(), x + 3, y + 4.7);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(value), x + 3, y + 12);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.4);
+    doc.setTextColor(...mutedText);
+    doc.text(doc.splitTextToSize(String(note), w - 6), x + 3, y + 17);
+  };
+
+  const drawFooter = (page, total) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(...mutedText);
+    doc.text(`Page ${page} of ${total}`, 16, pageHeight - 5);
+  };
+
+  doc.setFillColor(...pageBg);
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, pageWidth, 32, "F");
+
+  doc.setFillColor(255, 255, 255);
+  doc.circle(19, 15.8, 8.5, "F");
+  if (!drawImageCoverCircle(schoolLogo, 19, 15.8, 7.4)) {
+    doc.setFillColor(...navy);
+    doc.circle(19, 15.8, 5.7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("S", 19, 18.1, { align: "center" });
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.text(doc.splitTextToSize(String(schoolData?.school_name || "School Name").toUpperCase(), 42), 32, 11);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(5.4);
+  doc.setTextColor(190, 213, 240);
+  doc.text(schoolData?.area || "-", 32, 18.5);
+  doc.text(`Academic Year : ${schoolData?.academic_year || "-"}`, 32, 25);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(255, 255, 255);
+  doc.text("STUDENT ANALYTICS REPORT", pageWidth / 2, 12.6, { align: "center" });
+  doc.setDrawColor(130, 168, 215);
+  doc.setLineWidth(0.45);
+  doc.line(pageWidth / 2 - 48, 23, pageWidth / 2 - 18, 23);
+  doc.line(pageWidth / 2 + 18, 23, pageWidth / 2 + 48, 23);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(5.8);
+  doc.setTextColor(190, 213, 240);
+  doc.text("SUBJECT & QUESTION ANALYSIS", pageWidth / 2, 25, { align: "center" });
+
+  doc.setFillColor(255, 255, 255);
+  doc.circle(pageWidth - 62, 15.8, 8.5, "F");
+  drawImageCoverCircle(spectropyLogo, pageWidth - 62, 15.8, 6.8);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.setTextColor(255, 255, 255);
+  doc.text("SPECTROPY", pageWidth - 18, 12.8, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(5.2);
+  doc.setTextColor(190, 213, 240);
+  doc.text("Powered by Spectropy", pageWidth - 18, 19.5, { align: "right" });
+
+  const gradeSection = `${studentData?.class || "-"}${studentData?.section ? ` / ${studentData.section}` : ""}`;
+  const program = [result?.program, result?.subject_group].filter(Boolean).join(" / ") || "-";
+  const studentCardY = 39;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(16, studentCardY, pageWidth - 32, 22, 2.5, 2.5, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13.2);
+  doc.setTextColor(...navy);
+  doc.text(studentName.toUpperCase(), 24, studentCardY + 9.2);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.2);
+  doc.setTextColor(...mutedText);
+  doc.text("STUDENT ANALYTICS PROFILE", 24, studentCardY + 14.4);
+
+  const detailX = 113;
+  const detailY = studentCardY + 5;
+  const detailW = 112;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(191, 219, 254);
+  doc.roundedRect(detailX, detailY, detailW, 11, 2.5, 2.5, "S");
+  const detailItems = [
+    [`GRADE-${studentData?.class || "-"}`, 0],
+    [`Section ${studentData?.section || "-"}`, 37],
+    [`Roll No. ${studentData?.roll_no || studentData?.student_id || result?.student_id || "-"}`, 74],
+  ];
+  detailItems.forEach(([text, offset], index) => {
+    if (index > 0) {
+      doc.setDrawColor(191, 219, 254);
+      doc.line(detailX + offset - 4, detailY + 2, detailX + offset - 4, detailY + 9);
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(15, 47, 99);
+    doc.text(text, detailX + 6 + offset, detailY + 7);
+  });
+  doc.setFillColor(...navy);
+  doc.roundedRect(pageWidth - 72, detailY, 48, 12, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6);
+  doc.setTextColor(255, 255, 255);
+  doc.text(doc.splitTextToSize(program.toUpperCase(), 40), pageWidth - 48, detailY + 7, {
+    align: "center",
+  });
+
+  let y = 70;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.roundedRect(16, y - 6, pageWidth - 32, 37, 2, 2, "FD");
+  drawSection(
+    "Cognitive Analysis",
+    "Bloom-tagged mastery for this exam only.",
+    y - 2,
+    `${analysis.overall.total} tagged response${analysis.overall.total === 1 ? "" : "s"}`,
+    5.5,
+  );
+
+  if (analysis.hasData) {
+    const gap = 4;
+    const cardW = (pageWidth - 54 - gap * 3) / 4;
+    [
+      ["Overall mastery", pct(analysis.overall.percentage), `${analysis.overall.correct}/${analysis.overall.total} correct`, [59, 130, 246], [239, 246, 255]],
+      ["LOTS", pct(analysis.lots.percentage), "Remember + Understand", [16, 185, 129], [236, 253, 245]],
+      ["HOTS", pct(analysis.hots.percentage), "Apply + Analyse + Evaluate + Create", [245, 158, 11], [255, 251, 235]],
+      [
+        "Cognitive level",
+        analysis.level.label,
+        analysis.gap === null ? "LOTS/HOTS gap unavailable" : `${Math.abs(analysis.gap)} point LOTS/HOTS gap`,
+        [37, 99, 235],
+        [248, 250, 252],
+      ],
+    ].forEach(([label, value, note, border, fill], index) => {
+      drawMetricCard({
+        x: 20 + (cardW + gap) * index,
+        y: y + 7,
+        w: cardW,
+        label,
+        value,
+        note,
+        border,
+        fill,
+      });
+    });
+  }
+
+  y = 113;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...softBorder);
+  doc.roundedRect(16, y - 8, pageWidth - 32, 90, 2, 2, "FD");
+  drawSection(
+    "Subject-wise Cognitive Analytics",
+    "Subject mastery calculated from this exam's Bloom-tagged questions.",
+    y - 2,
+    `${analysis.subjectPerformance.length} subject${analysis.subjectPerformance.length === 1 ? "" : "s"}`,
+  );
+
+  if (analysis.subjectPerformance.length > 0) {
+    const subjectGap = 4;
+    const subjectW = (pageWidth - 54 - subjectGap * 3) / 4;
+    const subjectY = y + 8;
+    const subjectColors = [[139, 92, 246], [6, 182, 212], [37, 99, 235], [244, 63, 94]];
+    analysis.subjectPerformance.slice(0, 4).forEach((subject, index) => {
+      const x = 20 + (subjectW + subjectGap) * index;
+      const color = subjectColors[index] || [37, 99, 235];
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...softBorder);
+      doc.roundedRect(x, subjectY, subjectW, 25, 2, 2, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42);
+      doc.text(subject.label, x + 5, subjectY + 8.5);
+      doc.setFontSize(12.5);
+      doc.setTextColor(...color);
+      doc.text(pct(subject.overall), x + subjectW - 5, subjectY + 8.8, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.7);
+      doc.setTextColor(...mutedText);
+      doc.text(`${subject.correct}/${subject.total} tagged questions correct`, x + 5, subjectY + 15);
+      doc.setFillColor(232, 250, 239);
+      doc.setDrawColor(187, 247, 208);
+      doc.roundedRect(x + 5, subjectY + 18, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(4.9);
+      doc.setTextColor(0, 121, 90);
+      doc.text(`LOTS ${pct(subject.lots)}`, x + subjectW / 4 + 1, subjectY + 21.5, { align: "center" });
+      doc.setFillColor(255, 237, 213);
+      doc.setDrawColor(253, 186, 116);
+      doc.roundedRect(x + subjectW / 2 + 2, subjectY + 18, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
+      doc.setTextColor(194, 65, 12);
+      doc.text(`HOTS ${pct(subject.hots)}`, x + subjectW * 0.75 - 1, subjectY + 21.5, { align: "center" });
+    });
+
+    doc.autoTable({
+      startY: subjectY + 31,
+      theme: "grid",
+      margin: { left: 20, right: 20 },
+      tableWidth: pageWidth - 40,
+      head: [["Subject", ...BLOOM_SKILLS.map((skill) => skill.key), "Subject Level"]],
+      body: analysis.subjectPerformance.map((subject) => {
+        const subjectBand = bandStyle(subject.overall);
+        return [
+          subject.label,
+          ...BLOOM_SKILLS.map(({ key }) => {
+            const skill = subject.skills.find((item) => item.skill === key);
+            return skill?.percentage === null ? "-\nN/A" : `${skill.percentage}%\n${skill.correct}/${skill.total}`;
+          }),
+          `${subjectBand.label}\n${pct(subject.overall)}`,
+        ];
+      }),
+      styles: {
+        font: "helvetica",
+        fontSize: 5.5,
+        cellPadding: 1.65,
+        halign: "center",
+        valign: "middle",
+        lineColor: [226, 232, 240],
+        textColor: [15, 23, 42],
+      },
+      headStyles: {
+        fillColor: [239, 246, 255],
+        textColor: [15, 23, 42],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: 31, halign: "left", fontStyle: "bold" },
+        7: { cellWidth: 33, fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.section === "head" && data.column.index > 0 && data.column.index < 7) {
+          const color = BLOOM_SKILLS[data.column.index - 1].color.replace("#", "");
+          const red = Number.parseInt(color.slice(0, 2), 16);
+          const green = Number.parseInt(color.slice(2, 4), 16);
+          const blue = Number.parseInt(color.slice(4, 6), 16);
+          data.cell.styles.fillColor = [
+            Math.round(red + (255 - red) * 0.78),
+            Math.round(green + (255 - green) * 0.78),
+            Math.round(blue + (255 - blue) * 0.78),
+          ];
+        }
+        if (data.section !== "body") return;
+        if (data.column.index > 0 && data.column.index < 7) {
+          const subject = analysis.subjectPerformance[data.row.index];
+          const skill = subject.skills[data.column.index - 1];
+          const style = bandStyle(skill?.percentage);
+          data.cell.styles.fillColor = style.fill;
+          data.cell.styles.fontStyle = skill?.percentage === null ? "normal" : "bold";
+        }
+        if (data.column.index === 7) {
+          const style = bandStyle(analysis.subjectPerformance[data.row.index].overall);
+          data.cell.styles.fillColor = style.fill;
+          data.cell.styles.textColor = style.text;
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+  }
+  drawFooter(1, 2);
+
+  doc.addPage("a4", "landscape");
+  doc.setFillColor(...pageBg);
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+  drawSection(
+    "Question-wise Analytics",
+    "Stored response evidence and the percentage of other students who answered each question correctly.",
+    15,
+    `${questionRows.length} questions`,
+  );
+
+  doc.autoTable({
+    startY: 32,
+    theme: "grid",
+    margin: { left: 16, right: 16 },
+    tableWidth: pageWidth - 32,
+    head: [["Question", "Option", "Key", "Marks", "Status", "Peer correct %"]],
+    body: questionRows.map((question) => [
+      question.question,
+      question.option || "-",
+      question.key || "-",
+      question.marks === "" ? "-" : question.marks,
+      question.status || "-",
+      question.peerCorrectPercentage === null ? "-" : `${question.peerCorrectPercentage}%`,
+    ]),
+    styles: {
+      font: "helvetica",
+      fontSize: 7.2,
+      cellPadding: 3.1,
+      valign: "middle",
+      lineColor: [226, 232, 240],
+      minCellHeight: 10.5,
+    },
+    headStyles: {
+      fillColor: [239, 246, 255],
+      textColor: [51, 65, 85],
+      fontStyle: "bold",
+    },
+    columnStyles: {
+      0: { cellWidth: 34 },
+      1: { cellWidth: 30 },
+      2: { cellWidth: 25 },
+      3: { cellWidth: 25, halign: "center" },
+      4: { cellWidth: 38, halign: "center" },
+      5: { cellWidth: "auto", halign: "center", fontStyle: "bold" },
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      if (data.column.index === 4) {
+        const status = String(data.cell.raw || "").toLowerCase();
+        data.cell.styles.fontStyle = "bold";
+        if (status.includes("incorrect")) {
+          data.cell.styles.fillColor = [254, 226, 226];
+          data.cell.styles.textColor = [220, 38, 38];
+        } else if (status.includes("correct")) {
+          data.cell.styles.fillColor = [220, 252, 231];
+          data.cell.styles.textColor = [5, 150, 105];
+        } else {
+          data.cell.styles.fillColor = [254, 249, 195];
+          data.cell.styles.textColor = [133, 77, 14];
+        }
+      }
+      if (data.column.index === 5) {
+        const tones = [
+          { fill: [239, 246, 255], text: [37, 99, 235] },
+          { fill: [236, 253, 245], text: [5, 150, 105] },
+          { fill: [255, 247, 237], text: [249, 115, 22] },
+          { fill: [250, 245, 255], text: [147, 51, 234] },
+          { fill: [255, 241, 242], text: [244, 63, 94] },
+        ];
+        const tone = tones[data.row.index % tones.length];
+        data.cell.styles.fillColor = tone.fill;
+        data.cell.styles.textColor = tone.text;
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 5) return;
+      const percentage = Number.parseFloat(String(data.cell.raw || ""));
+      if (!Number.isFinite(percentage)) return;
+      const tones = [[37, 99, 235], [5, 150, 105], [249, 115, 22], [147, 51, 234], [244, 63, 94]];
+      const x = data.cell.x + data.cell.width * 0.36;
+      const yBar = data.cell.y + data.cell.height / 2 + 1.4;
+      const width = data.cell.width * 0.56;
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(x, yBar, width, 1.2, 0.6, 0.6, "F");
+      doc.setFillColor(...tones[data.row.index % tones.length]);
+      doc.roundedRect(x, yBar, width * clamp(percentage, 0, 100) / 100, 1.2, 0.6, 0.6, "F");
+    },
+  });
+  drawFooter(2, 2);
+
+  doc.save(
+    [
+      sanitizeFileName(studentName),
+      sanitizeFileName(formatExamName(result.exam, "Exam")),
+      "analytics_report.pdf",
+    ].join("_"),
+  );
 };
 
 const generatePDF = (studentData, schoolData, examResults) => {
@@ -1583,6 +2570,97 @@ export default function StudentPerformanceView({
 }) {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [selectedExamResult, setSelectedExamResult] = useState(null);
+  const [peerQuestionAnalytics, setPeerQuestionAnalytics] = useState({
+    status: "idle",
+    byQuestion: {},
+    peerStudentCount: 0,
+  });
+
+  useEffect(() => {
+    if (!selectedExamResult) {
+      setPeerQuestionAnalytics({
+        status: "idle",
+        byQuestion: {},
+        peerStudentCount: 0,
+      });
+      return undefined;
+    }
+
+    const context = {
+      schoolId: selectedExamResult.school_id || student?.school_id,
+      program: selectedExamResult.program,
+      examPattern:
+        selectedExamResult.exam_pattern || selectedExamResult.exam,
+      classValue: selectedExamResult.class || student?.class,
+      section: selectedExamResult.section || student?.section,
+      examDate: selectedExamResult.exam_date || selectedExamResult.date,
+      studentId:
+        selectedExamResult.student_id ||
+        student?.student_id ||
+        student?.roll_no,
+    };
+
+    if (Object.values(context).some((value) => !String(value || "").trim())) {
+      setPeerQuestionAnalytics({
+        status: "unavailable",
+        byQuestion: {},
+        peerStudentCount: 0,
+      });
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      program: context.program,
+      exam_pattern: context.examPattern,
+      class: context.classValue,
+      section: context.section,
+      exam_date: String(context.examDate).slice(0, 10),
+      exclude_student_id: context.studentId,
+    });
+
+    setPeerQuestionAnalytics({
+      status: "loading",
+      byQuestion: {},
+      peerStudentCount: 0,
+    });
+
+    fetch(
+      `${API_BASE}/api/schools/${encodeURIComponent(context.schoolId)}/exam-datasets/question-peer-statistics?${params}`,
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load peer question statistics");
+        }
+        return payload;
+      })
+      .then((payload) => {
+        const byQuestion = Object.fromEntries(
+          (payload.questions || []).map((question) => [
+            normalizeQuestionLabel(question.question),
+            question,
+          ]),
+        );
+        setPeerQuestionAnalytics({
+          status: "ready",
+          byQuestion,
+          peerStudentCount: Number(payload.peer_student_count) || 0,
+        });
+      })
+      .catch((error) => {
+        if (error.name === "AbortError") return;
+        console.error("Unable to load peer question statistics:", error);
+        setPeerQuestionAnalytics({
+          status: "error",
+          byQuestion: {},
+          peerStudentCount: 0,
+        });
+      });
+
+    return () => controller.abort();
+  }, [selectedExamResult, student]);
 
   const analytics = useMemo(() => {
     const chronologicalResults = [...examResults].sort((a, b) => {
@@ -1607,7 +2685,6 @@ export default function StudentPerformanceView({
         weakSubject: null,
         performanceTrend: [],
         attemptData: [],
-        recommendations: [],
         nextTarget: 0,
         orderedResults: [],
       };
@@ -1696,35 +2773,6 @@ export default function StudentPerformanceView({
       return entry;
     });
 
-    const recommendations = [];
-    if (weakSubject) {
-      recommendations.push(
-        `Prioritise ${weakSubject.label}: current cumulative average is ${weakSubject.average}%.`,
-      );
-    }
-    if (accuracy < 70) {
-      recommendations.push(
-        "Focus on error analysis before increasing question volume; accuracy is the main score limiter.",
-      );
-    } else if (attemptRate < 80) {
-      recommendations.push(
-        "Use timed mixed practice to improve question selection and completion rate.",
-      );
-    } else {
-      recommendations.push(
-        "Maintain the present attempt strategy and increase difficulty gradually.",
-      );
-    }
-    if (consistency < 75) {
-      recommendations.push(
-        "Performance varies between exams; add a fixed weekly revision and test routine.",
-      );
-    } else if (improvement > 0.4) {
-      recommendations.push(
-        "The latest result is improving; continue the same preparation cycle for one more assessment.",
-      );
-    }
-
     return {
       bestExam,
       latestExam,
@@ -1752,7 +2800,6 @@ export default function StudentPerformanceView({
           color: COLORS.amber,
         },
       ].filter((item) => item.value > 0),
-      recommendations,
       nextTarget: Math.min(100, Math.ceil(toNum(latestExam?.percentage) + 5)),
       orderedResults: [...chronologicalResults].reverse(),
     };
@@ -1762,6 +2809,45 @@ export default function StudentPerformanceView({
     () => buildStudentCognitiveAnalysis(examResults),
     [examResults],
   );
+
+  const strongestMeasuredSubject = cognitiveAnalysis.strongestSubject;
+  const priorityMeasuredSubject =
+    cognitiveAnalysis.prioritySubject?.key !== strongestMeasuredSubject?.key
+      ? cognitiveAnalysis.prioritySubject
+      : null;
+  const teacherActions = useMemo(() => {
+    if (!strongestMeasuredSubject) {
+      return [
+        "Add or review Bloom and subject tags to generate evidence-based teaching actions.",
+      ];
+    }
+
+    const actions = [];
+
+    if (priorityMeasuredSubject) {
+      const lowestMeasuredSkill = [...priorityMeasuredSubject.skills]
+        .filter((skill) => skill.total > 0 && skill.percentage !== null)
+        .sort((a, b) => a.percentage - b.percentage)[0];
+
+      actions.push(
+        lowestMeasuredSkill
+          ? `Prioritise ${priorityMeasuredSubject.label}: ${lowestMeasuredSkill.skill} is the lowest measured Bloom skill at ${lowestMeasuredSkill.percentage}%. Use guided practice and corrective feedback.`
+          : `Prioritise ${priorityMeasuredSubject.label}: cognitive mastery is ${priorityMeasuredSubject.overall}%. Review its lowest Bloom-skill results first.`,
+      );
+    }
+
+    actions.push(
+      `Extend ${strongestMeasuredSubject.label}: cognitive mastery is ${strongestMeasuredSubject.overall}%. Use higher-difficulty application and reasoning questions to maintain progress.`,
+    );
+
+    if (!priorityMeasuredSubject) {
+      actions.push(
+        "Gather at least three Bloom-tagged questions in another subject before identifying a separate priority subject.",
+      );
+    }
+
+    return actions;
+  }, [priorityMeasuredSubject, strongestMeasuredSubject]);
 
   const {
     bestExam,
@@ -1777,7 +2863,6 @@ export default function StudentPerformanceView({
     weakSubject,
     performanceTrend,
     attemptData,
-    recommendations,
     nextTarget,
     orderedResults,
   } = analytics;
@@ -1785,11 +2870,20 @@ export default function StudentPerformanceView({
   const studentName = student?.name || "Student";
   const classLabel = `${student?.class || "—"}${student?.section ? `-${student.section}` : ""}`;
   const isParentProfile = title === "Your Child's Profile";
-  const selectedSubjectRows = selectedExamResult
-    ? getResultSubjects(selectedExamResult)
-    : [];
   const selectedQuestionRows = selectedExamResult
-    ? getQuestionRows(selectedExamResult.question_results)
+    ? getQuestionRows(selectedExamResult.question_results).map((question) => {
+        const peerStats =
+          peerQuestionAnalytics.byQuestion[
+            normalizeQuestionLabel(question.question)
+          ];
+        return {
+          ...question,
+          peerCorrectPercentage: peerStats?.correct_percentage ?? null,
+          peerCorrectCount: peerStats?.correct_count ?? 0,
+          peerResponseCount: peerStats?.peer_count ?? 0,
+          peerStatsStatus: peerQuestionAnalytics.status,
+        };
+      })
     : [];
   const selectedExamCognitiveAnalysis = useMemo(
     () =>
@@ -1901,13 +2995,13 @@ export default function StudentPerformanceView({
                     className="sp-button sp-button-small sp-detail-download-button"
                     onClick={async () => {
                       try {
-                        await downloadExamAnalyticsReport({
+                        await downloadExamAnalyticsPerfectLayoutReport({
                           studentName,
                           studentData: student,
                           schoolData: school || {},
                           result: selectedExamResult,
-                          subjectRows: selectedSubjectRows,
                           questionRows: selectedQuestionRows,
+                          cognitiveAnalysis: selectedExamCognitiveAnalysis,
                         });
                       } catch (error) {
                         console.error(error);
@@ -2027,7 +3121,7 @@ export default function StudentPerformanceView({
               )}
             </section>
 
-            <section className="sp-panel sp-detail-panel sp-exam-subject-cognitive-panel">
+            <section className="sp-panel sp-detail-panel sp-exam-subject-cognitive-panel sp-subject-bloom-matrix-panel">
               <div className="sp-panel-header">
                 <div>
                   <h3>Subject-wise Cognitive Analytics</h3>
@@ -2084,36 +3178,81 @@ export default function StudentPerformanceView({
                     ))}
                   </div>
 
+                  <div className="sp-mastery-legend" aria-label="Mastery level legend">
+                    <span className="sp-mastery-excellent"><i /> <strong>≥ 80%</strong> Excellent</span>
+                    <span className="sp-mastery-proficient"><i /> <strong>60 – 79%</strong> Proficient</span>
+                    <span className="sp-mastery-developing"><i /> <strong>40 – 59%</strong> Developing</span>
+                    <span className="sp-mastery-support"><i /> <strong>&lt; 40%</strong> Needs Support</span>
+                  </div>
+
                   <div className="sp-subject-bloom-table-wrap sp-exam-subject-cognitive-table-wrap">
                     <table className="sp-subject-bloom-table">
                       <thead>
                         <tr>
                           <th>Subject</th>
-                          {BLOOM_SKILLS.map((skill) => (
-                            <th key={skill.key}>{skill.key}</th>
-                          ))}
+                          {BLOOM_SKILLS.map((skill) => {
+                            const SkillIcon = BLOOM_SKILL_ICONS[skill.key];
+                            return (
+                              <th key={skill.key} style={{ "--skill-color": skill.color }}>
+                                <span className="sp-mastery-skill-heading">
+                                  <SkillIcon size={17} strokeWidth={2.4} aria-hidden="true" />
+                                  {skill.key}
+                                </span>
+                              </th>
+                            );
+                          })}
+                          <th>Subject Level</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedExamCognitiveAnalysis.subjectPerformance.map((subject) => (
-                          <tr key={subject.key}>
-                            <th>{subject.label}</th>
-                            {subject.skills.map((skill) => (
-                              <td key={skill.skill}>
-                                <strong>
-                                  {skill.percentage === null
-                                    ? "—"
-                                    : `${skill.percentage}%`}
-                                </strong>
-                                <small>
-                                  {skill.total > 0
-                                    ? `${skill.correct}/${skill.total}`
-                                    : "Not assessed"}
-                                </small>
+                        {selectedExamCognitiveAnalysis.subjectPerformance.map((subject) => {
+                          const SubjectIcon = subject.Icon;
+                          const subjectBand = getSubjectMasteryBand(subject.overall);
+                          return (
+                            <tr key={subject.key}>
+                              <th>
+                                <span className="sp-mastery-subject-heading">
+                                  <SubjectIcon
+                                    size={19}
+                                    strokeWidth={2.3}
+                                    style={{ color: subject.iconColor }}
+                                    aria-hidden="true"
+                                  />
+                                  {subject.label}
+                                </span>
+                              </th>
+                              {subject.skills.map((skill) => {
+                                const band = getSubjectMasteryBand(skill.percentage);
+                                return (
+                                  <td
+                                    className={`sp-mastery-cell sp-mastery-${band.key}`}
+                                    key={skill.skill}
+                                  >
+                                    <strong>
+                                      {skill.percentage === null
+                                        ? "—"
+                                        : `${skill.percentage}%`}
+                                    </strong>
+                                    {skill.percentage !== null && (
+                                      <span className="sp-mastery-progress" aria-hidden="true">
+                                        <span style={{ width: `${skill.percentage}%` }} />
+                                      </span>
+                                    )}
+                                    <small>
+                                      {skill.total > 0
+                                        ? `${skill.correct}/${skill.total}`
+                                        : "Not assessed"}
+                                    </small>
+                                  </td>
+                                );
+                              })}
+                              <td className={`sp-subject-level sp-mastery-${subjectBand.key}`}>
+                                <strong>{subjectBand.label}</strong>
+                                <small>{subject.overall}%</small>
                               </td>
-                            ))}
-                          </tr>
-                        ))}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2129,7 +3268,10 @@ export default function StudentPerformanceView({
               <div className="sp-panel-header">
                 <div>
                   <h3>Question-wise analytics</h3>
-                  <p>Stored option, key, and marks for every question.</p>
+                  <p>
+                    Stored response evidence and the percentage of other students
+                    who answered each question correctly.
+                  </p>
                 </div>
                 <span className="sp-panel-badge">
                   {selectedQuestionRows.length} questions
@@ -2146,10 +3288,13 @@ export default function StudentPerformanceView({
                         <th>Key</th>
                         <th>Marks</th>
                         <th>Status</th>
+                        <th title="Percentage of other students in this class and section who answered correctly">
+                          Peer correct %
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedQuestionRows.map((question) => (
+                      {selectedQuestionRows.map((question, questionIndex) => (
                         <tr key={question.question}>
                           <td>{question.question}</td>
                           <td>{question.option || "—"}</td>
@@ -2165,6 +3310,34 @@ export default function StudentPerformanceView({
                             >
                               {question.status}
                             </span>
+                          </td>
+                          <td>
+                            {question.peerStatsStatus === "loading" ? (
+                              <span className="sp-peer-rate sp-peer-rate-loading">
+                                Loading
+                              </span>
+                            ) : question.peerCorrectPercentage === null ? (
+                              <span
+                                className="sp-peer-rate sp-peer-rate-unavailable"
+                                title="Peer response data is unavailable"
+                              >
+                                —
+                              </span>
+                            ) : (
+                              <span
+                                className={`sp-peer-rate sp-peer-rate-tone-${questionIndex % 5}`}
+                                title={`${question.peerCorrectCount}/${question.peerResponseCount} other students answered correctly`}
+                              >
+                                <strong>{question.peerCorrectPercentage}%</strong>
+                                <span className="sp-peer-rate-track" aria-hidden="true">
+                                  <span
+                                    style={{
+                                      width: `${clamp(question.peerCorrectPercentage, 0, 100)}%`,
+                                    }}
+                                  />
+                                </span>
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -2182,19 +3355,20 @@ export default function StudentPerformanceView({
           <EmptyState />
         ) : (
           <>
+            <div className="sp-overview-layout">
             <section
               className="sp-metrics-grid"
               aria-label="Performance summary"
             >
               <MetricCard
-                icon="◎"
+                icon={<Trophy size={21} strokeWidth={2.4} />}
                 label="Average score"
                 value={`${overallAverage}%`}
                 helper={`${examResults.length} assessment${examResults.length === 1 ? "" : "s"}`}
                 tone={scoreBand.tone}
               />
               <MetricCard
-                icon={getTrendIcon(improvement)}
+                icon={<TrendingUp size={21} strokeWidth={2.4} />}
                 label="Current score"
                 value={`${round(latestExam?.percentage)}%`}
                 helper={getTrendText(improvement)}
@@ -2207,7 +3381,7 @@ export default function StudentPerformanceView({
                 }
               />
               <MetricCard
-                icon="✓"
+                icon={<Target size={21} strokeWidth={2.4} />}
                 label="Accuracy"
                 value={`${accuracy}%`}
                 helper={`${attemptRate}% questions attempted`}
@@ -2220,7 +3394,7 @@ export default function StudentPerformanceView({
                 }
               />
               <MetricCard
-                icon="#"
+                icon={<Hash size={21} strokeWidth={2.4} />}
                 label="Class rank"
                 value={
                   latestExam?.class_rank ? `#${latestExam.class_rank}` : "—"
@@ -2229,7 +3403,7 @@ export default function StudentPerformanceView({
                 tone="primary"
               />
               <MetricCard
-                icon="#"
+                icon={<Users size={21} strokeWidth={2.4} />}
                 label="School rank"
                 value={
                   latestExam?.school_rank ? `#${latestExam.school_rank}` : "—"
@@ -2238,7 +3412,7 @@ export default function StudentPerformanceView({
                 tone="primary"
               />
               <MetricCard
-                icon="#"
+                icon={<Star size={21} strokeWidth={2.4} />}
                 label="All India rank"
                 value={
                   latestExam?.all_schools_rank
@@ -2250,6 +3424,7 @@ export default function StudentPerformanceView({
               />
             </section>
 
+            <div className="sp-overview-main">
             <section className="sp-insight-strip">
               <div className="sp-insight-main">
                 <span className="sp-insight-icon" aria-hidden="true">
@@ -2278,6 +3453,7 @@ export default function StudentPerformanceView({
               </div>
             </section>
 
+            {/* Score overview removed from the student view.
             <section className="sp-dashboard-section">
               <SectionHeader
                 eyebrow="Analytics"
@@ -2510,22 +3686,28 @@ export default function StudentPerformanceView({
                 </ChartCard>
               </div>
             </section>
+            */}
 
-            <section className="sp-dashboard-section">
+            <section className="sp-dashboard-section sp-overview-insights">
               <div className="sp-teacher-insight-grid">
                 <section className="sp-panel sp-recommendation-panel">
                   <div className="sp-panel-header">
-                    <div>
-                      <h3>Recommended teacher actions</h3>
-                      <p>
-                        Suggested from the student’s current performance
-                        pattern.
-                      </p>
+                    <div className="sp-panel-title-group">
+                      <span className="sp-panel-title-icon sp-recommendation-title-icon" aria-hidden="true">
+                        <Lightbulb size={22} strokeWidth={2.4} />
+                      </span>
+                      <div>
+                        <h3>Recommended teacher actions</h3>
+                        <p>
+                          Suggested from measured subject and Bloom-skill
+                          performance.
+                        </p>
+                      </div>
                     </div>
-                    <span className="sp-panel-badge">Auto insight</span>
+                    <span className="sp-panel-badge">Measured insight</span>
                   </div>
                   <ol className="sp-action-list">
-                    {recommendations.map((recommendation, index) => (
+                    {teacherActions.map((recommendation, index) => (
                       <li key={recommendation}>
                         <span>{index + 1}</span>
                         <p>{recommendation}</p>
@@ -2536,24 +3718,37 @@ export default function StudentPerformanceView({
 
                 <section className="sp-panel sp-snapshot-panel">
                   <div className="sp-panel-header">
-                    <div>
-                      <h3>Learning snapshot</h3>
-                      <p>Fast summary for student or parent discussion.</p>
+                    <div className="sp-panel-title-group">
+                      <span className="sp-panel-title-icon sp-snapshot-title-icon" aria-hidden="true">
+                        <BarChart3 size={22} strokeWidth={2.4} />
+                      </span>
+                      <div>
+                        <h3>Learning snapshot</h3>
+                        <p>Evidence summary from Bloom-tagged questions.</p>
+                      </div>
                     </div>
                   </div>
                   <dl className="sp-snapshot-list">
                     <div>
-                      <dt>Strongest subject</dt>
+                      <dt>Strongest measured subject</dt>
                       <dd>
-                        {strengthSubject?.label || "—"}{" "}
-                        <span>{strengthSubject?.average ?? 0}%</span>
+                        {strongestMeasuredSubject?.label || "More evidence needed"}{" "}
+                        <span>
+                          {strongestMeasuredSubject
+                            ? `${strongestMeasuredSubject.overall}%`
+                            : "—"}
+                        </span>
                       </dd>
                     </div>
                     <div>
-                      <dt>Priority subject</dt>
+                      <dt>Priority measured subject</dt>
                       <dd>
-                        {weakSubject?.label || "—"}{" "}
-                        <span>{weakSubject?.average ?? 0}%</span>
+                        {priorityMeasuredSubject?.label || "More evidence needed"}{" "}
+                        <span>
+                          {priorityMeasuredSubject
+                            ? `${priorityMeasuredSubject.overall}%`
+                            : "—"}
+                        </span>
                       </dd>
                     </div>
                     <div>
@@ -2582,6 +3777,8 @@ export default function StudentPerformanceView({
                 </section>
               </div>
             </section>
+            </div>
+            </div>
 
             <section className="sp-dashboard-section sp-cognitive-section">
               <SectionHeader
@@ -2966,36 +4163,80 @@ export default function StudentPerformanceView({
                           <p>Exact mastery and response evidence for every measured skill.</p>
                         </div>
                       </div>
+                      <div className="sp-mastery-legend" aria-label="Mastery level legend">
+                        <span className="sp-mastery-excellent"><i /> <strong>≥ 80%</strong> Excellent</span>
+                        <span className="sp-mastery-proficient"><i /> <strong>60 – 79%</strong> Proficient</span>
+                        <span className="sp-mastery-developing"><i /> <strong>40 – 59%</strong> Developing</span>
+                        <span className="sp-mastery-support"><i /> <strong>&lt; 40%</strong> Needs Support</span>
+                      </div>
                       <div className="sp-subject-bloom-table-wrap">
                         <table className="sp-subject-bloom-table">
                           <thead>
                             <tr>
                               <th>Subject</th>
-                              {BLOOM_SKILLS.map((skill) => (
-                                <th key={skill.key}>{skill.key}</th>
-                              ))}
+                              {BLOOM_SKILLS.map((skill) => {
+                                const SkillIcon = BLOOM_SKILL_ICONS[skill.key];
+                                return (
+                                  <th key={skill.key} style={{ "--skill-color": skill.color }}>
+                                    <span className="sp-mastery-skill-heading">
+                                      <SkillIcon size={17} strokeWidth={2.4} aria-hidden="true" />
+                                      {skill.key}
+                                    </span>
+                                  </th>
+                                );
+                              })}
+                              <th>Subject Level</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {cognitiveAnalysis.subjectPerformance.map((subject) => (
-                              <tr key={subject.key}>
-                                <th>{subject.label}</th>
-                                {subject.skills.map((skill) => (
-                                  <td key={skill.skill}>
-                                    <strong>
-                                      {skill.percentage === null
-                                        ? "—"
-                                        : `${skill.percentage}%`}
-                                    </strong>
-                                    <small>
-                                      {skill.total > 0
-                                        ? `${skill.correct}/${skill.total}`
-                                        : "Not assessed"}
-                                    </small>
+                            {cognitiveAnalysis.subjectPerformance.map((subject) => {
+                              const SubjectIcon = subject.Icon;
+                              const subjectBand = getSubjectMasteryBand(subject.overall);
+                              return (
+                                <tr key={subject.key}>
+                                  <th>
+                                    <span className="sp-mastery-subject-heading">
+                                      <SubjectIcon
+                                        size={19}
+                                        strokeWidth={2.3}
+                                        style={{ color: subject.iconColor }}
+                                        aria-hidden="true"
+                                      />
+                                      {subject.label}
+                                    </span>
+                                  </th>
+                                  {subject.skills.map((skill) => {
+                                    const band = getSubjectMasteryBand(skill.percentage);
+                                    return (
+                                      <td
+                                        className={`sp-mastery-cell sp-mastery-${band.key}`}
+                                        key={skill.skill}
+                                      >
+                                        <strong>
+                                          {skill.percentage === null
+                                            ? "—"
+                                            : `${skill.percentage}%`}
+                                        </strong>
+                                        {skill.percentage !== null && (
+                                          <span className="sp-mastery-progress" aria-hidden="true">
+                                            <span style={{ width: `${skill.percentage}%` }} />
+                                          </span>
+                                        )}
+                                        <small>
+                                          {skill.total > 0
+                                            ? `${skill.correct}/${skill.total}`
+                                            : "Not assessed"}
+                                        </small>
+                                      </td>
+                                    );
+                                  })}
+                                  <td className={`sp-subject-level sp-mastery-${subjectBand.key}`}>
+                                    <strong>{subjectBand.label}</strong>
+                                    <small>{subject.overall}%</small>
                                   </td>
-                                ))}
-                              </tr>
-                            ))}
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -3004,6 +4245,9 @@ export default function StudentPerformanceView({
 
                   <div className="sp-subject-bloom-insights">
                     <article className="sp-subject-bloom-insight sp-subject-bloom-strength">
+                      <span className="sp-subject-bloom-insight-icon" aria-hidden="true">
+                        <TrendingUp size={24} strokeWidth={2.5} />
+                      </span>
                       <span>Strongest measured subject</span>
                       <strong>
                         {cognitiveAnalysis.strongestSubject?.label || "More evidence needed"}
@@ -3015,6 +4259,9 @@ export default function StudentPerformanceView({
                       </p>
                     </article>
                     <article className="sp-subject-bloom-insight sp-subject-bloom-priority">
+                      <span className="sp-subject-bloom-insight-icon" aria-hidden="true">
+                        <TrendingDown size={24} strokeWidth={2.5} />
+                      </span>
                       <span>Priority measured subject</span>
                       <strong>
                         {cognitiveAnalysis.prioritySubject?.label || "More evidence needed"}
@@ -3845,6 +5092,26 @@ const DASHBOARD_CSS = `
     font-size: 17px;
     font-weight: 850;
   }
+  .sp-cognitive-evidence dl > div:nth-child(1) {
+    border: 1px solid #cfe6fb;
+    background: linear-gradient(135deg, #f4faff, #e5f3ff);
+  }
+  .sp-cognitive-evidence dl > div:nth-child(1) dd { color: #1059ad; }
+  .sp-cognitive-evidence dl > div:nth-child(2) {
+    border: 1px solid #d2efde;
+    background: linear-gradient(135deg, #f5fff9, #e8f8ef);
+  }
+  .sp-cognitive-evidence dl > div:nth-child(2) dd { color: #087f4f; }
+  .sp-cognitive-evidence dl > div:nth-child(3) {
+    border: 1px solid #f4dfcf;
+    background: linear-gradient(135deg, #fffaf6, #fff0e5);
+  }
+  .sp-cognitive-evidence dl > div:nth-child(3) dd { color: #a64b12; }
+  .sp-cognitive-evidence dl > div:nth-child(4) {
+    border: 1px solid #e1d9f7;
+    background: linear-gradient(135deg, #fbf9ff, #f0ebff);
+  }
+  .sp-cognitive-evidence dl > div:nth-child(4) dd { color: #5526a9; }
   .sp-cognitive-insights ul {
     display: grid;
     gap: 8px;
@@ -3871,6 +5138,26 @@ const DASHBOARD_CSS = `
     border-radius: 50%;
     background: #2563eb;
   }
+  .sp-cognitive-insights li:nth-child(1) {
+    color: #17553b;
+    background: linear-gradient(100deg, #effcf5, #e5f8ee);
+  }
+  .sp-cognitive-insights li:nth-child(1)::before { background: #20b977; }
+  .sp-cognitive-insights li:nth-child(2) {
+    color: #82411b;
+    background: linear-gradient(100deg, #fff8f1, #ffede0);
+  }
+  .sp-cognitive-insights li:nth-child(2)::before { background: #f47a25; }
+  .sp-cognitive-insights li:nth-child(3) {
+    color: #8d2038;
+    background: linear-gradient(100deg, #fff2f5, #ffe5eb);
+  }
+  .sp-cognitive-insights li:nth-child(3)::before { background: #ef3159; }
+  .sp-cognitive-insights li:nth-child(n+4) {
+    color: #44308f;
+    background: linear-gradient(100deg, #f8f5ff, #eee8ff);
+  }
+  .sp-cognitive-insights li:nth-child(n+4)::before { background: #7252d6; }
   .sp-cognitive-empty { margin-top: 0; }
 
   .sp-subject-bloom-cards {
@@ -3926,6 +5213,18 @@ const DASHBOARD_CSS = `
     background: var(--sp-slate-50);
     text-align: center;
   }
+  .sp-subject-bloom-card dl > div:nth-child(1) {
+    border: 1px solid #bfe8cf;
+    background: linear-gradient(135deg, #f1fcf5, #e2f7ea);
+  }
+  .sp-subject-bloom-card dl > div:nth-child(1) dt,
+  .sp-subject-bloom-card dl > div:nth-child(1) dd { color: #087b4a; }
+  .sp-subject-bloom-card dl > div:nth-child(2) {
+    border: 1px solid #f4d1b8;
+    background: linear-gradient(135deg, #fff8f1, #ffeadc);
+  }
+  .sp-subject-bloom-card dl > div:nth-child(2) dt,
+  .sp-subject-bloom-card dl > div:nth-child(2) dd { color: #c45a16; }
   .sp-subject-bloom-card dl > div:nth-child(3) {
     display: none;
   }
@@ -3973,17 +5272,46 @@ const DASHBOARD_CSS = `
     overflow: hidden;
     padding-bottom: 12px;
   }
+  .sp-subject-bloom-section .sp-subject-bloom-grid { grid-template-columns: 1fr; }
+  .sp-subject-bloom-matrix-panel .sp-panel-header h3 { font-size: 15px; }
+  .sp-subject-bloom-matrix-panel .sp-panel-header p { font-size: 12px; }
+  .sp-mastery-legend {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 10px 14px 0;
+    color: #111827;
+    font-size: 11px;
+  }
+  .sp-mastery-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .sp-mastery-legend i {
+    width: 9px;
+    height: 9px;
+    border: 4px solid transparent;
+    border-radius: 50%;
+  }
+  .sp-mastery-legend .sp-mastery-excellent i { border-color: #b9f1d5; background: #10b981; }
+  .sp-mastery-legend .sp-mastery-proficient i { border-color: #d5f5e1; background: #60d994; }
+  .sp-mastery-legend .sp-mastery-developing i { border-color: #fff1b8; background: #f5c518; }
+  .sp-mastery-legend .sp-mastery-support i { border-color: #ffd7df; background: #f43f68; }
   .sp-subject-bloom-table-wrap {
     margin: 14px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     border: 1px solid var(--sp-slate-200);
     border-radius: 8px;
   }
   .sp-subject-bloom-table {
     width: 100%;
+    min-width: 860px;
     table-layout: fixed;
     border-collapse: collapse;
-    font-size: 9px;
+    font-size: 10px;
     text-align: center;
   }
   .sp-subject-bloom-table th,
@@ -4001,7 +5329,7 @@ const DASHBOARD_CSS = `
   .sp-subject-bloom-table thead th {
     color: var(--sp-slate-600);
     background: var(--sp-slate-50);
-    font-size: 9px;
+    font-size: 10px;
   }
   .sp-subject-bloom-table tbody th {
     color: var(--sp-navy);
@@ -4012,13 +5340,73 @@ const DASHBOARD_CSS = `
   .sp-subject-bloom-table td strong {
     display: block;
     color: var(--sp-slate-700);
-    font-size: 11px;
+    font-size: 12px;
   }
   .sp-subject-bloom-table td small {
     display: block;
     margin-top: 3px;
     color: var(--sp-slate-500);
-    font-size: 8px;
+    font-size: 9px;
+  }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:first-child,
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:last-child {
+    background: #f3f7fb;
+  }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(2) { background: #e4f1ff; }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(3) { background: #e2f8ea; }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(4) { background: #fff4c9; }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(5) { background: #ffead5; }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(6) { background: #ffe2e9; }
+  .sp-subject-bloom-matrix-panel .sp-subject-bloom-table thead th:nth-child(7) { background: #eee8ff; }
+  .sp-mastery-skill-heading,
+  .sp-mastery-subject-heading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .sp-mastery-skill-heading svg { color: var(--skill-color, #2563eb); }
+  .sp-mastery-subject-heading { justify-content: flex-start; }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell,
+  .sp-subject-bloom-matrix-panel .sp-subject-level {
+    border: 3px solid #fff;
+    border-radius: 8px;
+  }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell.sp-mastery-excellent,
+  .sp-subject-bloom-matrix-panel .sp-subject-level.sp-mastery-excellent { background: #d9f8e6; }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell.sp-mastery-proficient,
+  .sp-subject-bloom-matrix-panel .sp-subject-level.sp-mastery-proficient { background: #e8faef; }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell.sp-mastery-developing,
+  .sp-subject-bloom-matrix-panel .sp-subject-level.sp-mastery-developing { background: #fff6d6; }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell.sp-mastery-support,
+  .sp-subject-bloom-matrix-panel .sp-subject-level.sp-mastery-support { background: #ffe7ed; }
+  .sp-subject-bloom-matrix-panel .sp-mastery-cell.sp-mastery-unassessed,
+  .sp-subject-bloom-matrix-panel .sp-subject-level.sp-mastery-unassessed { background: #f2f6fa; }
+  .sp-mastery-progress {
+    display: block;
+    height: 6px;
+    margin: 6px auto 0;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .08);
+  }
+  .sp-mastery-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #10b981;
+  }
+  .sp-mastery-proficient .sp-mastery-progress > span { background: #49d687; }
+  .sp-mastery-developing .sp-mastery-progress > span { background: #f5c518; }
+  .sp-mastery-support .sp-mastery-progress > span { background: #f43f68; }
+  .sp-subject-level strong {
+    color: var(--sp-navy) !important;
+    font-size: 11px !important;
+  }
+  .sp-subject-level small {
+    color: var(--sp-slate-700) !important;
+    font-size: 11px !important;
+    font-weight: 850;
   }
   .sp-subject-bloom-insights {
     display: grid;
@@ -4027,20 +5415,43 @@ const DASHBOARD_CSS = `
     margin-top: 12px;
   }
   .sp-subject-bloom-insight {
-    padding: 15px 16px;
+    position: relative;
+    min-height: 96px;
+    padding: 15px 16px 15px 68px;
     border: 1px solid #dce3ec;
     border-left: 4px solid #10b981;
     border-radius: 9px;
     background: #fff;
   }
-  .sp-subject-bloom-priority { border-left-color: #f59e0b; }
-  .sp-subject-bloom-insight > span {
+  .sp-subject-bloom-priority { border-left-color: #ef4444; }
+  .sp-subject-bloom-insight > span:not(.sp-subject-bloom-insight-icon) {
     display: block;
     color: var(--sp-slate-500);
     font-size: 9px;
     font-weight: 850;
     letter-spacing: .06em;
     text-transform: uppercase;
+  }
+  .sp-subject-bloom-insight-icon {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    transform: translateY(-50%);
+    border-radius: 50%;
+  }
+  .sp-subject-bloom-strength .sp-subject-bloom-insight-icon {
+    color: #079447;
+    border: 1px solid #bbf7d0;
+    background: #dcfce7;
+  }
+  .sp-subject-bloom-priority .sp-subject-bloom-insight-icon {
+    color: #dc3545;
+    border: 1px solid #fecdd3;
+    background: #ffe4e8;
   }
   .sp-subject-bloom-insight strong {
     display: block;
@@ -4194,6 +5605,18 @@ const DASHBOARD_CSS = `
   .sp-exam-subject-cognitive-panel {
     padding-bottom: 14px;
   }
+  .sp-exam-subject-cognitive-panel > .sp-panel-header h3 { font-size: 16px; }
+  .sp-exam-subject-cognitive-panel > .sp-panel-header p { font-size: 12px; }
+  .sp-exam-subject-cognitive-panel > .sp-panel-header .sp-panel-badge { font-size: 11px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-card h3 { font-size: 14px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-card-head > strong { font-size: 23px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-card > p { font-size: 11px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-card dt { font-size: 9px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-card dd { font-size: 12px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-table thead th,
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-table tbody th { font-size: 11px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-table td strong { font-size: 13px; }
+  .sp-exam-subject-cognitive-panel .sp-subject-bloom-table td small { font-size: 9.5px; }
   .sp-exam-subject-cognitive-cards {
     padding: 14px 14px 0;
   }
@@ -4212,6 +5635,7 @@ const DASHBOARD_CSS = `
   }
   .sp-question-table {
     width: 100%;
+    min-width: 780px;
     border-collapse: collapse;
     font-size: 14px;
   }
@@ -4231,6 +5655,10 @@ const DASHBOARD_CSS = `
     font-weight: 850;
     text-transform: uppercase;
     letter-spacing: .03em;
+  }
+  .sp-question-table th:last-child {
+    min-width: 260px;
+    background: linear-gradient(135deg, #f8f7ff, #f2efff);
   }
   .sp-question-table tbody tr:last-child td {
     border-bottom: 0;
@@ -4256,6 +5684,79 @@ const DASHBOARD_CSS = `
   .sp-status-pill-not-attempted {
     color: #b45309;
     background: #fffbeb;
+  }
+  .sp-peer-rate {
+    --peer-color: #2878e9;
+    --peer-fill: #79adf7;
+    --peer-track: #dcecff;
+    --peer-bg: #f1f7ff;
+    display: grid;
+    grid-template-columns: 62px minmax(100px, 1fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 9px 16px;
+    border-radius: 11px;
+    color: var(--peer-color);
+    background: var(--peer-bg);
+  }
+  .sp-peer-rate > strong {
+    font-size: 16px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .sp-peer-rate-track {
+    display: block;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--peer-track);
+  }
+  .sp-peer-rate-track > span {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    border-radius: inherit;
+    background: var(--peer-fill);
+  }
+  .sp-peer-rate-tone-1 {
+    --peer-color: #07966a;
+    --peer-fill: #68c9aa;
+    --peer-track: #d9f3ea;
+    --peer-bg: #effaf6;
+  }
+  .sp-peer-rate-tone-2 {
+    --peer-color: #e68a13;
+    --peer-fill: #ffc667;
+    --peer-track: #fff0d5;
+    --peer-bg: #fff8eb;
+  }
+  .sp-peer-rate-tone-3 {
+    --peer-color: #7c3aed;
+    --peer-fill: #b487f4;
+    --peer-track: #eee3ff;
+    --peer-bg: #f7f2ff;
+  }
+  .sp-peer-rate-tone-4 {
+    --peer-color: #ed3f68;
+    --peer-fill: #f58ba5;
+    --peer-track: #ffe2e9;
+    --peer-bg: #fff2f5;
+  }
+  .sp-peer-rate-loading,
+  .sp-peer-rate-unavailable {
+    display: inline-grid;
+    grid-template-columns: 1fr;
+    width: auto;
+    min-width: 86px;
+    min-height: 32px;
+    padding: 6px 10px;
+    color: var(--sp-slate-500);
+    background: var(--sp-slate-50);
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
   }
   .sp-mobile-view-button {
     width: 100%;
@@ -4440,6 +5941,297 @@ const DASHBOARD_CSS = `
   .sp-teacher-avatar,
   .sp-teacher-links a { color: #163b82; background: #edf4ff; }
 
+  .sp-overview-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(220px, 19vw, 250px);
+    gap: 12px;
+    align-items: stretch;
+    margin: 14px 0 0;
+  }
+  .sp-overview-main {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sp-overview-main > .sp-overview-insights {
+    order: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 0 !important;
+  }
+  .sp-overview-main > .sp-insight-strip {
+    order: 2;
+    flex: 0 0 118px;
+    min-height: 118px;
+    box-sizing: border-box;
+  }
+  .sp-overview-insights .sp-teacher-insight-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(290px, .8fr);
+    gap: 10px;
+    height: 100%;
+    min-height: 330px;
+    margin-top: 0 !important;
+    transform: none;
+  }
+  .sp-overview-insights .sp-recommendation-panel,
+  .sp-overview-insights .sp-snapshot-panel {
+    height: 100%;
+    box-sizing: border-box;
+    padding-bottom: 16px;
+  }
+  .sp-overview-insights .sp-panel-header { padding: 16px 16px 0; }
+  .sp-overview-insights .sp-panel-header h3 { font-size: 18px; }
+  .sp-overview-insights .sp-panel-header p { font-size: 13px; line-height: 1.5; }
+  .sp-overview-insights .sp-panel-badge { font-size: 11.5px; }
+  .sp-overview-insights .sp-panel-title-group {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 12px;
+  }
+  .sp-overview-insights .sp-panel-title-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+  }
+  .sp-overview-insights .sp-recommendation-title-icon {
+    color: #f2a000;
+    background: #fff0c9;
+  }
+  .sp-overview-insights .sp-snapshot-title-icon {
+    color: #09a934;
+    background: #d9f7df;
+  }
+  .sp-overview-insights .sp-action-list { gap: 10px; margin: 14px 14px 0; }
+  .sp-overview-insights .sp-action-list li { gap: 11px; padding: 12px; }
+  .sp-overview-insights .sp-action-list li > span {
+    width: 27px;
+    height: 27px;
+  }
+  .sp-overview-insights .sp-action-list li > span { font-size: 13px; }
+  .sp-overview-insights .sp-action-list p { font-size: 14px; line-height: 1.5; }
+  .sp-overview-insights .sp-snapshot-list { margin: 10px 16px 0; }
+  .sp-overview-insights .sp-snapshot-list > div { padding: 12px 0; }
+  .sp-overview-insights .sp-snapshot-list dt { font-size: 13px; }
+  .sp-overview-insights .sp-snapshot-list dd { font-size: 15px; }
+  .sp-overview-insights .sp-snapshot-list dd span { font-size: 15px; }
+  .sp-overview-main > .sp-insight-strip {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    padding: 12px 14px;
+  }
+  .sp-overview-main > .sp-insight-strip .sp-eyebrow { font-size: 11px; }
+  .sp-overview-main > .sp-insight-strip .sp-insight-main strong { font-size: 26px; }
+  .sp-overview-main > .sp-insight-strip .sp-insight-main p { font-size: 13px; }
+  .sp-overview-main .sp-insight-stats div { padding: 9px 12px; }
+  .sp-overview-main .sp-insight-stats span { font-size: 11px; }
+  .sp-overview-main .sp-insight-stats strong { font-size: 17px; }
+  .sp-overview-layout > .sp-metrics-grid {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(6, minmax(54px, 1fr));
+    gap: 7px;
+    margin: 0;
+  }
+  .sp-overview-layout .sp-metric-card {
+    align-items: center;
+    min-height: 54px;
+    box-sizing: border-box;
+    padding: 8px 9px;
+    gap: 13px;
+  }
+  .sp-overview-layout .sp-metric-icon {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 17px;
+  }
+  .sp-overview-layout .sp-metric-copy { padding-left: 2px; }
+  .sp-overview-layout .sp-eyebrow { font-size: 8.5px; }
+  .sp-overview-layout .sp-metric-value { margin-top: 3px; font-size: 18px; }
+  .sp-overview-layout .sp-metric-helper {
+    max-width: 170px;
+    margin-top: 3px;
+    overflow: hidden;
+    font-size: 9px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(1) {
+    border-color: #bfdbfe;
+    background: linear-gradient(120deg, #f8fbff, #edf6ff);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(1) .sp-metric-icon {
+    color: #1672d4;
+    background: #dbeafe;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(2) {
+    border-color: #f5d99a;
+    background: linear-gradient(120deg, #fffdf7, #fff5dc);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(2) .sp-metric-icon {
+    color: #f59e0b;
+    background: #ffedc2;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(3) {
+    border-color: #b7e7c3;
+    background: linear-gradient(120deg, #f6fff8, #e5f9e9);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(3) .sp-metric-icon {
+    color: #0aaa35;
+    background: #d1f5d9;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(4) {
+    border-color: #ddd0fa;
+    background: linear-gradient(120deg, #fbf9ff, #f1ebff);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(4) .sp-metric-icon {
+    color: #6d28d9;
+    background: #e9ddff;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(5) {
+    border-color: #f6c8ce;
+    background: linear-gradient(120deg, #fff9fa, #ffecef);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(5) .sp-metric-icon {
+    color: #dc2745;
+    background: #ffdce2;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(6) {
+    border-color: #bcd9f7;
+    background: linear-gradient(120deg, #f8fbff, #e8f3ff);
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(6) .sp-metric-icon {
+    color: #1267cc;
+    background: #d5eaff;
+  }
+  .sp-overview-layout .sp-metric-card:nth-child(1) .sp-eyebrow,
+  .sp-overview-layout .sp-metric-card:nth-child(6) .sp-eyebrow { color: #155fb8; }
+  .sp-overview-layout .sp-metric-card:nth-child(2) .sp-eyebrow { color: #a96500; }
+  .sp-overview-layout .sp-metric-card:nth-child(3) .sp-eyebrow { color: #087b2a; }
+  .sp-overview-layout .sp-metric-card:nth-child(4) .sp-eyebrow { color: #5b21b6; }
+  .sp-overview-layout .sp-metric-card:nth-child(5) .sp-eyebrow { color: #b51d38; }
+
+  .sp-overview-insights .sp-action-list li:first-child {
+    background: linear-gradient(100deg, #fff2f4, #ffe7ec);
+  }
+  .sp-overview-insights .sp-action-list li:first-child > span {
+    background: #d91f3d;
+  }
+  .sp-overview-insights .sp-action-list li:last-child {
+    background: linear-gradient(100deg, #f2f8ff, #e6f2ff);
+  }
+  .sp-overview-insights .sp-action-list li:last-child > span {
+    background: #1262bf;
+  }
+  .sp-overview-insights .sp-snapshot-list > div {
+    border-bottom: 0;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 12px;
+  }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(1),
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(4) {
+    background: #e7f8e9;
+  }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(2) {
+    background: #ffedef;
+  }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(3) {
+    background: #eaf4ff;
+  }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(1) dd span,
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(4) dd span { color: #07962e; }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(2) dd span { color: #d91f3d; }
+  .sp-overview-insights .sp-snapshot-list > div:nth-child(3) dd span { color: #1262bf; }
+
+  .sp-overview-main > .sp-insight-strip {
+    border-color: #f2d58e;
+    border-left-color: #f2a900;
+    background: linear-gradient(115deg, #fffdf8, #fff8e7);
+  }
+  .sp-overview-main > .sp-insight-strip .sp-insight-icon {
+    color: #ef9f00;
+    background: #fff0c7;
+  }
+  .sp-overview-main > .sp-insight-strip .sp-insight-icon::after { color: #ef9f00; }
+  .sp-overview-main > .sp-insight-strip .sp-eyebrow { color: #102a63; }
+  .sp-overview-main > .sp-insight-strip .sp-insight-main p { color: #425b7e; }
+  .sp-overview-main .sp-insight-stats {
+    grid-template-columns: 105px 205px;
+    justify-self: end;
+    width: 320px;
+    max-width: 100%;
+    min-width: 0;
+    border: 0;
+    gap: 10px;
+    background: transparent;
+    transform: translateX(-10px);
+  }
+  .sp-overview-main .sp-insight-stats div {
+    border: 0;
+    border-radius: 9px;
+    background: #e7f2ff;
+  }
+  .sp-overview-main .sp-insight-stats div + div {
+    border: 0;
+    background: #f1e8ff;
+  }
+  .sp-overview-main .sp-insight-stats div:first-child strong { color: #1262bf; }
+  .sp-overview-main .sp-insight-stats div:last-child strong { color: #7023b8; }
+  .sp-overview-layout + .sp-cognitive-section { margin-top: 18px; }
+
+  @media (max-width: 1199px) {
+    .sp-overview-layout { grid-template-columns: minmax(0, 1fr); }
+    .sp-overview-layout > .sp-metrics-grid {
+      grid-column: 1;
+      grid-row: 1;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: none;
+      gap: 10px;
+    }
+    .sp-overview-main { grid-column: 1; grid-row: 2; }
+    .sp-overview-main > .sp-overview-insights {
+      flex: none;
+      margin-top: 0 !important;
+    }
+    .sp-overview-main > .sp-insight-strip {
+      flex: none;
+      min-height: 0;
+    }
+    .sp-overview-insights .sp-teacher-insight-grid,
+    .sp-overview-insights .sp-recommendation-panel,
+    .sp-overview-insights .sp-snapshot-panel { height: auto; }
+    .sp-overview-insights .sp-teacher-insight-grid {
+      min-height: 0;
+      transform: none;
+    }
+    .sp-overview-main .sp-insight-stats {
+      width: min(100%, 320px);
+      transform: none;
+    }
+    .sp-overview-layout .sp-metric-card {
+      align-items: flex-start;
+      min-height: 84px;
+      padding: 12px;
+    }
+    .sp-overview-layout .sp-eyebrow { font-size: 9px; }
+    .sp-overview-layout .sp-metric-value { font-size: 21px; }
+    .sp-overview-layout .sp-metric-helper {
+      margin-top: 5px;
+      font-size: 10px;
+      white-space: normal;
+    }
+  }
+
   @media (max-width: 1120px) {
     .sp-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .sp-subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -4455,6 +6247,23 @@ const DASHBOARD_CSS = `
   }
 
   @media (max-width: 860px) {
+    .sp-overview-layout > .sp-metrics-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .sp-overview-insights .sp-teacher-insight-grid {
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+    }
+    .sp-overview-insights .sp-recommendation-panel,
+    .sp-overview-insights .sp-snapshot-panel {
+      min-width: 0;
+      width: 100%;
+    }
+    .sp-overview-main .sp-insight-stats {
+      justify-self: stretch;
+      width: 100%;
+    }
+    .sp-overview-main > .sp-insight-strip { grid-template-columns: 1fr; }
     .sp-hero-content { grid-template-columns: auto minmax(0,1fr); }
     .sp-status-badge { grid-column: 2; justify-self: start; }
     .sp-insight-strip, .sp-teacher-insight-grid,
@@ -4488,6 +6297,29 @@ const DASHBOARD_CSS = `
     .sp-section-header p { font-size: 12px; }
     .sp-panel { border-radius: 8px; }
     .sp-panel-header { padding: 12px 12px 0; }
+    .sp-overview-insights .sp-panel-header {
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 12px 0;
+    }
+    .sp-overview-insights .sp-panel-title-group { gap: 10px; }
+    .sp-overview-insights .sp-panel-title-icon {
+      flex-basis: 38px;
+      width: 38px;
+      height: 38px;
+    }
+    .sp-overview-insights .sp-panel-header h3 { font-size: 16px; }
+    .sp-overview-insights .sp-panel-header p,
+    .sp-overview-insights .sp-action-list p { font-size: 12px; }
+    .sp-overview-insights .sp-action-list { margin: 12px 10px 0; }
+    .sp-overview-insights .sp-snapshot-list { margin: 9px 12px 0; }
+    .sp-overview-insights .sp-snapshot-list > div { gap: 10px; padding: 10px; }
+    .sp-overview-insights .sp-snapshot-list dt { min-width: 0; }
+    .sp-overview-insights .sp-snapshot-list dd {
+      flex: 0 1 55%;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
     .sp-chart-card { min-height: 250px; }
     .sp-chart-area { height: 195px; padding: 6px 2px 10px; }
     .sp-subject-grid { grid-template-columns: 1fr; }
@@ -4514,6 +6346,20 @@ const DASHBOARD_CSS = `
   }
 
   @media (max-width: 460px) {
+    .sp-overview-main .sp-insight-stats { grid-template-columns: 1fr; }
+    .sp-overview-insights .sp-recommendation-panel .sp-panel-header {
+      flex-direction: column;
+    }
+    .sp-overview-insights .sp-panel-badge { align-self: flex-start; }
+    .sp-overview-insights .sp-snapshot-list > div {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    .sp-overview-insights .sp-snapshot-list dd {
+      max-width: 150px;
+      text-align: right;
+    }
     .sp-hero-actions .sp-button span { display: none; }
     .sp-metrics-grid { grid-template-columns: 1fr 1fr; }
     .sp-metric-card { display: block; }
