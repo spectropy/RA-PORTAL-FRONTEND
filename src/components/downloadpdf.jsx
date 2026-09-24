@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 
 import spectropyLogoUrl from "../assets/logo.png";
+import ceoSignatureUrl from "../assets/spectropy-signature.jfif";
 
 const rankIconUrls = {
   class: "/assets/classrank.png",
@@ -13,10 +14,6 @@ const subjectIconUrls = {
   maths: "/assets/pi.png",
   biology: "/assets/leaf.png",
 };
-
-// Optional approved CEO signature only.
-// import ceoSignatureUrl from "../assets/ceo-signature.png";
-const ceoSignatureUrl = null;
 
 // ============================================================================
 // IMAGE HELPERS
@@ -39,6 +36,88 @@ const toDataUrl = async (src) => {
     console.warn("Unable to load report image:", src, error);
     return null;
   }
+};
+
+const prepareSignatureImage = async (src) => {
+  const dataUrl = await toDataUrl(src);
+  if (!dataUrl) return null;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const sourceX = Math.round(image.naturalWidth * 0.08);
+      const sourceY = Math.round(image.naturalHeight * 0.08);
+      const sourceWidth = Math.round(image.naturalWidth * 0.8);
+      const sourceHeight = Math.round(image.naturalHeight * 0.64);
+      const sourceCanvas = document.createElement("canvas");
+      sourceCanvas.width = sourceWidth;
+      sourceCanvas.height = sourceHeight;
+      const sourceContext = sourceCanvas.getContext("2d");
+      sourceContext.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        sourceWidth,
+        sourceHeight,
+      );
+
+      const pixels = sourceContext.getImageData(0, 0, sourceWidth, sourceHeight);
+      let minX = sourceWidth;
+      let minY = sourceHeight;
+      let maxX = 0;
+      let maxY = 0;
+      for (let y = 0; y < sourceHeight; y += 1) {
+        for (let x = 0; x < sourceWidth; x += 1) {
+          const offset = (y * sourceWidth + x) * 4;
+          const luminance =
+            pixels.data[offset] * 0.299 +
+            pixels.data[offset + 1] * 0.587 +
+            pixels.data[offset + 2] * 0.114;
+          const alpha = Math.max(0, Math.min(255, Math.round((150 - luminance) * 5)));
+          pixels.data[offset] = 25;
+          pixels.data[offset + 1] = 23;
+          pixels.data[offset + 2] = 91;
+          pixels.data[offset + 3] = alpha < 55 ? 0 : alpha;
+          if (pixels.data[offset + 3] > 24) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+
+      if (maxX <= minX || maxY <= minY) {
+        resolve(null);
+        return;
+      }
+
+      sourceContext.putImageData(pixels, 0, 0);
+      const signatureCanvas = document.createElement("canvas");
+      signatureCanvas.width = maxX - minX + 1;
+      signatureCanvas.height = maxY - minY + 1;
+      signatureCanvas
+        .getContext("2d")
+        .drawImage(
+          sourceCanvas,
+          minX,
+          minY,
+          signatureCanvas.width,
+          signatureCanvas.height,
+          0,
+          0,
+          signatureCanvas.width,
+          signatureCanvas.height,
+        );
+      resolve(signatureCanvas.toDataURL("image/png"));
+    };
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
 };
 
 const svgToPng = async (svg, width = 160, height = 160) => {
@@ -610,7 +689,7 @@ export const generatePDF = async (
   const BLOOM_SKILLS = [
     { key: "Remember", color: [47, 140, 255], group: "LOTS" },
     { key: "Understand", color: [52, 201, 154], group: "LOTS" },
-    { key: "Apply", color: [255, 200, 61], group: "HOTS" },
+    { key: "Apply", color: [8, 145, 178], group: "HOTS" },
     { key: "Analyse", color: [255, 138, 69], group: "HOTS" },
     { key: "Evaluate", color: [255, 95, 125], group: "HOTS" },
     { key: "Create", color: [143, 109, 246], group: "HOTS" },
@@ -848,7 +927,7 @@ export const generatePDF = async (
         schoolData?.logo_data_url ||
         schoolData?.logo_url,
     ),
-    toDataUrl(ceoSignatureUrl),
+    prepareSignatureImage(ceoSignatureUrl),
     (async () => {
       const entries = await Promise.all(
         Object.entries(rankIconUrls).map(async ([k, src]) => [
@@ -1542,12 +1621,20 @@ export const generatePDF = async (
   const actionCards = guidanceItems.slice(0, 2);
   actionCards.forEach((item, index) => {
     const y = 96 + index * 27;
-    rounded(13, y, 113, 22, index === 0 ? [255, 235, 239] : [232, 243, 255], index === 0 ? [255, 210, 220] : [205, 226, 255], 2.5);
-    doc.setFillColor(index === 0 ? 225 : 30, index === 0 ? 35 : 105, index === 0 ? 65 : 190);
+    rounded(
+      13,
+      y,
+      113,
+      22,
+      index === 0 ? [255, 235, 241] : [225, 247, 238],
+      index === 0 ? [255, 210, 220] : [167, 230, 207],
+      2.5,
+    );
+    doc.setFillColor(...(index === 0 ? C.red : C.teal));
     doc.roundedRect(17, y + 4.4, 7.5, 12, 2, 2, "F");
     setText(8.5, C.white, "bold");
     doc.text(String(index + 1), 20.75, y + 12.2, { align: "center" });
-    setText(12, C.ink, "normal");
+    setText(10.8, C.ink, "normal");
     doc.text(doc.splitTextToSize(item, 94), 27, y + 8);
   });
 
@@ -1571,7 +1658,7 @@ export const generatePDF = async (
     doc.text(labelA, 149, y + 4.2);
     if (labelB) doc.text(labelB, 149, y + 8.8);
     setText(10.8, C.ink, "bold");
-    doc.text(String(valueA), 198, y + 4.6, { align: "right" });
+    doc.text(String(valueA), 202, y + 4.6, { align: "right" });
     setText(10.5, color, "bold");
     doc.text(String(valueB), 198, y + 9.2, { align: "right" });
   });
@@ -1657,6 +1744,13 @@ export const generatePDF = async (
       doc.text(doc.splitTextToSize(String(note), cardW - 12), x + 6, cardY + 20);
     });
 
+    setText(6.2, C.ink, "normal");
+    doc.text(
+      "Foundation: <40% | Developing: 40-<60% | Proficient: 60-<80% | Advanced Thinker: >=80%",
+      197,
+      78.5,
+    );
+
     setText(14, C.navy, "bold");
     doc.text("Bloom skill mastery", 11, 84);
     setText(7.8, C.muted, "normal");
@@ -1719,9 +1813,30 @@ export const generatePDF = async (
     };
     drawTrendBreakdown("Latest mastery", cognitiveReport.latestTrend, 106.5);
     drawTrendBreakdown("Previous mastery", cognitiveReport.previousTrend, 113.5);
-    setText(10, C.ink, "normal");
-    doc.text(`Change: ${cognitiveReport.trendChange === null ? "New baseline" : `${cognitiveReport.trendChange >= 0 ? "+" : ""}${cognitiveReport.trendChange}%`}`, 157, 120.5);
-    doc.text(`Trend: ${trendStatus}`, 157, 127.5);
+    const changeText =
+      cognitiveReport.trendChange === null
+        ? "New baseline"
+        : `${cognitiveReport.trendChange >= 0 ? "+" : ""}${cognitiveReport.trendChange}%`;
+    const changeColor =
+      cognitiveReport.trendChange === null
+        ? C.muted
+        : cognitiveReport.trendChange > 0
+          ? C.green
+          : cognitiveReport.trendChange < 0
+            ? C.red
+            : C.muted;
+    rounded(159, 117, 45, 12, [239, 246, 255], [239, 246, 255], 2);
+    setText(10.5, C.ink, "bold");
+    const changeLabelWidth = doc.getTextWidth("Change: ");
+    setText(10.5, changeColor, "bold");
+    const changeValueWidth = doc.getTextWidth(changeText);
+    const changeTextX = 159 + (45 - changeLabelWidth - changeValueWidth) / 2;
+    setText(10.5, C.ink, "bold");
+    doc.text("Change:", changeTextX, 123.5);
+    setText(10.5, changeColor, "bold");
+    doc.text(changeText, changeTextX + changeLabelWidth, 123.5);
+    setText(11.5, C.ink, "bold");
+    doc.text(`Trend: ${trendStatus}`, 227, 123.5);
 
     rounded(8, 154, 137, 38, C.white, C.border2, 3);
     setText(11.5, C.navy, "bold");
@@ -1772,8 +1887,8 @@ export const generatePDF = async (
 
   drawIconCircle("clipboard", 18, 38.5, 13, [232, 241, 255], C.border);
   setText(14, C.navy, "bold");
-  doc.text("SUBJECT BLOOM'S TAXONOMY ANALYTICS", 26.5, 39);
-  setText(7.5, C.muted, "normal");
+  doc.text("SUBJECT WISE ANALYSIS", 26.5, 39);
+  setText(8.5, C.muted, "normal");
   doc.text("Subject-wise mastery calculated from Bloom-tagged responses", 26.5, 43);
 
   if (cognitiveReport.hasData && cognitiveReport.subjectPerformance.length) {
@@ -1814,20 +1929,20 @@ export const generatePDF = async (
       doc.text(`${subject.overall.correct}/${subject.overall.total} tagged responses correct`, x + 6, subjectY + 15.5);
       rounded(x + 6, subjectY + 19, 28.5, 9, [225, 247, 238], [167, 230, 207], 1.5);
       rounded(x + subjectW - 34.5, subjectY + 19, 28.5, 9, [255, 246, 232], [255, 186, 125], 1.5);
-      setText(5.8, C.teal, "bold");
+      setText(5.8, C.ink, "bold");
       doc.text("LOTS", x + 20.25, subjectY + 22.2, { align: "center" });
-      setText(7.1, C.teal, "bold");
+      setText(7.1, C.ink, "bold");
       doc.text(reportPct(subject.lotsPercentage), x + 20.25, subjectY + 26.2, { align: "center" });
-      setText(5.8, C.amber, "bold");
+      setText(5.8, C.ink, "bold");
       doc.text("HOTS", x + subjectW - 20.25, subjectY + 22.2, { align: "center" });
-      setText(7.1, C.amber, "bold");
+      setText(7.1, C.ink, "bold");
       doc.text(reportPct(subject.hotsPercentage), x + subjectW - 20.25, subjectY + 26.2, { align: "center" });
     });
 
 
     setText(12, C.navy, "bold");
     doc.text("Subject Bloom mastery", 8, 85);
-    setText(7.8, C.muted, "normal");
+    setText(8.8, C.muted, "normal");
     doc.text("Exact mastery and response evidence for every measured skill.", 8, 91);
 
     doc.autoTable({
@@ -1846,11 +1961,11 @@ export const generatePDF = async (
       ]),
       styles: {
         font: "helvetica",
-        fontSize: 6.8,
+        fontSize: 7.5,
         textColor: C.ink,
         lineColor: C.border,
         lineWidth: 0.2,
-        cellPadding: 1.05,
+        cellPadding: 1.5,
         halign: "center",
         valign: "middle",
       },
@@ -1888,7 +2003,7 @@ export const generatePDF = async (
 
     const profileY = (doc.lastAutoTable?.finalY || 137) + 3;
     subjectProfileCards.forEach((profile, index) => {
-      const x = 8 + index * 140.5;
+      const x = 13 + index * 140.5;
       rounded(x, profileY, 132.5, 24, C.white, C.border2, 3);
       doc.setFillColor(...profile.accent);
       doc.roundedRect(x, profileY, 2.4, 24, 1, 1, "F");
@@ -1904,22 +2019,39 @@ export const generatePDF = async (
     const signatureH = Math.min(25, 197 - signatureY);
     const signatureGap = 3;
     const signatureW = (281 - signatureGap * 3) / 4;
+    const signatureDate = `Date: ${formatDate(new Date())}`;
     const signatures = [
-      ["SPECTROPY CEO", "KRISHANA"],
-      ["PARENT / GUARDIAN", "----------------"],
-      ["IIT COORDINATOR", "----------------"],
-      ["SCHOOL PRINCIPAL", "----------------"],
+      "SPECTROPY CEO",
+      "PARENT / GUARDIAN",
+      "IIT COORDINATOR",
+      "SCHOOL PRINCIPAL / CORRESPONDENT",
     ];
-    signatures.forEach(([label, name], index) => {
+    signatures.forEach((label, index) => {
       const x = 8 + index * (signatureW + signatureGap);
       rounded(x, signatureY, signatureW, signatureH, C.white, C.border2, 3);
       setText(7.4, C.navy, "bold");
       doc.text(label, x + signatureW / 2, signatureY + 5.5, { align: "center" });
       doc.setDrawColor(148, 163, 184);
       doc.setLineWidth(0.25);
-      doc.line(x + 8, signatureY + 15, x + signatureW - 8, signatureY + 15);
+      if (index !== 0) {
+        doc.line(x + 8, signatureY + 15, x + signatureW - 8, signatureY + 15);
+      }
+      if (index === 0 && ceoSignature) {
+        const imageProperties = doc.getImageProperties(ceoSignature);
+        const imageScale = Math.min(42 / imageProperties.width, 9 / imageProperties.height);
+        const imageWidth = imageProperties.width * imageScale;
+        const imageHeight = imageProperties.height * imageScale;
+        doc.addImage(
+          ceoSignature,
+          "PNG",
+          x + (signatureW - imageWidth) / 2,
+          signatureY + 15 - imageHeight,
+          imageWidth,
+          imageHeight,
+        );
+      }
       setText(7, C.muted, "normal");
-      doc.text(name, x + signatureW / 2, signatureY + 21, { align: "center" });
+      doc.text(signatureDate, x + signatureW / 2, signatureY + 21, { align: "center" });
     });
   } else {
     rounded(8, 56, 281, 44, C.white, C.border2, 3.5);
@@ -2112,6 +2244,11 @@ export const generatePDF = async (
       }
 
       // Percentage column — navy bold (matching reference)
+      if (data.column.index === 4) {
+        data.cell.styles.fillColor = [245, 238, 250];
+        data.cell.styles.textColor = [105, 75, 125];
+      }
+
       if (data.column.index === percentageIndex) {
         data.cell.styles.textColor = C.navy;
         data.cell.styles.fontStyle = "bold";

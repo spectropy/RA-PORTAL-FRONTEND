@@ -242,7 +242,7 @@ const getQuestionRows = (questionResults) => {
 const BLOOM_SKILLS = [
   { key: "Remember", color: "#2f8cff", group: "LOTS" },
   { key: "Understand", color: "#34c99a", group: "LOTS" },
-  { key: "Apply", color: "#ffc83d", group: "HOTS" },
+  { key: "Apply", color: "#0891b2", group: "HOTS" },
   { key: "Analyse", color: "#ff8a45", group: "HOTS" },
   { key: "Evaluate", color: "#ff5f7d", group: "HOTS" },
   { key: "Create", color: "#8f6df6", group: "HOTS" },
@@ -1650,12 +1650,24 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
     doc.setFillColor(...accent);
     doc.roundedRect(x, y, 1.4, 13.8, 0.7, 0.7, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
+    doc.setFontSize(5.5);
     doc.setTextColor(...mutedText);
     doc.text(String(label).toUpperCase(), x + 4.3, y + 5.2);
-    doc.setFontSize(11);
+    const valueText = String(value || "-");
+    doc.setFont("helvetica", "bold");
     doc.setTextColor(...primaryText);
-    doc.text(doc.splitTextToSize(String(value || "-"), w - 8), x + 4.3, y + 10.7);
+    if (label === "Student") {
+      let valueFontSize = 11;
+      doc.setFontSize(valueFontSize);
+      while (valueFontSize > 6 && doc.getTextWidth(valueText) > w - 8) {
+        valueFontSize -= 0.5;
+        doc.setFontSize(valueFontSize);
+      }
+      doc.text(valueText, x + 4.3, y + 10.7);
+    } else {
+      doc.setFontSize(11);
+      doc.text(doc.splitTextToSize(valueText, w - 8), x + 4.3, y + 10.7);
+    }
   };
 
   const drawBloomCard = ({ x, y, w, skill }) => {
@@ -4284,19 +4296,28 @@ export default function StudentPerformanceView({
                       <small>Apply + Analyse + Evaluate + Create</small>
                     </article>
                     <article className={`sp-cognitive-summary-card sp-cognitive-level sp-tone-${cognitiveAnalysis.level.tone}`}>
-                      <div className="sp-cognitive-summary-head">
-                        <span className="sp-cognitive-summary-icon" aria-hidden="true">
-                          <Award size={18} strokeWidth={2.4} />
-                        </span>
-                        <span>Cognitive level</span>
+                      <div className="sp-cognitive-level-main">
+                        <div className="sp-cognitive-summary-head">
+                          <span className="sp-cognitive-summary-icon" aria-hidden="true">
+                            <Award size={18} strokeWidth={2.4} />
+                          </span>
+                          <span>Cognitive level</span>
+                        </div>
+                        <strong>{cognitiveAnalysis.level.label}</strong>
+                        <small>
+                          {cognitiveAnalysis.gap === null
+                            ? "LOTS/HOTS gap not available"
+                            : `${Math.abs(cognitiveAnalysis.gap)} point LOTS/HOTS gap`}
+                        </small>
                       </div>
-                      <strong>{cognitiveAnalysis.level.label}</strong>
-                      <small>
-                        {cognitiveAnalysis.gap === null
-                          ? "LOTS/HOTS gap not available"
-                          : `${Math.abs(cognitiveAnalysis.gap)} point LOTS/HOTS gap`}
-                      </small>
                     </article>
+                  </div>
+
+                  <div className="sp-cognitive-level-ranges" aria-label="Cognitive level percentage ranges">
+                    <span><b>Foundation:</b> &lt;40%</span>
+                    <span><b>Developing:</b> 40–&lt;60%</span>
+                    <span><b>Proficient:</b> 60–&lt;80%</span>
+                    <span><b>Advanced Thinker:</b> ≥80%</span>
                   </div>
 
                   <div className="sp-cognitive-grid">
@@ -5456,6 +5477,19 @@ const DASHBOARD_CSS = `
   .sp-cognitive-level.sp-tone-warning { border-top-color: #f59e0b; }
   .sp-cognitive-level.sp-tone-danger { border-top-color: #ef4444; }
   .sp-cognitive-level strong { font-size: clamp(18px, 2vw, 23px); }
+  .sp-cognitive-level-main { min-width: 0; }
+  .sp-cognitive-level-ranges {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 8px 2px 0;
+    color: #111827;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+  .sp-cognitive-level-ranges b { font-weight: 700; }
 
   .sp-cognitive-grid,
   .sp-cognitive-footer-grid {
