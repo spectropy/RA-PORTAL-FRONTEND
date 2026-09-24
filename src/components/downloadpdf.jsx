@@ -2144,7 +2144,7 @@ export const generatePDF = async (
     infoY + 5.5,
   );
 
-  drawFooterBar("Page 2 of 2");
+  drawFooterBar("Page 4 of 4");
 
   // --------------------------------------------------------------------------
   // Save
