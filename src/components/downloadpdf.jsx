@@ -579,6 +579,9 @@ export const generatePDF = async (
   );
 
   const latestExam = exams[exams.length - 1];
+  const previousExam = exams[exams.length - 2] || latestExam;
+  const currentScoreChange =
+    examPct(latestExam, activeSubjects) - examPct(previousExam, activeSubjects);
 
   const PROGRAMS = {
     MAE: "Maestro",
@@ -603,6 +606,230 @@ export const generatePDF = async (
     stream = "MED";
 
   const fullProgram = stream ? `${programName} / ${stream}` : programName;
+
+  const BLOOM_SKILLS = [
+    { key: "Remember", color: [47, 140, 255], group: "LOTS" },
+    { key: "Understand", color: [52, 201, 154], group: "LOTS" },
+    { key: "Apply", color: [255, 200, 61], group: "HOTS" },
+    { key: "Analyse", color: [255, 138, 69], group: "HOTS" },
+    { key: "Evaluate", color: [255, 95, 125], group: "HOTS" },
+    { key: "Create", color: [143, 109, 246], group: "HOTS" },
+  ];
+
+  const parseQuestionResults = (value) => {
+    if (!value) return {};
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof value === "object" ? value : {};
+  };
+
+  const normalizeBloomSkill = (value) => {
+    const normalized = String(value || "")
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (["remember", "remembering"].includes(normalized)) return "Remember";
+    if (["understand", "understanding"].includes(normalized)) return "Understand";
+    if (["apply", "applying"].includes(normalized)) return "Apply";
+    if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) return "Analyse";
+    if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+    if (["create", "creating"].includes(normalized)) return "Create";
+    return "";
+  };
+
+  const normalizeSubject = (value) => {
+    const normalized = String(value || "")
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (["physics", "phy"].includes(normalized)) return "physics";
+    if (["chemistry", "chem"].includes(normalized)) return "chemistry";
+    if (["math", "maths", "mathematics"].includes(normalized)) return "maths";
+    if (["biology", "bio"].includes(normalized)) return "biology";
+    return "";
+  };
+
+  const questionNumber = (question) =>
+    Number(String(question || "").match(/\d+/)?.[0] || 0);
+
+  const emptyBucket = () => ({ correct: 0, incorrect: 0, unattempted: 0, total: 0 });
+  const addResponse = (bucket, status) => {
+    bucket.total += 1;
+    bucket[status] += 1;
+  };
+  const bucketPct = (bucket) =>
+    bucket.total > 0 ? Number(((bucket.correct / bucket.total) * 100).toFixed(1)) : null;
+  const reportPct = (value) =>
+    value === null || value === undefined ? "No questions" : `${value}%`;
+  const cognitiveLevel = (percentage) => {
+    if (percentage === null) return "No questions";
+    if (percentage >= 80) return "Advanced Thinker";
+    if (percentage >= 60) return "Proficient";
+    if (percentage >= 40) return "Developing";
+    return "Foundation";
+  };
+
+  const buildCognitiveReport = () => {
+    const skills = Object.fromEntries(BLOOM_SKILLS.map(({ key }) => [key, emptyBucket()]));
+    const subjects = Object.fromEntries(
+      activeSubjects.map((subject) => [
+        subject.key,
+        {
+          ...subject,
+          overall: emptyBucket(),
+          lots: emptyBucket(),
+          hots: emptyBucket(),
+          skills: Object.fromEntries(BLOOM_SKILLS.map(({ key }) => [key, emptyBucket()])),
+        },
+      ]),
+    );
+    const overall = emptyBucket();
+    const lots = emptyBucket();
+    const hots = emptyBucket();
+    let allQuestions = 0;
+    const trend = [];
+
+    exams.forEach((exam) => {
+      const entries = Object.entries(parseQuestionResults(exam?.question_results));
+      allQuestions += entries.length;
+      const examOverall = emptyBucket();
+      const examLots = emptyBucket();
+      const examHots = emptyBucket();
+      const maxQuestionNumber = Math.max(
+        ...entries.map(([question]) => questionNumber(question)),
+        entries.length,
+        0,
+      );
+      const questionsPerSubject = Math.max(
+        1,
+        Math.ceil((maxQuestionNumber || entries.length || 1) / activeSubjects.length),
+      );
+
+      entries.forEach(([question, details]) => {
+        const skill = normalizeBloomSkill(
+          details?.blooms_skill ||
+            details?.bloomsSkill ||
+            details?.["Blooms Skill"] ||
+            details?.["Bloom's Skill"],
+        );
+        if (!skill) return;
+
+        const option = details?.option ?? details?.options ?? "";
+        const marks = Number(details?.marks);
+        const rawStatus = String(details?.status || "").toLowerCase();
+        const status =
+          rawStatus.includes("incorrect")
+            ? "incorrect"
+            : rawStatus.includes("correct") || (Number.isFinite(marks) && marks > 0)
+              ? "correct"
+              : rawStatus.includes("not") || rawStatus.includes("unattempted") || !option
+                ? "unattempted"
+                : "incorrect";
+        const group = BLOOM_SKILLS.find((item) => item.key === skill)?.group;
+        const groupBucket = group === "LOTS" ? lots : hots;
+        const storedSubject = normalizeSubject(
+          details?.subject || details?.Subject || details?.subject_name || details?.subjectName,
+        );
+        const fallbackIndex = Math.min(
+          activeSubjects.length - 1,
+          Math.floor((Math.max(questionNumber(question), 1) - 1) / questionsPerSubject),
+        );
+        const subjectKey = storedSubject || activeSubjects[fallbackIndex]?.key;
+
+        addResponse(overall, status);
+        addResponse(examOverall, status);
+        addResponse(group === "LOTS" ? examLots : examHots, status);
+        addResponse(skills[skill], status);
+        addResponse(groupBucket, status);
+        if (subjectKey && subjects[subjectKey]) {
+          const subject = subjects[subjectKey];
+          addResponse(subject.overall, status);
+          addResponse(subject.skills[skill], status);
+          addResponse(group === "LOTS" ? subject.lots : subject.hots, status);
+        }
+      });
+
+      if (examOverall.total > 0) {
+        trend.push({
+          exam: examName(exam),
+          date: formatDate(exam?.date),
+          percentage: bucketPct(examOverall),
+          lots: bucketPct(examLots),
+          hots: bucketPct(examHots),
+          total: examOverall.total,
+          correct: examOverall.correct,
+        });
+      }
+    });
+
+    const skillPerformance = BLOOM_SKILLS.map((skill) => ({
+      ...skill,
+      ...skills[skill.key],
+      percentage: bucketPct(skills[skill.key]),
+    }));
+    const subjectPerformance = Object.values(subjects)
+      .map((subject) => ({
+        ...subject,
+        percentage: bucketPct(subject.overall),
+        lotsPercentage: bucketPct(subject.lots),
+        hotsPercentage: bucketPct(subject.hots),
+        skillPerformance: BLOOM_SKILLS.map((skill) => ({
+          ...skill,
+          ...subject.skills[skill.key],
+          percentage: bucketPct(subject.skills[skill.key]),
+        })),
+      }))
+      .filter((subject) => subject.overall.total > 0);
+    const measuredSubjects = [...subjectPerformance].sort(
+      (a, b) => (b.percentage || 0) - (a.percentage || 0),
+    );
+    const overallPercentage = bucketPct(overall);
+    const lotsPercentage = bucketPct(lots);
+    const hotsPercentage = bucketPct(hots);
+    const gap =
+      lotsPercentage !== null && hotsPercentage !== null
+        ? Number((lotsPercentage - hotsPercentage).toFixed(1))
+        : null;
+    const measuredSkills = [...skillPerformance]
+      .filter((skill) => skill.total > 0 && skill.percentage !== null)
+      .sort((a, b) => b.percentage - a.percentage);
+    const latestTrend = trend[trend.length - 1] || null;
+    const previousTrend = trend[trend.length - 2] || latestTrend;
+    const trendChange =
+      latestTrend && previousTrend
+        ? Number((latestTrend.percentage - previousTrend.percentage).toFixed(1))
+        : null;
+    return {
+      hasData: overall.total > 0,
+      overall: { ...overall, percentage: overallPercentage },
+      lots: { ...lots, percentage: lotsPercentage },
+      hots: { ...hots, percentage: hotsPercentage },
+      level: cognitiveLevel(overallPercentage),
+      gap,
+      coverage: allQuestions ? Number(((overall.total / allQuestions) * 100).toFixed(1)) : 0,
+      allQuestions,
+      trend,
+      latestTrend,
+      previousTrend,
+      trendChange,
+      skillPerformance,
+      strongestSkill: measuredSkills[0] || null,
+      weakestSkill: measuredSkills[measuredSkills.length - 1] || null,
+      subjectPerformance,
+      strongestSubject: measuredSubjects[0] || null,
+      prioritySubject: measuredSubjects[measuredSubjects.length - 1] || null,
+    };
+  };
+
+  const cognitiveReport = buildCognitiveReport();
 
   // --------------------------------------------------------------------------
   // IMAGE LOADING
@@ -1257,62 +1484,453 @@ export const generatePDF = async (
 
   setText(9, C.ink, "normal");
   doc.text(
-    `Strong overall achievement with excellent performance in ${strongest?.label || "the strongest subject"}.`,
+    `Best exam: ${examName(bestExam)} at ${examPct(bestExam, activeSubjects).toFixed(1)}%. Bloom coverage: ${cognitiveReport.coverage}%.`,
     24,
     154.2,
   );
   setText(8, C.muted, "normal");
   doc.text(
-    `Greater consistency in ${focus?.label || "the focus area"} can further improve the overall result.`,
+    `Focus on ${focus?.label || "the focus area"} and target ${Math.min(100, Math.ceil(examPct(latestExam, activeSubjects) + 5))}% in the next assessment.`,
     24,
     158.5,
   );
 
   // --------------------------------------------------------------------------
-  // Signature Section  (y=164, h=30)
+  // Performance Guidance Section  (y=164, h=30)
   // --------------------------------------------------------------------------
   rounded(8, 164, 281, 30, C.white, C.border2, 3.5);
 
-  const sigLabels = [
-    "SPECTROPY CEO",
-    "PARENT / GUARDIAN",
-    "IIT COORDINATOR",
-    "SCHOOL PRINCIPAL",
+  setText(10.5, C.navy, "bold");
+  doc.text("PERFORMANCE GUIDANCE", 13, 171);
+  setText(6.3, C.muted, "normal");
+  doc.text("Recommended next steps generated from marks and Bloom-tagged responses", 13, 176);
+
+  const guidanceItems = [
+    cognitiveReport.prioritySubject
+      ? `Prioritise ${cognitiveReport.prioritySubject.label}: cognitive mastery is ${reportPct(cognitiveReport.prioritySubject.percentage)}.`
+      : `Prioritise ${focus?.label || "the focus area"} for steady score improvement.`,
+    cognitiveReport.strongestSubject
+      ? `Extend ${cognitiveReport.strongestSubject.label}: use higher-difficulty application and reasoning questions.`
+      : `Extend ${strongest?.label || "the strongest subject"} with timed practice.`,
+    `Review wrong answers from the latest assessment dated ${formatDate(latestExam?.date)}.`,
   ];
-  const latestDate = formatDate(latestExam?.date);
-
-  sigLabels.forEach((label, i) => {
-    const cellW = 281 / 4;
-    const cellX = 8 + i * cellW;
-    const center = cellX + cellW / 2;
-
-    if (i > 0) line(cellX, 167, cellX, 190.5, C.border2, 0.3);
-
-    // Role label
-    setText(6.8, C.navy, "bold");
-    doc.text(label, center, 170.5, { align: "center" });
-
-    // Signature area
-    if (i === 0 && ceoSignature) {
-      drawImageContain(ceoSignature, center - 15, 172.5, 30, 8);
-    } else {
-      // Handwriting placeholder: gentle wavy-ish dashed line
-      dashedLine(center - 17, 181, center + 17, 181, [160, 180, 210], 0.4, 1.8);
-    }
-
-    // Date
-    setText(6.2, C.muted, "normal");
-    doc.text(`Date:  ${latestDate}`, center, 189.5, { align: "center" });
+  guidanceItems.forEach((item, i) => {
+    const x = 16 + i * 91;
+    drawIconCircle(i === 0 ? "target" : i === 1 ? "star" : "info", x, 184, 9, [232, 241, 255], C.border);
+    setText(7.2, C.ink, "normal");
+    doc.text(doc.splitTextToSize(item, 72), x + 7, 182.2);
   });
 
-  drawFooterBar("Page 1 of 2");
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 52, pageWidth, 146, "F");
+
+  setText(14, C.navy, "bold");
+  doc.text("PERFORMANCE GUIDANCE & LEARNING SNAPSHOT", 9, 63);
+  setText(7.2, C.muted, "normal");
+  doc.text("Recommended teacher actions and learning summary from assessment evidence.", 9, 68);
+
+  rounded(8, 70, 126, 82, C.white, C.border2, 3.5);
+  setText(12.8, C.navy, "bold");
+  doc.text("Recommended teacher actions", 16, 81);
+  doc.setFillColor(237, 244, 255);
+  doc.roundedRect(103, 76.5, 26, 8.5, 4, 4, "F");
+  setText(6.5, C.navy, "bold");
+  doc.text("Measured insight", 116, 82, { align: "center" });
+  setText(7.1, C.muted, "normal");
+  doc.text("Suggested from measured subject and Bloom-skill performance.", 16, 88.5);
+
+  const actionCards = guidanceItems.slice(0, 2);
+  actionCards.forEach((item, index) => {
+    const y = 96 + index * 27;
+    rounded(13, y, 113, 22, index === 0 ? [255, 235, 239] : [232, 243, 255], index === 0 ? [255, 210, 220] : [205, 226, 255], 2.5);
+    doc.setFillColor(index === 0 ? 225 : 30, index === 0 ? 35 : 105, index === 0 ? 65 : 190);
+    doc.roundedRect(17, y + 4.4, 7.5, 12, 2, 2, "F");
+    setText(8.5, C.white, "bold");
+    doc.text(String(index + 1), 20.75, y + 12.2, { align: "center" });
+    setText(12, C.ink, "normal");
+    doc.text(doc.splitTextToSize(item, 94), 27, y + 8);
+  });
+
+  rounded(140, 70, 74, 82, C.white, C.border2, 3.5);
+  setText(13, C.navy, "bold");
+  doc.text("Learning snapshot", 147, 80);
+  setText(6.2, C.muted, "normal");
+  doc.text(`Evidence summary from Bloom-tagged questions.`, 147, 86);
+
+  const snapshotRows = [
+    ["Strongest measured", "subject", cognitiveReport.strongestSubject?.label || strongest?.label || "-", reportPct(cognitiveReport.strongestSubject?.percentage), [225, 247, 238], C.teal],
+    ["Priority measured", "subject", cognitiveReport.prioritySubject?.label || focus?.label || "-", reportPct(cognitiveReport.prioritySubject?.percentage), [255, 235, 241], C.red],
+    ["Exam consistency", "", "Moderate", `${Math.round(Math.max(0, 100 - Math.abs(examPct(latestExam, activeSubjects) - overallAverage)))}%`, [232, 243, 255], C.blue],
+    ["Attempt behaviour", "", "Confident", `${Math.round(clamp(((Number(latestExam?.correct_answers || 0) + Number(latestExam?.wrong_answers || 0)) / Math.max(1, Number(latestExam?.correct_answers || 0) + Number(latestExam?.wrong_answers || 0) + Number(latestExam?.unattempted || 0))) * 100))}%`, [225, 247, 238], C.teal],
+  ];
+
+  snapshotRows.forEach(([labelA, labelB, valueA, valueB, fill, color], index) => {
+    const y = 89 + index * 14.8;
+    rounded(145, y, 62, 13.6, fill, fill, 2);
+    setText(9.7, C.muted, "normal");
+    doc.text(labelA, 149, y + 4.2);
+    if (labelB) doc.text(labelB, 149, y + 8.8);
+    setText(10.8, C.ink, "bold");
+    doc.text(String(valueA), 198, y + 4.6, { align: "right" });
+    setText(10.5, color, "bold");
+    doc.text(String(valueB), 198, y + 9.2, { align: "right" });
+  });
+
+  const sideMetrics = [
+    ["AVERAGE SCORE", `${overallAverage.toFixed(1)}%`, `${exams.length} assessments`, [232, 243, 255], C.blue],
+    ["CURRENT SCORE", `${examPct(latestExam, activeSubjects).toFixed(1)}%`, `${currentScoreChange >= 0 ? "+" : ""}${currentScoreChange.toFixed(1)}% from previous exam`, [255, 248, 232], C.amber],
+    ["ACCURACY", `${clamp((Number(latestExam?.correct_answers || 0) / Math.max(1, Number(latestExam?.correct_answers || 0) + Number(latestExam?.wrong_answers || 0))) * 100).toFixed(1)}%`, "Current exam", [226, 248, 246], C.teal],
+    ["CLASS RANK", safe(latestExam?.class_rank), "Current exam", [241, 232, 252], C.purple],
+    ["SCHOOL RANK", safe(latestExam?.school_rank), "Current exam", [255, 235, 241], C.red],
+    ["ALL INDIA RANK", safe(latestExam?.all_schools_rank), "Current exam", [232, 243, 255], C.blue],
+  ];
+
+  sideMetrics.forEach(([label, value, note, fill, color], index) => {
+    const y = 70 + index * 20.8;
+    rounded(218, y, 65, 18.7, fill, [198, 214, 238], 2.5);
+    setText(8, color, "bold");
+    doc.text(label, 223, y + 5.8);
+    setText(16, C.navy, "bold");
+    doc.text(value, 223, y + 12.5);
+    setText(7.8, C.muted, "normal");
+    doc.text(note, 223, y + 16.2);
+  });
+
+  rounded(8, 156, 206, 28, [255, 253, 244], [245, 158, 11], 3.5);
+  setText(10, C.navy, "bold");
+  doc.text("NEXT PERFORMANCE TARGET", 20, 164);
+  setText(20, C.navy, "bold");
+  doc.text(`${Math.min(100, Math.ceil(examPct(latestExam, activeSubjects) + 5))}%`, 20, 174);
+  setText(10.2, C.ink, "normal");
+  doc.text(
+    doc.splitTextToSize(
+      `Focus first on ${focus?.label || "the focus area"} while protecting strength in ${strongest?.label || "the strongest subject"}.`,
+      112,
+    ),
+    20,
+    179,
+  );
+  rounded(128, 164, 28, 16, [239, 246, 255], [239, 246, 255], 2);
+  setText(5.5, C.muted, "bold");
+  doc.text("CONSISTENCY", 142, 169, { align: "center" });
+  setText(12.5, C.blue, "bold");
+  doc.text(`${Math.round(Math.max(0, 100 - Math.abs(examPct(latestExam, activeSubjects) - overallAverage)))}%`, 142, 175.5, { align: "center" });
+  rounded(160, 164, 44, 16, [241, 232, 252], [241, 232, 252], 2);
+  setText(5.5, C.muted, "bold");
+  doc.text("BEST EXAM", 182, 169, { align: "center" });
+  setText(11, C.purple, "bold");
+  fitText(examName(bestExam).toUpperCase(), 182, 176.2, 38, 10.5, "center", C.purple);
+
+  drawFooterBar("Page 1 of 4");
 
   // ==========================================================================
   // PAGE 2  —  Assessment History ONLY  (no trend chart per reference)
   // ==========================================================================
 
   doc.addPage();
-  drawHeader("PAGE 2 OF 2");
+  drawHeader("PAGE 2 OF 4");
+
+  drawIconCircle("bulb", 18, 38.5, 13, [232, 241, 255], C.border);
+  setText(15, C.navy, "bold");
+  doc.text("COGNITIVE ANALYSIS", 26.5, 39);
+  setText(8.5, C.muted, "normal");
+  doc.text("Bloom-tagged mastery across recorded assessments", 26.5, 43);
+
+  if (cognitiveReport.hasData) {
+    const cardY = 52;
+    const cardW = 67.25;
+    const subjectProfileCards = [
+      ["OVERALL MASTERY", reportPct(cognitiveReport.overall.percentage), `${cognitiveReport.overall.correct}/${cognitiveReport.overall.total} correct`, C.blue],
+      ["LOTS", reportPct(cognitiveReport.lots.percentage), "Remember + Understand", C.teal],
+      ["HOTS", reportPct(cognitiveReport.hots.percentage), "Apply + Analyse + Evaluate + Create", C.amber],
+      ["COGNITIVE LEVEL", cognitiveReport.level, cognitiveReport.gap === null ? "LOTS/HOTS gap unavailable" : `${Math.abs(cognitiveReport.gap)} point LOTS/HOTS gap`, C.purple],
+    ].forEach(([title, value, note, color], i) => {
+      const x = 8 + i * (cardW + 4);
+      rounded(x, cardY, cardW, 22, C.white, C.border2, 3);
+      doc.setFillColor(...color);
+      doc.roundedRect(x, cardY, 2.2, 22, 1, 1, "F");
+      setText(6.4, C.muted, "bold");
+      doc.text(title, x + 6, cardY + 7);
+      setText(16, C.ink, "bold");
+      doc.text(String(value), x + 6, cardY + 14.5);
+      setText(6.4, C.muted, "normal");
+      doc.text(doc.splitTextToSize(String(note), cardW - 12), x + 6, cardY + 20);
+    });
+
+    setText(14, C.navy, "bold");
+    doc.text("Bloom skill mastery", 11, 84);
+    setText(7.8, C.muted, "normal");
+    doc.text("Correct answers out of all questions at each level.", 11, 88.5);
+    cognitiveReport.skillPerformance.forEach((skill, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const x = 8 + col * 45.5;
+      const skillY = 94 + row * 31;
+      rounded(x, skillY, 39.5, 25, C.white, C.border2, 2.7);
+      doc.setFillColor(...skill.color);
+      doc.circle(x + 5.6, skillY + 6.3, 2, "F");
+      setText(7.2, C.ink, "bold");
+      doc.text(skill.key, x + 9.2, skillY + 7.8);
+      setText(17, skill.color, "bold");
+      doc.text(reportPct(skill.percentage), x + 19.75, skillY + 16.8, { align: "center" });
+      setText(6.8, C.muted, "normal");
+      doc.text(
+        skill.total > 0 ? `${skill.correct}/${skill.total} correct` : "No tagged questions",
+        x + 19.75,
+        skillY + 22,
+        { align: "center" },
+      );
+    });
+
+    const trendStatus =
+      cognitiveReport.trendChange === null
+        ? "New baseline"
+        : cognitiveReport.trendChange > 0.4
+          ? "Improving"
+          : cognitiveReport.trendChange < -0.4
+            ? "Needs attention"
+            : "Stable";
+    const evidenceStatus =
+      cognitiveReport.coverage >= 80
+        ? "Strong"
+        : cognitiveReport.coverage >= 50
+          ? "Moderate"
+          : "Limited";
+
+    rounded(150, 81.5, 139, 52, C.white, C.border2, 3);
+    doc.setFillColor(...C.blue);
+    doc.roundedRect(150, 81.5, 2.2, 52, 1, 1, "F");
+    setText(12, C.navy, "bold");
+    doc.text("Cognitive Performance Trend", 157, 90.5);
+    setText(7.7, C.muted, "normal");
+    doc.text("Exam-wise overall, LOTS, and HOTS mastery", 157, 96.5);
+    const drawTrendBreakdown = (label, trend, y) => {
+      setText(11, C.blue, "normal");
+      doc.text(`${label}: ${reportPct(trend?.percentage)} | `, 157, y);
+      let x = 157 + doc.getTextWidth(`${label}: ${reportPct(trend?.percentage)} | `);
+      setText(11, C.teal, "bold");
+      doc.text(`LOTS ${reportPct(trend?.lots)}`, x, y);
+      x += doc.getTextWidth(`LOTS ${reportPct(trend?.lots)}`);
+      setText(11, C.blue, "normal");
+      doc.text(" | ", x, y);
+      x += doc.getTextWidth(" | ");
+      setText(11, C.amber, "bold");
+      doc.text(`HOTS ${reportPct(trend?.hots)}`, x, y);
+    };
+    drawTrendBreakdown("Latest mastery", cognitiveReport.latestTrend, 106.5);
+    drawTrendBreakdown("Previous mastery", cognitiveReport.previousTrend, 113.5);
+    setText(10, C.ink, "normal");
+    doc.text(`Change: ${cognitiveReport.trendChange === null ? "New baseline" : `${cognitiveReport.trendChange >= 0 ? "+" : ""}${cognitiveReport.trendChange}%`}`, 157, 120.5);
+    doc.text(`Trend: ${trendStatus}`, 157, 127.5);
+
+    rounded(8, 154, 137, 38, C.white, C.border2, 3);
+    setText(11.5, C.navy, "bold");
+    doc.text("Evidence Quality", 14, 163);
+    setText(8, C.muted, "normal");
+    doc.text("How much available question data supports this analysis.", 14, 169);
+    [
+      ["Bloom coverage", `${cognitiveReport.coverage}%`, [232, 243, 255], C.blue],
+      ["Tagged questions", `${cognitiveReport.overall.total}`, [226, 248, 246], C.teal],
+      ["Untagged questions", `${Math.max(0, cognitiveReport.allQuestions - cognitiveReport.overall.total)}`, [255, 248, 232], C.amber],
+      ["Unattempted tagged", `${cognitiveReport.overall.unattempted}`, [241, 232, 252], C.purple],
+    ].forEach(([label, value, fill, color], index) => {
+      const x = 14 + index * 32;
+      rounded(x, 174, 30.5, 13, fill, fill, 2);
+      setText(6.8, C.muted, "normal");
+      doc.text(label, x + 2, 178);
+      setText(11.5, color, "bold");
+      doc.text(value, x + 2, 185);
+    });
+
+    rounded(150, 136, 139, 56, C.white, C.border2, 3);
+    setText(11.5, C.navy, "bold");
+    doc.text("Cognitive Insights", 156, 144);
+    setText(8.6, C.muted, "normal");
+    doc.text("Priority observations based on measured performance.", 156, 150);
+    [
+      [cognitiveReport.strongestSkill ? `${cognitiveReport.strongestSkill.key} is the strongest measured cognitive skill at ${reportPct(cognitiveReport.strongestSkill.percentage)}.` : "Strongest Bloom skill is not available.", [225, 247, 238], C.teal],
+      [cognitiveReport.weakestSkill ? `${cognitiveReport.weakestSkill.key} needs the most support at ${reportPct(cognitiveReport.weakestSkill.percentage)}.` : "Focus Bloom skill is not available.", [255, 248, 232], C.amber],
+      [cognitiveReport.gap === null ? "LOTS/HOTS gap needs more tagged evidence." : `HOTS trails LOTS by ${Math.abs(cognitiveReport.gap)} percentage points; prioritise application and reasoning practice.`, [255, 235, 241], C.red],
+    ].forEach(([text, fill, color], index) => {
+      const y = 155 + index * 11.8;
+      rounded(156, y, 127, 10.6, fill, fill, 2);
+      doc.setFillColor(...color);
+      doc.circle(160, y + 5.2, 1.3, "F");
+      setText(8.8, color, "normal");
+      doc.text(doc.splitTextToSize(text, 115), 164, y + 6.4);
+    });
+  } else {
+    rounded(8, 56, 281, 44, C.white, C.border2, 3.5);
+    setText(10, C.muted, "normal");
+    doc.text("Cognitive Analysis is unavailable because Bloom-tagged questions are not available.", 16, 78);
+  }
+
+  drawFooterBar("Page 2 of 4");
+
+  doc.addPage();
+  drawHeader("PAGE 3 OF 4");
+
+  drawIconCircle("clipboard", 18, 38.5, 13, [232, 241, 255], C.border);
+  setText(14, C.navy, "bold");
+  doc.text("SUBJECT BLOOM'S TAXONOMY ANALYTICS", 26.5, 39);
+  setText(7.5, C.muted, "normal");
+  doc.text("Subject-wise mastery calculated from Bloom-tagged responses", 26.5, 43);
+
+  if (cognitiveReport.hasData && cognitiveReport.subjectPerformance.length) {
+    const subjectProfileCards = [
+      {
+        title: "Strongest measured subject",
+        subject: cognitiveReport.strongestSubject,
+        accent: C.teal,
+        fallback: "No measured subject",
+        text: cognitiveReport.strongestSubject
+          ? `${reportPct(cognitiveReport.strongestSubject.percentage)} cognitive mastery across ${cognitiveReport.strongestSubject.overall.total} tagged questions.`
+          : "No subject-level Bloom evidence available.",
+      },
+      {
+        title: "Priority measured subject",
+        subject: cognitiveReport.prioritySubject,
+        accent: C.red,
+        fallback: "No priority subject",
+        text: cognitiveReport.prioritySubject
+          ? `${reportPct(cognitiveReport.prioritySubject.percentage)} cognitive mastery; review its lowest Bloom-skill results first.`
+          : "No subject-level Bloom evidence available.",
+      },
+    ];
+
+    // Compact the subject cards to reserve clear space for the table, summaries, and signatures.
+    const subjectY = 48;
+    const subjectW = 67.25;
+    cognitiveReport.subjectPerformance.slice(0, 4).forEach((subject, i) => {
+      const x = 8 + i * (subjectW + 4);
+      rounded(x, subjectY, subjectW, 31, C.white, C.border2, 3);
+      doc.setFillColor(...subject.color);
+      doc.roundedRect(x, subjectY, 2.4, 31, 1, 1, "F");
+      setText(8.4, C.ink, "bold");
+      doc.text(subject.label, x + 6, subjectY + 7);
+      setText(18, subject.color, "bold");
+      doc.text(reportPct(subject.percentage), x + subjectW - 6, subjectY + 12.5, { align: "right" });
+      setText(6.2, C.muted, "normal");
+      doc.text(`${subject.overall.correct}/${subject.overall.total} tagged responses correct`, x + 6, subjectY + 15.5);
+      rounded(x + 6, subjectY + 19, 28.5, 9, [225, 247, 238], [167, 230, 207], 1.5);
+      rounded(x + subjectW - 34.5, subjectY + 19, 28.5, 9, [255, 246, 232], [255, 186, 125], 1.5);
+      setText(5.8, C.teal, "bold");
+      doc.text("LOTS", x + 20.25, subjectY + 22.2, { align: "center" });
+      setText(7.1, C.teal, "bold");
+      doc.text(reportPct(subject.lotsPercentage), x + 20.25, subjectY + 26.2, { align: "center" });
+      setText(5.8, C.amber, "bold");
+      doc.text("HOTS", x + subjectW - 20.25, subjectY + 22.2, { align: "center" });
+      setText(7.1, C.amber, "bold");
+      doc.text(reportPct(subject.hotsPercentage), x + subjectW - 20.25, subjectY + 26.2, { align: "center" });
+    });
+
+
+    setText(12, C.navy, "bold");
+    doc.text("Subject Bloom mastery", 8, 85);
+    setText(7.8, C.muted, "normal");
+    doc.text("Exact mastery and response evidence for every measured skill.", 8, 91);
+
+    doc.autoTable({
+      startY: 96,
+      theme: "grid",
+      margin: { left: 8, right: 8, bottom: 18 },
+      tableWidth: 281,
+      head: [["Subject", ...BLOOM_SKILLS.map((skill) => skill.key), "Subject Level"]],
+      body: cognitiveReport.subjectPerformance.map((subject) => [
+        subject.label,
+        ...BLOOM_SKILLS.map((skill) => {
+          const row = subject.skillPerformance.find((item) => item.key === skill.key);
+          return row?.percentage === null ? "No questions" : `${row.percentage}%\n${row.correct}/${row.total}`;
+        }),
+        `${cognitiveLevel(subject.percentage)}\n${reportPct(subject.percentage)}`,
+      ]),
+      styles: {
+        font: "helvetica",
+        fontSize: 6.8,
+        textColor: C.ink,
+        lineColor: C.border,
+        lineWidth: 0.2,
+        cellPadding: 1.05,
+        halign: "center",
+        valign: "middle",
+      },
+      headStyles: {
+        fillColor: C.navy,
+        textColor: C.white,
+        fontStyle: "bold",
+        fontSize: 8.1,
+      },
+      columnStyles: {
+        0: { cellWidth: 31, halign: "left", fontStyle: "bold" },
+        7: { cellWidth: 33, fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.section !== "body") return;
+        if (data.column.index >= 1 && data.column.index <= 6) {
+          const raw = String(data.cell.raw || "");
+          if (raw.includes("No questions")) {
+            data.cell.styles.fillColor = [248, 251, 255];
+            data.cell.styles.textColor = C.muted;
+          } else {
+            const value = Number.parseFloat(raw);
+            if (value >= 80) data.cell.styles.fillColor = [220, 252, 231];
+            else if (value >= 60) data.cell.styles.fillColor = [239, 246, 255];
+            else if (value >= 40) data.cell.styles.fillColor = [254, 249, 195];
+            else data.cell.styles.fillColor = [254, 226, 226];
+          }
+        }
+        if (data.column.index === 7) {
+          data.cell.styles.fillColor = [236, 253, 245];
+          data.cell.styles.textColor = C.green;
+        }
+      },
+    });
+
+    const profileY = (doc.lastAutoTable?.finalY || 137) + 3;
+    subjectProfileCards.forEach((profile, index) => {
+      const x = 8 + index * 140.5;
+      rounded(x, profileY, 132.5, 24, C.white, C.border2, 3);
+      doc.setFillColor(...profile.accent);
+      doc.roundedRect(x, profileY, 2.4, 24, 1, 1, "F");
+      setText(7.6, C.muted, "bold");
+      doc.text(profile.title.toUpperCase(), x + 7, profileY + 7);
+      setText(13, C.navy, "bold");
+      doc.text(profile.subject?.label || profile.fallback, x + 7, profileY + 13.8);
+      setText(7.5, C.muted, "normal");
+      doc.text(doc.splitTextToSize(profile.text, 112), x + 7, profileY + 19);
+    });
+
+    const signatureY = profileY + 27;
+    const signatureH = Math.min(25, 197 - signatureY);
+    const signatureGap = 3;
+    const signatureW = (281 - signatureGap * 3) / 4;
+    const signatures = [
+      ["SPECTROPY CEO", "KRISHANA"],
+      ["PARENT / GUARDIAN", "----------------"],
+      ["IIT COORDINATOR", "----------------"],
+      ["SCHOOL PRINCIPAL", "----------------"],
+    ];
+    signatures.forEach(([label, name], index) => {
+      const x = 8 + index * (signatureW + signatureGap);
+      rounded(x, signatureY, signatureW, signatureH, C.white, C.border2, 3);
+      setText(7.4, C.navy, "bold");
+      doc.text(label, x + signatureW / 2, signatureY + 5.5, { align: "center" });
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.25);
+      doc.line(x + 8, signatureY + 15, x + signatureW - 8, signatureY + 15);
+      setText(7, C.muted, "normal");
+      doc.text(name, x + signatureW / 2, signatureY + 21, { align: "center" });
+    });
+  } else {
+    rounded(8, 56, 281, 44, C.white, C.border2, 3.5);
+    setText(10, C.muted, "normal");
+    doc.text("Subject Bloom's Taxonomy Analytics is unavailable because recognized Bloom and subject tags are not available.", 16, 78);
+  }
+
+  drawFooterBar("Page 3 of 4");
+
+  doc.addPage();
+  drawHeader("PAGE 4 OF 4");
 
   // --------------------------------------------------------------------------
   // Large section title with big clipboard icon
@@ -1540,3 +2158,8 @@ export const generatePDF = async (
   if (options.output === "blob") return doc.output("blob");
   doc.save(fileName);
 };
+
+
+
+
+

@@ -262,7 +262,7 @@ const normalizeQuestionLabel = (value) =>
 
 const getSubjectMasteryBand = (percentage) => {
   if (percentage === null || percentage === undefined) {
-    return { key: "unassessed", label: "Not assessed" };
+    return { key: "unassessed", label: "No questions" };
   }
   if (percentage >= 80) return { key: "excellent", label: "Excellent" };
   if (percentage >= 60) return { key: "proficient", label: "Proficient" };
@@ -403,7 +403,7 @@ const cognitivePercentage = (bucket) =>
   bucket.total > 0 ? round((bucket.correct / bucket.total) * 100) : null;
 
 const getCognitiveLevel = (percentage) => {
-  if (percentage === null) return { label: "Not assessed", tone: "primary" };
+  if (percentage === null) return { label: "No questions", tone: "primary" };
   if (percentage >= 80) return { label: "Advanced Thinker", tone: "success" };
   if (percentage >= 60) return { label: "Proficient", tone: "primary" };
   if (percentage >= 40) return { label: "Developing", tone: "warning" };
@@ -1534,6 +1534,12 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
   const pageBg = [245, 248, 252];
   const softBorder = [203, 213, 225];
   const mutedText = [71, 85, 105];
+  const primaryText = [30, 41, 59];
+  const overviewMargin = 8;
+  const overviewInset = 13;
+  const questionMargin = 12;
+  const thinBorder = 0.16;
+  const cardBorder = 0.28;
   const [schoolLogo, spectropyLogo] = await Promise.all([
     toDataUrl(
       schoolData?.logo_base64 || schoolData?.logo_data_url || schoolData?.logo_url,
@@ -1581,7 +1587,12 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
     }
   };
 
-  const pct = (value) => (value === null || value === undefined ? "-" : `${value}%`);
+  const pct = (value) =>
+    value === null || value === undefined ? "No questions" : `${value}%`;
+  const hexToRgb = (hex) => {
+    const value = String(hex || "").replace("#", "");
+    return [0, 2, 4].map((index) => Number.parseInt(value.slice(index, index + 2), 16));
+  };
   const bandStyle = (percentage) => {
     const band = getSubjectMasteryBand(percentage);
     if (band.key === "excellent") return { ...band, fill: [217, 248, 230], text: [4, 120, 87] };
@@ -1604,26 +1615,26 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
   const drawSection = (heading, description, y, rightText = "", pillYOffset = 0) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text(heading, 20, y);
+    doc.setTextColor(...primaryText);
+    doc.text(heading, overviewInset, y);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.2);
     doc.setTextColor(...mutedText);
-    doc.text(description, 20, y + 5);
-    if (rightText) drawPill(rightText, pageWidth - 20, y + pillYOffset);
+    doc.text(description, overviewInset, y + 5);
+    if (rightText) drawPill(rightText, pageWidth - overviewInset, y + pillYOffset);
   };
 
   const drawMetricCard = ({ x, y, w, label, value, note, border, fill }) => {
     doc.setFillColor(...fill);
     doc.setDrawColor(...border);
-    doc.setLineWidth(0.5);
+    doc.setLineWidth(cardBorder);
     doc.roundedRect(x, y, w, 19.5, 2, 2, "FD");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(5.4);
     doc.setTextColor(0, 53, 122);
     doc.text(String(label).toUpperCase(), x + 3, y + 4.7);
-    doc.setFontSize(13);
-    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(16);
+    doc.setTextColor(...primaryText);
     doc.text(String(value), x + 3, y + 12);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.4);
@@ -1631,125 +1642,150 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
     doc.text(doc.splitTextToSize(String(note), w - 6), x + 3, y + 17);
   };
 
+  const drawInfoCard = ({ x, y, w, label, value, accent, fill }) => {
+    doc.setFillColor(...fill);
+    doc.setDrawColor(191, 219, 254);
+    doc.setLineWidth(cardBorder);
+    doc.roundedRect(x, y, w, 13.8, 1.5, 1.5, "FD");
+    doc.setFillColor(...accent);
+    doc.roundedRect(x, y, 1.4, 13.8, 0.7, 0.7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...mutedText);
+    doc.text(String(label).toUpperCase(), x + 4.3, y + 5.2);
+    doc.setFontSize(11);
+    doc.setTextColor(...primaryText);
+    doc.text(doc.splitTextToSize(String(value || "-"), w - 8), x + 4.3, y + 10.7);
+  };
+
+  const drawBloomCard = ({ x, y, w, skill }) => {
+    const color = hexToRgb(skill.color);
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(220, 230, 242);
+    doc.setLineWidth(cardBorder);
+    doc.roundedRect(x, y, w, 15.2, 1.7, 1.7, "FD");
+    doc.setFillColor(...color);
+    doc.circle(x + 3.6, y + 4.6, 1.15, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(15, 47, 99);
+    doc.text(skill.skill, x + 6.3, y + 5.6);
+    doc.setFontSize(11);
+    doc.text(pct(skill.percentage), x + 2.8, y + 11.3);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.9);
+    doc.setTextColor(...mutedText);
+    doc.text(
+      skill.total > 0
+        ? `${skill.correct}/${skill.total} correct`
+        : "No tagged questions",
+      x + 2.8,
+      y + 14.1,
+    );
+  };
+
   const drawFooter = (page, total) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(...mutedText);
-    doc.text(`Page ${page} of ${total}`, 16, pageHeight - 5);
+    doc.text(`Page ${page} of ${total}`, questionMargin, pageHeight - 4.5);
   };
 
   doc.setFillColor(...pageBg);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
   doc.setFillColor(...navy);
-  doc.rect(0, 0, pageWidth, 32, "F");
+  doc.rect(0, 0, pageWidth, 22.2, "F");
 
   doc.setFillColor(255, 255, 255);
-  doc.circle(19, 15.8, 8.5, "F");
-  if (!drawImageCoverCircle(schoolLogo, 19, 15.8, 7.4)) {
+  doc.circle(15.5, 11.1, 8.1, "F");
+  if (!drawImageCoverCircle(schoolLogo, 15.5, 11.1, 6.8)) {
     doc.setFillColor(...navy);
-    doc.circle(19, 15.8, 5.7, "F");
+    doc.circle(15.5, 11.1, 5.8, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(255, 255, 255);
-    doc.text("S", 19, 18.1, { align: "center" });
+    doc.text("S", 15.5, 13.4, { align: "center" });
   }
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.setTextColor(255, 255, 255);
-  doc.text(doc.splitTextToSize(String(schoolData?.school_name || "School Name").toUpperCase(), 42), 32, 11);
+  doc.text(doc.splitTextToSize(String(schoolData?.school_name || "School Name").toUpperCase(), 54), 27.8, 8.4);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.4);
+  doc.setFontSize(7);
   doc.setTextColor(190, 213, 240);
-  doc.text(schoolData?.area || "-", 32, 18.5);
-  doc.text(`Academic Year : ${schoolData?.academic_year || "-"}`, 32, 25);
+  doc.text(schoolData?.area || "-", 27.8, 13.5);
+  doc.text(`Academic Year : ${schoolData?.academic_year || "-"}`, 27.8, 18.1);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
-  doc.text("STUDENT ANALYTICS REPORT", pageWidth / 2, 12.6, { align: "center" });
+  doc.text("STUDENT ANALYTICS REPORT", pageWidth / 2, 9.6, { align: "center" });
   doc.setDrawColor(130, 168, 215);
   doc.setLineWidth(0.45);
-  doc.line(pageWidth / 2 - 48, 23, pageWidth / 2 - 18, 23);
-  doc.line(pageWidth / 2 + 18, 23, pageWidth / 2 + 48, 23);
+  doc.line(pageWidth / 2 - 37, 16.7, pageWidth / 2 - 20, 16.7);
+  doc.line(pageWidth / 2 + 20, 16.7, pageWidth / 2 + 37, 16.7);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.8);
+  doc.setFontSize(7);
   doc.setTextColor(190, 213, 240);
-  doc.text("SUBJECT & QUESTION ANALYSIS", pageWidth / 2, 25, { align: "center" });
+  doc.text("SUBJECT & QUESTION ANALYSIS", pageWidth / 2, 18.3, { align: "center" });
 
   doc.setFillColor(255, 255, 255);
-  doc.circle(pageWidth - 62, 15.8, 8.5, "F");
-  drawImageCoverCircle(spectropyLogo, pageWidth - 62, 15.8, 6.8);
+  doc.circle(pageWidth - 42, 11.1, 7.7, "F");
+  drawImageCoverCircle(spectropyLogo, pageWidth - 42, 11.1, 6.4);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
+  doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
-  doc.text("SPECTROPY", pageWidth - 18, 12.8, { align: "right" });
+  doc.text("SPECTROPY", pageWidth - 8, 9.2, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.2);
+  doc.setFontSize(6.5);
   doc.setTextColor(190, 213, 240);
-  doc.text("Powered by Spectropy", pageWidth - 18, 19.5, { align: "right" });
+  doc.text("Powered by Spectropy", pageWidth - 8, 15.4, { align: "right" });
 
   const gradeSection = `${studentData?.class || "-"}${studentData?.section ? ` / ${studentData.section}` : ""}`;
   const program = [result?.program, result?.subject_group].filter(Boolean).join(" / ") || "-";
-  const studentCardY = 39;
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(...softBorder);
-  doc.setLineWidth(0.45);
-  doc.roundedRect(16, studentCardY, pageWidth - 32, 22, 2.5, 2.5, "FD");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13.2);
-  doc.setTextColor(...navy);
-  doc.text(studentName.toUpperCase(), 24, studentCardY + 9.2);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.2);
-  doc.setTextColor(...mutedText);
-  doc.text("STUDENT ANALYTICS PROFILE", 24, studentCardY + 14.4);
+  doc.setFontSize(11.5);
+  doc.setTextColor(...primaryText);
+  doc.text(title.toUpperCase(), overviewMargin, 29.2);
 
-  const detailX = 113;
-  const detailY = studentCardY + 5;
-  const detailW = 112;
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(191, 219, 254);
-  doc.roundedRect(detailX, detailY, detailW, 11, 2.5, 2.5, "S");
-  const detailItems = [
-    [`GRADE-${studentData?.class || "-"}`, 0],
-    [`Section ${studentData?.section || "-"}`, 37],
-    [`Roll No. ${studentData?.roll_no || studentData?.student_id || result?.student_id || "-"}`, 74],
-  ];
-  detailItems.forEach(([text, offset], index) => {
-    if (index > 0) {
-      doc.setDrawColor(191, 219, 254);
-      doc.line(detailX + offset - 4, detailY + 2, detailX + offset - 4, detailY + 9);
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(15, 47, 99);
-    doc.text(text, detailX + 6 + offset, detailY + 7);
-  });
-  doc.setFillColor(...navy);
-  doc.roundedRect(pageWidth - 72, detailY, 48, 12, 3, 3, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6);
-  doc.setTextColor(255, 255, 255);
-  doc.text(doc.splitTextToSize(program.toUpperCase(), 40), pageWidth - 48, detailY + 7, {
-    align: "center",
+  const infoY = 34.2;
+  const infoGap = 3.5;
+  const infoW = (pageWidth - overviewMargin * 2 - infoGap * 4) / 5;
+  [
+    ["Student", studentName, [37, 99, 235], [239, 246, 255]],
+    ["Grade / Section", gradeSection, [139, 92, 246], [245, 243, 255]],
+    ["Roll No.", studentData?.roll_no || studentData?.student_id || result?.student_id || "-", [6, 182, 212], [236, 254, 255]],
+    ["Exam Date", formatDate(result?.date), [245, 158, 11], [255, 251, 235]],
+    ["Program", program, [16, 185, 129], [236, 253, 245]],
+  ].forEach(([label, value, accent, fill], index) => {
+    drawInfoCard({
+      x: overviewMargin + (infoW + infoGap) * index,
+      y: infoY,
+      w: infoW,
+      label,
+      value,
+      accent,
+      fill,
+    });
   });
 
-  let y = 70;
+  let y = 50.5;
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...softBorder);
-  doc.roundedRect(16, y - 6, pageWidth - 32, 37, 2, 2, "FD");
+  doc.setLineWidth(cardBorder);
+  doc.roundedRect(overviewMargin, y, pageWidth - overviewMargin * 2, 57.8, 2, 2, "FD");
   drawSection(
     "Cognitive Analysis",
     "Bloom-tagged mastery for this exam only.",
-    y - 2,
+    y + 7,
     `${analysis.overall.total} tagged response${analysis.overall.total === 1 ? "" : "s"}`,
-    5.5,
+    0,
   );
 
   if (analysis.hasData) {
-    const gap = 4;
-    const cardW = (pageWidth - 54 - gap * 3) / 4;
+    const gap = 3.8;
+    const cardW = (pageWidth - overviewInset * 2 - gap * 3) / 4;
     [
       ["Overall mastery", pct(analysis.overall.percentage), `${analysis.overall.correct}/${analysis.overall.total} correct`, [59, 130, 246], [239, 246, 255]],
       ["LOTS", pct(analysis.lots.percentage), "Remember + Understand", [16, 185, 129], [236, 253, 245]],
@@ -1763,8 +1799,8 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
       ],
     ].forEach(([label, value, note, border, fill], index) => {
       drawMetricCard({
-        x: 20 + (cardW + gap) * index,
-        y: y + 7,
+        x: overviewInset + (cardW + gap) * index,
+        y: y + 13.8,
         w: cardW,
         label,
         value,
@@ -1773,60 +1809,88 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
         fill,
       });
     });
+
+    const bloomGap = 2.5;
+    const bloomW = (pageWidth - overviewInset * 2 - bloomGap * 5) / 6;
+    analysis.skillPerformance.forEach((skill, index) => {
+      drawBloomCard({
+        x: overviewInset + (bloomW + bloomGap) * index,
+        y: y + 36.8,
+        w: bloomW,
+        skill,
+      });
+    });
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...mutedText);
+    doc.text("No Bloom-tagged questions are available for this exam.", overviewInset, y + 22);
   }
 
-  y = 113;
+  y = 111.1;
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...softBorder);
-  doc.roundedRect(16, y - 8, pageWidth - 32, 90, 2, 2, "FD");
+  doc.setLineWidth(cardBorder);
+  doc.roundedRect(overviewMargin, y, pageWidth - overviewMargin * 2, 90.4, 2, 2, "FD");
   drawSection(
     "Subject-wise Cognitive Analytics",
     "Subject mastery calculated from this exam's Bloom-tagged questions.",
-    y - 2,
+    y + 7,
     `${analysis.subjectPerformance.length} subject${analysis.subjectPerformance.length === 1 ? "" : "s"}`,
   );
 
   if (analysis.subjectPerformance.length > 0) {
-    const subjectGap = 4;
-    const subjectW = (pageWidth - 54 - subjectGap * 3) / 4;
-    const subjectY = y + 8;
+    const subjectGap = 3.5;
+    const subjectW = (pageWidth - overviewInset * 2 - subjectGap * 3) / 4;
+    const subjectY = y + 13.8;
     const subjectColors = [[139, 92, 246], [6, 182, 212], [37, 99, 235], [244, 63, 94]];
     analysis.subjectPerformance.slice(0, 4).forEach((subject, index) => {
-      const x = 20 + (subjectW + subjectGap) * index;
+      const x = overviewInset + (subjectW + subjectGap) * index;
       const color = subjectColors[index] || [37, 99, 235];
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(...softBorder);
+      doc.setLineWidth(cardBorder);
       doc.roundedRect(x, subjectY, subjectW, 25, 2, 2, "FD");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(10);
+      doc.setTextColor(...primaryText);
       doc.text(subject.label, x + 5, subjectY + 8.5);
-      doc.setFontSize(12.5);
+      doc.setFontSize(16);
       doc.setTextColor(...color);
       doc.text(pct(subject.overall), x + subjectW - 5, subjectY + 8.8, { align: "right" });
       doc.setFont("helvetica", "normal");
       doc.setFontSize(5.7);
       doc.setTextColor(...mutedText);
-      doc.text(`${subject.correct}/${subject.total} tagged questions correct`, x + 5, subjectY + 15);
+      doc.text(`${subject.correct}/${subject.total} tagged questions correct`, x + 5, subjectY + 13.5);
+      const drawSubjectBadgeValue = (label, value, centerX) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(4.9);
+        const labelWidth = doc.getTextWidth(`${label} `);
+        doc.setFontSize(8);
+        const valueWidth = doc.getTextWidth(value);
+        const textX = centerX - (labelWidth + valueWidth) / 2;
+        doc.setFontSize(4.9);
+        doc.text(`${label} `, textX, subjectY + 21.5);
+        doc.setFontSize(8);
+        doc.text(value, textX + labelWidth, subjectY + 21.5);
+      };
       doc.setFillColor(232, 250, 239);
       doc.setDrawColor(187, 247, 208);
-      doc.roundedRect(x + 5, subjectY + 18, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(4.9);
+      doc.roundedRect(x + 4, subjectY + 16.5, subjectW / 2 - 5, 7, 1.4, 1.4, "FD");
       doc.setTextColor(0, 121, 90);
-      doc.text(`LOTS ${pct(subject.lots)}`, x + subjectW / 4 + 1, subjectY + 21.5, { align: "center" });
+      drawSubjectBadgeValue("LOTS", pct(subject.lots), x + subjectW / 4 + 1.5);
       doc.setFillColor(255, 237, 213);
       doc.setDrawColor(253, 186, 116);
-      doc.roundedRect(x + subjectW / 2 + 2, subjectY + 18, subjectW / 2 - 7, 5, 1.4, 1.4, "FD");
+      doc.roundedRect(x + subjectW / 2 + 1, subjectY + 16.5, subjectW / 2 - 5, 7, 1.4, 1.4, "FD");
       doc.setTextColor(194, 65, 12);
-      doc.text(`HOTS ${pct(subject.hots)}`, x + subjectW * 0.75 - 1, subjectY + 21.5, { align: "center" });
+      drawSubjectBadgeValue("HOTS", pct(subject.hots), x + subjectW * 0.75 - 1.5);
     });
 
     doc.autoTable({
-      startY: subjectY + 31,
+      startY: subjectY + 27.8,
       theme: "grid",
-      margin: { left: 20, right: 20 },
-      tableWidth: pageWidth - 40,
+      margin: { left: overviewInset, right: overviewInset },
+      tableWidth: pageWidth - overviewInset * 2,
       head: [["Subject", ...BLOOM_SKILLS.map((skill) => skill.key), "Subject Level"]],
       body: analysis.subjectPerformance.map((subject) => {
         const subjectBand = bandStyle(subject.overall);
@@ -1834,23 +1898,26 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
           subject.label,
           ...BLOOM_SKILLS.map(({ key }) => {
             const skill = subject.skills.find((item) => item.skill === key);
-            return skill?.percentage === null ? "-\nN/A" : `${skill.percentage}%\n${skill.correct}/${skill.total}`;
+            return skill?.percentage === null
+              ? "No questions"
+              : `${skill.percentage}%\n${skill.correct}/${skill.total}`;
           }),
           `${subjectBand.label}\n${pct(subject.overall)}`,
         ];
       }),
       styles: {
         font: "helvetica",
-        fontSize: 5.5,
-        cellPadding: 1.65,
+        fontSize: 7,
+        cellPadding: 1.7,
         halign: "center",
         valign: "middle",
         lineColor: [226, 232, 240],
-        textColor: [15, 23, 42],
+        lineWidth: thinBorder,
+        textColor: primaryText,
       },
       headStyles: {
         fillColor: [239, 246, 255],
-        textColor: [15, 23, 42],
+        textColor: primaryText,
         fontStyle: "bold",
       },
       columnStyles: {
@@ -1885,26 +1952,42 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
         }
       },
     });
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...mutedText);
+    doc.text("No subject-level cognitive data is available for this exam.", overviewInset, y + 23);
   }
-  drawFooter(1, 2);
-
-  doc.addPage("a4", "landscape");
-  doc.setFillColor(...pageBg);
-  doc.rect(0, 0, pageWidth, pageHeight, "F");
-  drawSection(
-    "Question-wise Analytics",
-    "Stored response evidence and the percentage of other students who answered each question correctly.",
-    15,
-    `${questionRows.length} questions`,
+  const questionsPerPage = 12;
+  const questionPages = Array.from(
+    { length: Math.ceil(questionRows.length / questionsPerPage) },
+    (_, index) => questionRows.slice(index * questionsPerPage, (index + 1) * questionsPerPage),
   );
+  const totalPages = 1 + questionPages.length;
+  drawFooter(1, totalPages);
 
-  doc.autoTable({
-    startY: 32,
+  questionPages.forEach((pageRows, pageIndex) => {
+    doc.addPage("a4", "landscape");
+    doc.setFillColor(...pageBg);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    const firstQuestion = pageIndex * questionsPerPage + 1;
+    const lastQuestion = firstQuestion + pageRows.length - 1;
+    drawSection(
+      "Question-wise Analytics",
+      pageIndex === 0
+        ? "Stored response evidence and the percentage of other students who answered each question correctly."
+        : `Questions ${firstQuestion}-${lastQuestion}`,
+      13.5,
+      pageIndex === 0 ? `${questionRows.length} questions` : "",
+    );
+
+    doc.autoTable({
+    startY: 32.5,
     theme: "grid",
-    margin: { left: 16, right: 16 },
-    tableWidth: pageWidth - 32,
+    margin: { left: questionMargin, right: questionMargin },
+    tableWidth: pageWidth - questionMargin * 2,
     head: [["Question", "Option", "Key", "Marks", "Status", "Peer correct %"]],
-    body: questionRows.map((question) => [
+    body: pageRows.map((question) => [
       question.question,
       question.option || "-",
       question.key || "-",
@@ -1914,23 +1997,28 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
     ]),
     styles: {
       font: "helvetica",
-      fontSize: 7.2,
-      cellPadding: 3.1,
+      fontSize: 10,
+      cellPadding: 2.4,
+      halign: "center",
       valign: "middle",
       lineColor: [226, 232, 240],
-      minCellHeight: 10.5,
+      lineWidth: thinBorder,
+      minCellHeight: 12.35,
+      textColor: primaryText,
     },
     headStyles: {
       fillColor: [239, 246, 255],
       textColor: [51, 65, 85],
       fontStyle: "bold",
+      halign: "center",
+      fontSize: 10,
     },
     columnStyles: {
-      0: { cellWidth: 34 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 25 },
-      3: { cellWidth: 25, halign: "center" },
-      4: { cellWidth: 38, halign: "center" },
+      0: { cellWidth: 35.3 },
+      1: { cellWidth: 31.8 },
+      2: { cellWidth: 26.5 },
+      3: { cellWidth: 26.5, halign: "center" },
+      4: { cellWidth: 39.5, halign: "center" },
       5: { cellWidth: "auto", halign: "center", fontStyle: "bold" },
     },
     didParseCell: (data) => {
@@ -1957,7 +2045,7 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
           { fill: [250, 245, 255], text: [147, 51, 234] },
           { fill: [255, 241, 242], text: [244, 63, 94] },
         ];
-        const tone = tones[data.row.index % tones.length];
+        const tone = tones[(pageIndex * questionsPerPage + data.row.index) % tones.length];
         data.cell.styles.fillColor = tone.fill;
         data.cell.styles.textColor = tone.text;
       }
@@ -1967,16 +2055,18 @@ const downloadExamAnalyticsPerfectLayoutReport = async ({
       const percentage = Number.parseFloat(String(data.cell.raw || ""));
       if (!Number.isFinite(percentage)) return;
       const tones = [[37, 99, 235], [5, 150, 105], [249, 115, 22], [147, 51, 234], [244, 63, 94]];
+      const toneIndex = (pageIndex * questionsPerPage + data.row.index) % tones.length;
       const x = data.cell.x + data.cell.width * 0.36;
       const yBar = data.cell.y + data.cell.height / 2 + 1.4;
       const width = data.cell.width * 0.56;
       doc.setFillColor(226, 232, 240);
       doc.roundedRect(x, yBar, width, 1.2, 0.6, 0.6, "F");
-      doc.setFillColor(...tones[data.row.index % tones.length]);
+      doc.setFillColor(...tones[toneIndex]);
       doc.roundedRect(x, yBar, width * clamp(percentage, 0, 100) / 100, 1.2, 0.6, 0.6, "F");
     },
   });
-  drawFooter(2, 2);
+    drawFooter(pageIndex + 2, totalPages);
+  });
 
   doc.save(
     [
@@ -2556,6 +2646,367 @@ doc.text(`CLASS SECTION : ${studentData.class}-${studentData.section}`, 15,45);*
   // ======================
   // 💾 SAVE
   // ======================
+  const reportCognitiveAnalysis = buildStudentCognitiveAnalysis(examResults);
+  const reportPercent = (value) =>
+    value === null || value === undefined ? "No questions" : `${value}%`;
+  const slateText = [30, 41, 59];
+  const mutedSlate = [71, 85, 105];
+  const softLine = [203, 213, 225];
+  const pageFill = [245, 248, 252];
+  const cardFill = [255, 255, 255];
+  const accentBlue = [37, 99, 235];
+  const accentGreen = [16, 185, 129];
+  const accentAmber = [245, 158, 11];
+  const accentRose = [244, 63, 94];
+  const reportMargin = 12;
+  const reportContentWidth = pageWidth - reportMargin * 2;
+
+  const reportScores = sortedExamResults.map((result) =>
+    clamp(toNum(result.percentage), 0, 100),
+  );
+  const reportAverage = reportScores.length
+    ? round(reportScores.reduce((sum, value) => sum + value, 0) / reportScores.length)
+    : 0;
+  const latestResult = sortedExamResults[sortedExamResults.length - 1] || {};
+  const previousResult =
+    sortedExamResults[sortedExamResults.length - 2] || latestResult;
+  const latestPct = round(toNum(latestResult.percentage));
+  const improvement = round(toNum(latestResult.percentage) - toNum(previousResult.percentage));
+  const totals = sortedExamResults.reduce(
+    (accumulator, result) => ({
+      correct: accumulator.correct + toNum(result.correct_answers),
+      wrong: accumulator.wrong + toNum(result.wrong_answers),
+      unattempted: accumulator.unattempted + toNum(result.unattempted),
+    }),
+    { correct: 0, wrong: 0, unattempted: 0 },
+  );
+  const attemptedQuestions = totals.correct + totals.wrong;
+  const totalQuestions = attemptedQuestions + totals.unattempted;
+  const accuracyPct = attemptedQuestions
+    ? round((totals.correct / attemptedQuestions) * 100)
+    : 0;
+  const attemptPct = totalQuestions
+    ? round((attemptedQuestions / totalQuestions) * 100)
+    : 0;
+  const consistencyPct = round(clamp(100 - standardDeviation(reportScores) * 2, 0, 100));
+  const nextTarget = Math.min(100, Math.ceil(latestPct + 5));
+
+  const strongestMeasuredSubject = reportCognitiveAnalysis.strongestSubject;
+  const priorityMeasuredSubject =
+    reportCognitiveAnalysis.prioritySubject?.key !== strongestMeasuredSubject?.key
+      ? reportCognitiveAnalysis.prioritySubject
+      : null;
+  const guidanceItems = [];
+  if (priorityMeasuredSubject) {
+    const lowestMeasuredSkill = [...priorityMeasuredSubject.skills]
+      .filter((skill) => skill.total > 0 && skill.percentage !== null)
+      .sort((a, b) => a.percentage - b.percentage)[0];
+    guidanceItems.push(
+      lowestMeasuredSkill
+        ? `Prioritise ${priorityMeasuredSubject.label}: ${lowestMeasuredSkill.skill} is the lowest measured Bloom skill at ${lowestMeasuredSkill.percentage}%.`
+        : `Prioritise ${priorityMeasuredSubject.label}: cognitive mastery is ${priorityMeasuredSubject.overall}%.`,
+    );
+  }
+  if (strongestMeasuredSubject) {
+    guidanceItems.push(
+      `Extend ${strongestMeasuredSubject.label}: cognitive mastery is ${strongestMeasuredSubject.overall}%. Use higher-difficulty practice.`,
+    );
+  }
+  if (!guidanceItems.length) {
+    guidanceItems.push(
+      "Add or review Bloom and subject tags to generate evidence-based learning guidance.",
+    );
+  }
+  guidanceItems.push(`Set the next score target at ${nextTarget}% and review progress after the next assessment.`);
+
+  const hexToRgbForReport = (hex) => {
+    const value = String(hex || "").replace("#", "");
+    return [0, 2, 4].map((index) => Number.parseInt(value.slice(index, index + 2), 16));
+  };
+
+  const drawReportPageHeader = (heading, subheading) => {
+    doc.setFillColor(...pageFill);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    doc.setFillColor(...BLUE);
+    doc.rect(0, 0, pageWidth, 22, "F");
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(17);
+    doc.setTextColor(255, 255, 255);
+    doc.text(heading, reportMargin, 12);
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(9);
+    doc.text(subheading, reportMargin, 18);
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(10);
+    doc.text(studentData.name || "Student", pageWidth - reportMargin, 12, { align: "right" });
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(8);
+    doc.text(
+      `${studentData.class || "-"}-${studentData.section || "-"} | Roll No. ${studentData.roll_no || "-"}`,
+      pageWidth - reportMargin,
+      18,
+      { align: "right" },
+    );
+  };
+
+  const drawReportCard = ({ x, y: cardY, w, h, title: cardTitle, value, note, color }) => {
+    doc.setFillColor(...cardFill);
+    doc.setDrawColor(...softLine);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(x, cardY, w, h, 2.4, 2.4, "FD");
+    doc.setFillColor(...color);
+    doc.roundedRect(x, cardY, 2.2, h, 1, 1, "F");
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...mutedSlate);
+    doc.text(String(cardTitle).toUpperCase(), x + 5, cardY + 7);
+    doc.setFontSize(20);
+    doc.setTextColor(...slateText);
+    doc.text(String(value), x + 5, cardY + 17);
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...mutedSlate);
+    doc.text(doc.splitTextToSize(String(note), w - 10), x + 5, cardY + 24);
+  };
+
+  doc.addPage();
+  drawReportPageHeader(
+    "Performance Guidance & Learning Snapshot",
+    "Generated summary from marks, attempts, trends, and Bloom-tagged responses.",
+  );
+
+  const snapshotY = 32;
+  const snapshotGap = 4;
+  const snapshotW = (reportContentWidth - snapshotGap * 3) / 4;
+  [
+    ["Overall Average", `${reportAverage}%`, `${examResults.length} assessment${examResults.length === 1 ? "" : "s"} included`, accentBlue],
+    ["Latest Score", `${latestPct}%`, improvement >= 0 ? `+${improvement}% from previous` : `${improvement}% from previous`, accentGreen],
+    ["Accuracy", `${accuracyPct}%`, `${Math.round(totals.correct)} correct answers`, accentAmber],
+    ["Attempt Rate", `${attemptPct}%`, `${Math.round(totals.unattempted)} unattempted questions`, accentRose],
+  ].forEach(([cardTitle, value, note, color], index) => {
+    drawReportCard({
+      x: reportMargin + (snapshotW + snapshotGap) * index,
+      y: snapshotY,
+      w: snapshotW,
+      h: 31,
+      title: cardTitle,
+      value,
+      note,
+      color,
+    });
+  });
+
+  [
+    ["Consistency", `${consistencyPct}%`, "Stability across recorded exams", [139, 92, 246]],
+    ["Strength", strength.charAt(0).toUpperCase() + strength.slice(1), "Highest average subject", accentGreen],
+    ["Focus Area", weak.charAt(0).toUpperCase() + weak.slice(1), "Lowest average subject", accentRose],
+    ["Next Target", `${nextTarget}%`, "Recommended next milestone", accentBlue],
+  ].forEach(([cardTitle, value, note, color], index) => {
+    drawReportCard({
+      x: reportMargin + index * 70,
+      y: 70,
+      w: index === 3 ? 63 : 65,
+      h: 31,
+      title: cardTitle,
+      value,
+      note,
+      color,
+    });
+  });
+
+  doc.setFillColor(...cardFill);
+  doc.setDrawColor(...softLine);
+  doc.roundedRect(reportMargin, 109, 128, 48, 2.5, 2.5, "FD");
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...slateText);
+  doc.text("Performance Guidance", reportMargin + 5, 118);
+  doc.setFont("Times New Roman", "normal");
+  doc.setFontSize(9.2);
+  doc.setTextColor(...slateText);
+  guidanceItems.slice(0, 4).forEach((item, index) => {
+    const itemY = 127 + index * 9.5;
+    doc.setFillColor(...(index === 0 ? accentAmber : accentBlue));
+    doc.circle(reportMargin + 6, itemY - 2.5, 1.5, "F");
+    doc.text(doc.splitTextToSize(item, 112), reportMargin + 11, itemY);
+  });
+
+  doc.setFillColor(...cardFill);
+  doc.setDrawColor(...softLine);
+  doc.roundedRect(reportMargin + 136, 109, reportContentWidth - 136, 48, 2.5, 2.5, "FD");
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...slateText);
+  doc.text("Learning Snapshot", reportMargin + 141, 118);
+  doc.setFont("Times New Roman", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...mutedSlate);
+  [
+    `Best exam: ${formatExamName(bestExam.exam, "Exam")} at ${(bestExam.percentage || 0).toFixed(1)}%.`,
+    `Strongest measured cognitive area: ${reportCognitiveAnalysis.strongestSubject?.label || "No questions"}.`,
+    `Priority measured cognitive area: ${reportCognitiveAnalysis.prioritySubject?.label || "No questions"}.`,
+    `Bloom coverage: ${reportCognitiveAnalysis.coverage}% of recorded questions.`,
+  ].forEach((line, index) => {
+    doc.text(line, reportMargin + 141, 128 + index * 7);
+  });
+
+  doc.setFont("Times New Roman", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...slateText);
+  doc.text("Cognitive Analysis", reportMargin, 172);
+
+  if (reportCognitiveAnalysis.hasData) {
+    const cognitiveY = 178;
+    const cognitiveGap = 4;
+    const cognitiveW = (reportContentWidth - cognitiveGap * 3) / 4;
+    [
+      ["Overall Mastery", reportPercent(reportCognitiveAnalysis.overall.percentage), `${reportCognitiveAnalysis.overall.correct}/${reportCognitiveAnalysis.overall.total} correct`, accentBlue],
+      ["LOTS", reportPercent(reportCognitiveAnalysis.lots.percentage), "Remember + Understand", accentGreen],
+      ["HOTS", reportPercent(reportCognitiveAnalysis.hots.percentage), "Apply + Analyse + Evaluate + Create", accentAmber],
+      ["Cognitive Level", reportCognitiveAnalysis.level.label, reportCognitiveAnalysis.gap === null ? "LOTS/HOTS gap unavailable" : `${Math.abs(reportCognitiveAnalysis.gap)} point gap`, [139, 92, 246]],
+    ].forEach(([cardTitle, value, note, color], index) => {
+      drawReportCard({
+        x: reportMargin + (cognitiveW + cognitiveGap) * index,
+        y: cognitiveY,
+        w: cognitiveW,
+        h: 28,
+        title: cardTitle,
+        value,
+        note,
+        color,
+      });
+    });
+  } else {
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...mutedSlate);
+    doc.text("Cognitive analysis is unavailable because Bloom-tagged questions are not available.", reportMargin, 183);
+  }
+
+  doc.addPage();
+  drawReportPageHeader(
+    "Subject Bloom's Taxonomy Analytics",
+    "Subject-wise cognitive mastery generated from Bloom-tagged responses.",
+  );
+
+  if (reportCognitiveAnalysis.hasData && reportCognitiveAnalysis.subjectPerformance.length > 0) {
+    const subjectCardY = 32;
+    const subjectGap = 4;
+    const subjectW = (reportContentWidth - subjectGap * 3) / 4;
+    reportCognitiveAnalysis.subjectPerformance.slice(0, 4).forEach((subject, index) => {
+      const x = reportMargin + (subjectW + subjectGap) * index;
+      const color = hexToRgbForReport(subject.color);
+      doc.setFillColor(...cardFill);
+      doc.setDrawColor(...softLine);
+      doc.roundedRect(x, subjectCardY, subjectW, 31, 2.5, 2.5, "FD");
+      doc.setFont("Times New Roman", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...slateText);
+      doc.text(subject.label, x + 5, subjectCardY + 8);
+      doc.setFontSize(19);
+      doc.setTextColor(...color);
+      doc.text(reportPercent(subject.overall), x + subjectW - 5, subjectCardY + 14, { align: "right" });
+      doc.setFont("Times New Roman", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...mutedSlate);
+      doc.text(`${subject.correct}/${subject.total} tagged responses correct`, x + 5, subjectCardY + 18);
+      doc.setFont("Times New Roman", "bold");
+      doc.setFontSize(8.4);
+      doc.setTextColor(5, 150, 105);
+      doc.text(`LOTS ${reportPercent(subject.lots)}`, x + 5, subjectCardY + 26);
+      doc.setTextColor(194, 65, 12);
+      doc.text(`HOTS ${reportPercent(subject.hots)}`, x + subjectW - 5, subjectCardY + 26, { align: "right" });
+    });
+
+    doc.autoTable({
+      startY: 72,
+      theme: "grid",
+      margin: { left: reportMargin, right: reportMargin },
+      tableWidth: reportContentWidth,
+      head: [["Subject", ...BLOOM_SKILLS.map((skill) => skill.key), "Subject Level"]],
+      body: reportCognitiveAnalysis.subjectPerformance.map((subject) => {
+        const subjectBand = getSubjectMasteryBand(subject.overall);
+        return [
+          subject.label,
+          ...BLOOM_SKILLS.map(({ key }) => {
+            const skill = subject.skills.find((item) => item.skill === key);
+            return skill?.percentage === null
+              ? "No questions"
+              : `${skill.percentage}%\n${skill.correct}/${skill.total}`;
+          }),
+          `${subjectBand.label}\n${reportPercent(subject.overall)}`,
+        ];
+      }),
+      styles: {
+        font: "Times New Roman",
+        fontSize: 8.5,
+        cellPadding: 2.2,
+        halign: "center",
+        valign: "middle",
+        textColor: slateText,
+        lineColor: [226, 232, 240],
+        lineWidth: 0.18,
+      },
+      headStyles: {
+        fillColor: [239, 246, 255],
+        textColor: slateText,
+        fontStyle: "bold",
+        fontSize: 8.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 30, halign: "left", fontStyle: "bold" },
+        7: { cellWidth: 32, fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.section !== "body") return;
+        if (data.column.index >= 1 && data.column.index <= 6) {
+          const raw = String(data.cell.raw || "");
+          if (raw.includes("No questions")) {
+            data.cell.styles.fillColor = [248, 250, 252];
+            data.cell.styles.textColor = mutedSlate;
+          } else {
+            const value = Number.parseFloat(raw);
+            if (value >= 80) data.cell.styles.fillColor = [220, 252, 231];
+            else if (value >= 60) data.cell.styles.fillColor = [239, 246, 255];
+            else if (value >= 40) data.cell.styles.fillColor = [254, 249, 195];
+            else data.cell.styles.fillColor = [254, 226, 226];
+          }
+        }
+        if (data.column.index === 7) {
+          data.cell.styles.fillColor = [236, 253, 245];
+          data.cell.styles.textColor = [4, 120, 87];
+        }
+      },
+    });
+
+    const insightY = Math.min((doc.lastAutoTable?.finalY || 128) + 12, 168);
+    doc.setFillColor(...cardFill);
+    doc.setDrawColor(...softLine);
+    doc.roundedRect(reportMargin, insightY, reportContentWidth, 25, 2.5, 2.5, "FD");
+    doc.setFont("Times New Roman", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(...slateText);
+    doc.text("Cognitive Insights", reportMargin + 5, insightY + 8);
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...mutedSlate);
+    (reportCognitiveAnalysis.insights.length
+      ? reportCognitiveAnalysis.insights
+      : ["No additional Bloom insight is available for the current data."]
+    ).slice(0, 3).forEach((insight, index) => {
+      doc.text(doc.splitTextToSize(insight, reportContentWidth - 12), reportMargin + 5, insightY + 15 + index * 5.5);
+    });
+  } else {
+    doc.setFont("Times New Roman", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(...mutedSlate);
+    doc.text(
+      "Subject Bloom's Taxonomy Analytics is unavailable because recognized Bloom and subject tags are not available.",
+      reportMargin,
+      42,
+    );
+  }
+
   const fileName = `ReportCard_${studentData.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
   doc.save(fileName);
 };
@@ -2993,6 +3444,7 @@ export default function StudentPerformanceView({
                   <button
                     type="button"
                     className="sp-button sp-button-small sp-detail-download-button"
+                    disabled={peerQuestionAnalytics.status === "loading"}
                     onClick={async () => {
                       try {
                         await downloadExamAnalyticsPerfectLayoutReport({
@@ -3012,7 +3464,9 @@ export default function StudentPerformanceView({
                     }}
                   >
                     <FileDown size={15} strokeWidth={2.3} aria-hidden="true" />
-                    Download Analytics PDF
+                    {peerQuestionAnalytics.status === "loading"
+                      ? "Preparing Peer Data..."
+                      : "Download Analytics PDF"}
                   </button>
                   <button
                     type="button"
@@ -3060,7 +3514,7 @@ export default function StudentPerformanceView({
                       <div>
                         <span>LOTS</span>
                         <strong>
-                          {selectedExamCognitiveAnalysis.lots.percentage ?? "Not assessed"}
+                          {selectedExamCognitiveAnalysis.lots.percentage ?? "No questions"}
                           {selectedExamCognitiveAnalysis.lots.percentage === null ? "" : "%"}
                         </strong>
                         <small>Remember + Understand</small>
@@ -3073,7 +3527,7 @@ export default function StudentPerformanceView({
                       <div>
                         <span>HOTS</span>
                         <strong>
-                          {selectedExamCognitiveAnalysis.hots.percentage ?? "Not assessed"}
+                          {selectedExamCognitiveAnalysis.hots.percentage ?? "No questions"}
                           {selectedExamCognitiveAnalysis.hots.percentage === null ? "" : "%"}
                         </strong>
                         <small>Apply + Analyse + Evaluate + Create</small>
@@ -3103,7 +3557,7 @@ export default function StudentPerformanceView({
                           {skill.skill}
                         </span>
                         <strong>
-                          {skill.percentage === null ? "Not assessed" : `${skill.percentage}%`}
+                          {skill.percentage === null ? "No questions" : `${skill.percentage}%`}
                         </strong>
                         <small>
                           {skill.total > 0
@@ -3163,11 +3617,11 @@ export default function StudentPerformanceView({
                         <dl>
                           <div>
                             <dt>LOTS</dt>
-                            <dd>{subject.lots === null ? "Not assessed" : `${subject.lots}%`}</dd>
+                            <dd>{subject.lots === null ? "No questions" : `${subject.lots}%`}</dd>
                           </div>
                           <div>
                             <dt>HOTS</dt>
-                            <dd>{subject.hots === null ? "Not assessed" : `${subject.hots}%`}</dd>
+                            <dd>{subject.hots === null ? "No questions" : `${subject.hots}%`}</dd>
                           </div>
                           <div>
                             <dt>Gap</dt>
@@ -3241,7 +3695,7 @@ export default function StudentPerformanceView({
                                     <small>
                                       {skill.total > 0
                                         ? `${skill.correct}/${skill.total}`
-                                        : "Not assessed"}
+                                        : "No questions"}
                                     </small>
                                   </td>
                                 );
@@ -3816,7 +4270,7 @@ export default function StudentPerformanceView({
                         </span>
                         <span>Lower Order Thinking</span>
                       </div>
-                      <strong>{cognitiveAnalysis.lots.percentage ?? "Not assessed"}{cognitiveAnalysis.lots.percentage === null ? "" : "%"}</strong>
+                      <strong>{cognitiveAnalysis.lots.percentage ?? "No questions"}{cognitiveAnalysis.lots.percentage === null ? "" : "%"}</strong>
                       <small>Remember + Understand</small>
                     </article>
                     <article className="sp-cognitive-summary-card sp-cognitive-hots">
@@ -3826,7 +4280,7 @@ export default function StudentPerformanceView({
                         </span>
                         <span>Higher Order Thinking</span>
                       </div>
-                      <strong>{cognitiveAnalysis.hots.percentage ?? "Not assessed"}{cognitiveAnalysis.hots.percentage === null ? "" : "%"}</strong>
+                      <strong>{cognitiveAnalysis.hots.percentage ?? "No questions"}{cognitiveAnalysis.hots.percentage === null ? "" : "%"}</strong>
                       <small>Apply + Analyse + Evaluate + Create</small>
                     </article>
                     <article className={`sp-cognitive-summary-card sp-cognitive-level sp-tone-${cognitiveAnalysis.level.tone}`}>
@@ -3910,7 +4364,7 @@ export default function StudentPerformanceView({
                             <div className="sp-cognitive-skill-score">
                               <strong>
                                 {skill.percentage === null
-                                  ? "Not assessed"
+                                  ? "No questions"
                                   : `${skill.percentage}%`}
                               </strong>
                               <small>
@@ -3960,7 +4414,7 @@ export default function StudentPerformanceView({
                               return row ? `${row.exam} - ${row.date}` : "Assessment";
                             }}
                             formatter={(value, name) => [
-                              value === null ? "Not assessed" : `${value}%`,
+                              value === null ? "No questions" : `${value}%`,
                               name,
                             ]}
                           />
@@ -4089,11 +4543,11 @@ export default function StudentPerformanceView({
                         <dl>
                           <div>
                             <dt>LOTS</dt>
-                            <dd>{subject.lots === null ? "Not assessed" : `${subject.lots}%`}</dd>
+                            <dd>{subject.lots === null ? "No questions" : `${subject.lots}%`}</dd>
                           </div>
                           <div>
                             <dt>HOTS</dt>
-                            <dd>{subject.hots === null ? "Not assessed" : `${subject.hots}%`}</dd>
+                            <dd>{subject.hots === null ? "No questions" : `${subject.hots}%`}</dd>
                           </div>
                           <div>
                             <dt>Gap</dt>
@@ -4137,7 +4591,7 @@ export default function StudentPerformanceView({
                           <Tooltip
                             contentStyle={TOOLTIP_STYLE}
                             formatter={(value, name) => [
-                              value === null ? "Not assessed" : `${value}%`,
+                              value === null ? "No questions" : `${value}%`,
                               name,
                             ]}
                           />
@@ -4225,7 +4679,7 @@ export default function StudentPerformanceView({
                                         <small>
                                           {skill.total > 0
                                             ? `${skill.correct}/${skill.total}`
-                                            : "Not assessed"}
+                                            : "No questions"}
                                         </small>
                                       </td>
                                     );
