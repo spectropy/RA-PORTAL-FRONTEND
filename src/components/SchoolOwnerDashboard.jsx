@@ -3760,10 +3760,49 @@ export default function SchoolOwnerDashboard({ onBack }) {
       }
     };
 
-    const handleDownloadAnalysisPDF = () => {
+    const handleDownloadAnalysisPDF = async () => {
       if (!examWiseClassSection || !analysis) {
         return;
       }
+
+      const makeCircularLogo = (source) => new Promise((resolve) => {
+        if (!source || typeof Image === "undefined" || typeof document === "undefined") {
+          resolve(null);
+          return;
+        }
+        const image = new Image();
+        if (!String(source).startsWith("data:")) image.crossOrigin = "anonymous";
+        image.onload = () => {
+          try {
+            const size = 512;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const context = canvas.getContext("2d");
+            if (!context) {
+              resolve(null);
+              return;
+            }
+            const scale = Math.max(size / image.width, size / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            context.beginPath();
+            context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            context.clip();
+            context.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (error) {
+            console.warn("Unable to crop a batch report logo into a circle:", error);
+            resolve(null);
+          }
+        };
+        image.onerror = () => resolve(null);
+        image.src = source;
+      });
+      const [circularSchoolLogo, circularSpectropyLogo] = await Promise.all([
+        makeCircularLogo(school?.logo_url),
+        makeCircularLogo(spectropyLogoUrl),
+      ]);
 
       const doc = new jsPDF({
         orientation: "landscape",
@@ -4053,55 +4092,28 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const containerX = rightX - containerWidth;
         const containerY = centerY - containerHeight / 2;
 
-        const logoPanelWidth = compact ? 11 : 18;
-        const logoSize = compact ? 6 : 11;
-
-        // Outer white container
-        setFill(COLORS.white);
-        setDraw([194, 213, 238]);
-        doc.setLineWidth(0.35);
-
-        doc.roundedRect(
-          containerX,
-          containerY,
-          containerWidth,
-          containerHeight,
-          compact ? 2.5 : 4,
-          compact ? 2.5 : 4,
-          "FD",
-        );
-
-        // Logo panel divider
-        const dividerX = containerX + logoPanelWidth;
-
-        setDraw([218, 226, 238]);
-        doc.setLineWidth(0.35);
-
-        doc.line(
-          dividerX,
-          containerY + (compact ? 2 : 4),
-          dividerX,
-          containerY + containerHeight - (compact ? 2 : 4),
-        );
+        const logoPanelWidth = compact ? 11 : 21;
+        const logoSize = compact ? 6 : 17;
 
         // Logo
-        const logoX = containerX + (logoPanelWidth - logoSize) / 2;
+        const logoX = containerX + (logoPanelWidth - logoSize) / 2 + (compact ? 0 : 3);
 
         const logoY = containerY + (containerHeight - logoSize) / 2;
 
         let spectropyLogoLoaded = false;
 
         try {
-          doc.addImage(
-            spectropyLogoUrl,
-            "PNG",
-            logoX,
-            logoY,
-            logoSize,
-            logoSize,
-          );
-
-          spectropyLogoLoaded = true;
+          if (circularSpectropyLogo) {
+            doc.addImage(
+              circularSpectropyLogo,
+              "PNG",
+              logoX,
+              logoY,
+              logoSize,
+              logoSize,
+            );
+            spectropyLogoLoaded = true;
+          }
         } catch (error) {
           console.warn("Failed to load Spectropy logo, using fallback:", error);
         }
@@ -4126,32 +4138,21 @@ export default function SchoolOwnerDashboard({ onBack }) {
         }
 
         // Text section
-        const textX = dividerX + (compact ? 3 : 5);
-
-        // Powered by
-        setText([91, 121, 164]);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(compact ? 4.2 : 6);
-
-        doc.text("Powered by", textX, containerY + (compact ? 3 : 4.6));
+        const textX = containerX + logoPanelWidth + (compact ? 3 : 5);
 
         // SPECTROPY
-        setText(COLORS.navy);
+        setText(COLORS.white);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(compact ? 5.8 : 8.4);
+        doc.setFontSize(compact ? 5.8 : 13);
 
-        doc.text("SPECTROPY", textX, containerY + (compact ? 6.1 : 9.3));
+        doc.text("SPECTROPY", textX, containerY + (compact ? 5.2 : 7.2));
 
-        // Learning Analytics
-        setText([113, 135, 166]);
+        // Powered by Spectropy
+        setText([219, 234, 254]);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(compact ? 3 : 3.9);
+        doc.setFontSize(compact ? 3 : 7.1);
 
-        doc.text(
-          "Learning Analytics",
-          textX,
-          containerY + (compact ? 7.4 : 12.2),
-        );
+        doc.text("Powered by Spectropy", textX, containerY + (compact ? 7.2 : 11.2));
       };
 
       // =========================================================
@@ -4166,37 +4167,32 @@ export default function SchoolOwnerDashboard({ onBack }) {
         setFill(COLORS.navy);
         doc.rect(0, 0, pageWidth, headerHeight, "F");
 
-        setFill(COLORS.blue);
-        doc.rect(0, headerHeight - 2.5, pageWidth, 2.5, "F");
-
         // School logo
-        const schoolLogoBoxX = pageMargin;
+        const schoolLogoBoxX = pageMargin - 3;
         const schoolLogoBoxY = 4;
         const schoolLogoBoxSize = 22;
 
         setFill(COLORS.white);
-
-        doc.roundedRect(
-          schoolLogoBoxX,
-          schoolLogoBoxY,
-          schoolLogoBoxSize,
-          schoolLogoBoxSize,
-          3,
-          3,
-          "F",
+        setDraw([194, 213, 238]);
+        doc.setLineWidth(0.35);
+        doc.circle(
+          schoolLogoBoxX + schoolLogoBoxSize / 2,
+          schoolLogoBoxY + schoolLogoBoxSize / 2,
+          schoolLogoBoxSize / 2,
+          "FD",
         );
 
         let schoolLogoLoaded = false;
 
-        if (school?.logo_url) {
+        if (circularSchoolLogo) {
           try {
             doc.addImage(
-              school.logo_url,
+              circularSchoolLogo,
               "PNG",
-              schoolLogoBoxX + 2,
-              schoolLogoBoxY + 2,
-              schoolLogoBoxSize - 4,
-              schoolLogoBoxSize - 4,
+              schoolLogoBoxX + 1,
+              schoolLogoBoxY + 1,
+              schoolLogoBoxSize - 2,
+              schoolLogoBoxSize - 2,
             );
 
             schoolLogoLoaded = true;
@@ -4233,13 +4229,13 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const mainBrandWidth = 58;
 
         drawSpectropyLockup({
-          rightX: pageWidth - pageMargin,
+          rightX: pageWidth - pageMargin + 7,
           centerY: 15,
           compact: false,
         });
 
         // School identity
-        const schoolTextX = schoolLogoBoxX + schoolLogoBoxSize + 6;
+        const schoolTextX = schoolLogoBoxX + schoolLogoBoxSize + 4;
 
         const brandContainerX = pageWidth - pageMargin - mainBrandWidth;
 
@@ -4248,8 +4244,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const schoolNameFontSize = fitTextToWidth({
           text: schoolName,
           maxWidth: schoolTextMaximumWidth,
-          maximumFontSize: 16,
-          minimumFontSize: 9,
+          maximumFontSize: 12,
+          minimumFontSize: 7,
           fontStyle: "bold",
         });
 
@@ -4260,20 +4256,30 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.text(schoolName, schoolTextX, 12);
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
+        doc.setFontSize(7);
         doc.setTextColor(219, 234, 254);
 
-        doc.text(
-          `Area: ${safeText(
-            school?.area,
-            "Not Set",
-          )}  �  IIT Foundation Academic Analytics`,
-          schoolTextX,
-          20,
-          {
-            maxWidth: schoolTextMaximumWidth,
-          },
-        );
+        doc.text(`Area: ${safeText(school?.area, "Not Set")}`, schoolTextX, 19, {
+          maxWidth: schoolTextMaximumWidth,
+        });
+        doc.text(`Academic Year: ${safeText(school?.academic_year, "Not Set")}`, schoolTextX, 25, {
+          maxWidth: schoolTextMaximumWidth,
+        });
+
+        setText(COLORS.white);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text("Batch-Wise Performance Report", pageWidth / 2, 15, {
+          align: "center",
+          maxWidth: pageWidth - 116,
+        });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(219, 234, 254);
+        doc.text("Batch cognitive analysis and subject performance overview", pageWidth / 2, 21, {
+          align: "center",
+          maxWidth: pageWidth - 116,
+        });
       };
 
       // =========================================================
@@ -4285,9 +4291,6 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
         setFill(COLORS.navy);
         doc.rect(0, 0, pageWidth, 17, "F");
-
-        setFill(COLORS.blue);
-        doc.rect(0, 15, pageWidth, 2, "F");
 
         setText(COLORS.white);
         doc.setFont("helvetica", "bold");
@@ -4352,31 +4355,6 @@ export default function SchoolOwnerDashboard({ onBack }) {
       drawMainHeader();
 
       let y = 38;
-
-      // Report title
-      setText(COLORS.blue);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-
-      doc.text("IIT FOUNDATION", pageMargin, y);
-
-      y += 6;
-
-      setText(COLORS.dark);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(17);
-
-      doc.text("Batch-Wise Performance Report", pageMargin, y);
-
-      setText(COLORS.gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.8);
-
-      doc.text(
-        "Consolidated exam performance and subject-level academic analysis",
-        pageMargin,
-        y + 5.5,
-      );
 
       // Batch badge
       const batchBadgeWidth = 34;
@@ -7309,9 +7287,12 @@ export default function SchoolOwnerDashboard({ onBack }) {
           mastery: toPercent(totals.correct, totals.total),
           lots: toPercent(totals.lotsCorrect, totals.lotsTotal),
           hots: toPercent(totals.hotsCorrect, totals.hotsTotal),
+          lotsQuestions: totals.lotsTotal,
+          hotsQuestions: totals.hotsTotal,
           questions: totals.questionKeys.size,
           skills: bloomSkills.map((skill) => ({
             skill,
+            total: totals.skills[skill].total,
             percentage: toPercent(
               totals.skills[skill].correct,
               totals.skills[skill].total,
@@ -7321,7 +7302,51 @@ export default function SchoolOwnerDashboard({ onBack }) {
       });
     })();
 
-    const handleDownloadCognitivePdf = () => {
+    const handleDownloadCognitivePdf = async () => {
+      const makeCircularLogo = (source) => new Promise((resolve) => {
+        if (!source || typeof Image === "undefined" || typeof document === "undefined") {
+          resolve(null);
+          return;
+        }
+
+        const image = new Image();
+        if (!String(source).startsWith("data:")) image.crossOrigin = "anonymous";
+        image.onload = () => {
+          try {
+            const size = 512;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const context = canvas.getContext("2d");
+            if (!context) {
+              resolve(null);
+              return;
+            }
+
+            const scale = Math.max(size / image.width, size / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            context.clearRect(0, 0, size, size);
+            context.save();
+            context.beginPath();
+            context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            context.clip();
+            context.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+            context.restore();
+            resolve(canvas.toDataURL("image/png"));
+          } catch (error) {
+            console.warn("Unable to crop a cognitive report logo into a circle:", error);
+            resolve(null);
+          }
+        };
+        image.onerror = () => resolve(null);
+        image.src = source;
+      });
+
+      const [circularSchoolLogo, circularSpectropyLogo] = await Promise.all([
+        makeCircularLogo(school?.logo_url),
+        makeCircularLogo(spectropyLogoUrl),
+      ]);
       const doc = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -7343,6 +7368,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
       const setText = (color) => doc.setTextColor(color[0], color[1], color[2]);
       const setFill = (color) => doc.setFillColor(color[0], color[1], color[2]);
       const setDraw = (color) => doc.setDrawColor(color[0], color[1], color[2]);
+      const colorFromHex = (value) => {
+        const hex = String(value || "#2563eb").replace("#", "");
+        return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+      };
       const safeText = (value, fallback = "-") => {
         if (value === null || value === undefined || value === "") return fallback;
         return String(value);
@@ -7358,103 +7387,85 @@ export default function SchoolOwnerDashboard({ onBack }) {
         return fontSize;
       };
       const drawSpectropyBrand = () => {
-        const containerWidth = 51;
-        const containerHeight = 15;
-        const containerX = pageWidth - margin - containerWidth;
-        const containerY = 3.5;
-        const logoPanelWidth = 16;
-        const logoSize = 10;
-
+        const logoCenterX = pageWidth - margin - 35;
+        const logoCenterY = 11.5;
+        const logoSize = 14.5;
         setFill(white);
         setDraw([190, 211, 239]);
-        doc.setLineWidth(0.25);
-        doc.roundedRect(containerX, containerY, containerWidth, containerHeight, 3, 3, "FD");
-
-        const dividerX = containerX + logoPanelWidth;
-        setDraw([218, 226, 238]);
-        doc.line(dividerX, containerY + 2.5, dividerX, containerY + containerHeight - 2.5);
-
-        const logoX = containerX + (logoPanelWidth - logoSize) / 2;
-        const logoY = containerY + (containerHeight - logoSize) / 2;
-        let logoLoaded = false;
-
-        try {
-          doc.addImage(spectropyLogoUrl, "PNG", logoX, logoY, logoSize, logoSize);
-          logoLoaded = true;
-        } catch (error) {
-          console.warn("Failed to load Spectropy logo:", error);
+        doc.setLineWidth(0.4);
+        doc.circle(logoCenterX, logoCenterY, 8.5, "FD");
+        const logoX = logoCenterX - logoSize / 2;
+        const logoY = logoCenterY - logoSize / 2;
+        const logoLoaded = Boolean(circularSpectropyLogo);
+        if (circularSpectropyLogo) {
+          doc.addImage(circularSpectropyLogo, "PNG", logoX, logoY, logoSize, logoSize);
         }
 
         if (!logoLoaded) {
           setFill(blue);
-          doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, "F");
+          doc.circle(logoCenterX, logoCenterY, 6.2, "F");
           setText(white);
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(6);
-          doc.text("S", logoX + logoSize / 2, logoY + 6.7, { align: "center" });
+          doc.setFontSize(8);
+          doc.text("S", logoCenterX, logoCenterY + 2.7, { align: "center" });
         }
 
-        const textX = dividerX + 3;
-        setText([91, 121, 164]);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(4.3);
-        doc.text("Powered by", textX, containerY + 4.2);
-
-        setText(titleColor);
+        const textX = logoCenterX + 11;
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(7.5);
-        doc.text("SPECTROPY", textX, containerY + 9.1);
-
-        setText([113, 135, 166]);
+        doc.setFontSize(10.5);
+        setText(white);
+        doc.text("SPECTROPY", textX, 10.5);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(3.6);
-        doc.text("Learning Analytics", textX, containerY + 12.5);
+        doc.setFontSize(6.2);
+        doc.setTextColor(219, 234, 254);
+        doc.text("Powered by Spectropy", textX, 16);
       };
       const drawReportHeader = () => {
         setFill(background);
         doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-        const headerHeight = 22;
+        const headerHeight = 24;
         setFill(titleColor);
         doc.rect(0, 0, pageWidth, headerHeight, "F");
-        setFill(blue);
-        doc.rect(0, headerHeight - 2, pageWidth, 2, "F");
 
-        const schoolLogoBoxX = margin;
-        const schoolLogoBoxY = 3;
-        const schoolLogoBoxSize = 16;
+        const schoolLogoBoxX = margin + 3.5;
+        const schoolLogoBoxY = 11.5;
+        const schoolLogoRadius = 8.5;
         setFill(white);
-        doc.roundedRect(schoolLogoBoxX, schoolLogoBoxY, schoolLogoBoxSize, schoolLogoBoxSize, 2.5, 2.5, "F");
+        setDraw([190, 211, 239]);
+        doc.setLineWidth(0.4);
+        doc.circle(schoolLogoBoxX, schoolLogoBoxY, schoolLogoRadius, "FD");
 
-        let schoolLogoLoaded = false;
-        if (school?.logo_url) {
-          try {
-            doc.addImage(school.logo_url, "PNG", schoolLogoBoxX + 1.5, schoolLogoBoxY + 1.5, schoolLogoBoxSize - 3, schoolLogoBoxSize - 3);
-            schoolLogoLoaded = true;
-          } catch (error) {
-            console.warn("Failed to load school logo:", error);
-          }
+        const schoolLogoLoaded = Boolean(circularSchoolLogo);
+        if (circularSchoolLogo) {
+          doc.addImage(
+            circularSchoolLogo,
+            "PNG",
+            schoolLogoBoxX - schoolLogoRadius,
+            schoolLogoBoxY - schoolLogoRadius,
+            schoolLogoRadius * 2,
+            schoolLogoRadius * 2,
+          );
         }
 
         const schoolName = safeText(school?.school_name, "Unknown School").toUpperCase();
         if (!schoolLogoLoaded) {
           setFill([239, 246, 255]);
-          doc.circle(schoolLogoBoxX + schoolLogoBoxSize / 2, schoolLogoBoxY + schoolLogoBoxSize / 2, 5.2, "F");
+          doc.circle(schoolLogoBoxX, schoolLogoBoxY, 6.2, "F");
           setText(blue);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(9);
-          doc.text(schoolName.charAt(0) || "S", schoolLogoBoxX + schoolLogoBoxSize / 2, schoolLogoBoxY + 10.8, { align: "center" });
+          doc.text(schoolName.charAt(0) || "S", schoolLogoBoxX, schoolLogoBoxY + 3, { align: "center" });
         }
 
         drawSpectropyBrand();
 
-        const schoolTextX = schoolLogoBoxX + schoolLogoBoxSize + 5;
-        const brandX = pageWidth - margin - 51;
+        const schoolTextX = schoolLogoBoxX + schoolLogoRadius + 5;
         const schoolNameFontSize = fitTextToWidth({
           text: schoolName,
-          maxWidth: brandX - schoolTextX - 7,
-          maximumFontSize: 13,
-          minimumFontSize: 8,
+          maxWidth: 72,
+          maximumFontSize: 11,
+          minimumFontSize: 6.5,
         });
 
         setText(white);
@@ -7463,108 +7474,76 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.text(schoolName, schoolTextX, 9);
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
+        doc.setFontSize(8);
         doc.setTextColor(219, 234, 254);
         doc.text(`Area: ${safeText(school?.area, "Not Set")}`, schoolTextX, 15);
-      };
-      const addTitle = (text) => {
-        setText(titleColor);
+        doc.setFontSize(7.5);
+        doc.text(`Academic Year: ${safeText(school?.academic_year, "Not Set")}`, schoolTextX, 20.5);
+
+        setText(white);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        doc.text(text, margin, y);
-        y += 8;
-      };
-      const addSectionTitle = (text) => {
-        y += 3;
-        setText(titleColor);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.text(text, margin, y);
-        y += 5;
+        doc.setFontSize(15);
+        doc.text("COGNITIVE ANALYSIS REPORT", pageWidth / 2, 10.5, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.4);
+        doc.setTextColor(219, 234, 254);
+        const subtitle = "EXAM-WISE & SUBJECT-WISE Cognitive Analysis";
+        const subtitleCenter = pageWidth / 2;
+        const subtitleY = 17;
+        const subtitleWidth = doc.getTextWidth(subtitle);
+        const subtitleHalfWidth = subtitleWidth / 2;
+        const subtitleLineGap = 2.5;
+        const subtitleLineLength = 16;
+        setDraw([147, 183, 227]);
+        doc.setLineWidth(0.35);
+        doc.line(
+          subtitleCenter - subtitleHalfWidth - subtitleLineGap - subtitleLineLength,
+          subtitleY - 1,
+          subtitleCenter - subtitleHalfWidth - subtitleLineGap,
+          subtitleY - 1,
+        );
+        doc.line(
+          subtitleCenter + subtitleHalfWidth + subtitleLineGap,
+          subtitleY - 1,
+          subtitleCenter + subtitleHalfWidth + subtitleLineGap + subtitleLineLength,
+          subtitleY - 1,
+        );
+        setText(white);
+        doc.text(subtitle, subtitleCenter, subtitleY, { align: "center" });
       };
       const addExamInfoStrip = () => {
+        const cardY = y - 3;
         setFill(white);
         setDraw(border);
         doc.setLineWidth(0.25);
-        doc.roundedRect(margin, y, pageWidth - margin * 2, 11, 2.5, 2.5, "FD");
+        doc.roundedRect(margin, cardY, pageWidth - margin * 2, 14, 2.5, 2.5, "FD");
 
         setText(mutedColor);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(5.7);
-        doc.text("CLASS & SECTION", margin + 5, y + 4);
-        doc.text("EXAM PATTERN", margin + 57, y + 4);
-        doc.text("EXAM DATE", margin + 150, y + 4);
-        doc.text("STUDENTS", margin + 205, y + 4);
-        doc.text("QUESTIONS", margin + 237, y + 4);
+        doc.setFontSize(6.7);
+        doc.text("CLASS & SECTION", margin + 5, cardY + 4.5);
+        doc.text("EXAM PATTERN", margin + 57, cardY + 4.5);
+        doc.text("EXAM DATE", margin + 150, cardY + 4.5);
+        doc.text("STUDENTS", margin + 205, cardY + 4.5);
+        doc.text("QUESTIONS", margin + 237, cardY + 4.5);
 
         setText(titleColor);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(7.4);
-        doc.text(`${currentOMRExam.class}-${currentOMRExam.section || "-"}`, margin + 5, y + 8.5);
-        doc.text(safeText(currentOMRExam.exam_pattern), margin + 57, y + 8.5);
+        doc.setFontSize(9.4);
+        doc.text(`${currentOMRExam.class}-${currentOMRExam.section || "-"}`, margin + 5, cardY + 11.5);
+        doc.text(safeText(currentOMRExam.exam_pattern), margin + 57, cardY + 11.5);
         doc.text(
           currentOMRExam.exam_date ? new Date(currentOMRExam.exam_date).toLocaleDateString() : "-",
           margin + 150,
-          y + 8.5,
+          cardY + 11.5,
         );
-        doc.text(String(results.length || totalStudents || 0), margin + 205, y + 8.5);
-        doc.text(String(bloomTaggedQuestions.length), margin + 237, y + 8.5);
+        doc.text(String(results.length || totalStudents || 0), margin + 205, cardY + 11.5);
+        doc.text(String(bloomTaggedQuestions.length), margin + 237, cardY + 11.5);
 
         y += 20;
       };
-      const ensureSpace = (height = 35) => {
-        if (y + height > 190) {
-          doc.addPage();
-          drawReportHeader();
-          y = 29;
-        }
-      };
-      const autoTable = (options) => {
-        doc.autoTable({
-          startY: y,
-          margin: { left: margin, right: margin },
-          theme: "grid",
-          styles: {
-            font: "helvetica",
-            fontSize: 8,
-            cellPadding: 2,
-            textColor: [15, 23, 42],
-            lineColor: border,
-            lineWidth: 0.2,
-          },
-          headStyles: {
-            fillColor: titleColor,
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-          },
-          alternateRowStyles: {
-            fillColor: background,
-          },
-          ...options,
-        });
-        y = doc.lastAutoTable.finalY + 7;
-      };
-
       const pageContentTop = 29;
       const availableWidth = pageWidth - margin * 2;
-      const columnGap = 6;
-      const columnWidth = (availableWidth - columnGap) / 2;
-      const tableBaseStyles = {
-        font: "helvetica",
-        fontSize: 7.2,
-        cellPadding: 1.35,
-        textColor: [15, 23, 42],
-        lineColor: border,
-        lineWidth: 0.16,
-        overflow: "linebreak",
-      };
-      const tableHeadStyles = {
-        fillColor: titleColor,
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 7,
-        cellPadding: 1.35,
-      };
       const addPageHeading = (title, showExamInfo = true) => {
         drawReportHeader();
         y = pageContentTop;
@@ -7582,261 +7561,493 @@ export default function SchoolOwnerDashboard({ onBack }) {
           addExamInfoStrip();
         }
       };
-      const drawCompactTitle = (text, x, topY) => {
+      addPageHeading("Exam-wise Cognitive Analysis");
+
+      const drawCard = ({
+        x,
+        top,
+        width,
+        height,
+        title,
+        value,
+        detail,
+        accent,
+        fill,
+        titleFontSize = 5.7,
+        valueFontSize = 12,
+        detailFontSize = 5.1,
+        compactTitleFontSize = 4.7,
+        compactValueFontSize = 8.5,
+        compactDetailFontSize = 4.2,
+        valueY,
+      }) => {
+        setFill(white);
+        setDraw(border);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(x, top, width, height, 2, 2, "FD");
+        setFill(fill);
+        doc.roundedRect(x + 0.7, top + 0.7, width - 1.4, height - 1.4, 1.6, 1.6, "F");
+        setFill(accent);
+        doc.roundedRect(x + 0.7, top + 0.7, 2, height - 1.4, 0.8, 0.8, "F");
+        setText(mutedColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(height < 18 ? compactTitleFontSize : titleFontSize);
+        doc.text(title, x + 4, top + (height < 18 ? 4.2 : 5));
+        setText(accent);
+        doc.setFontSize(height < 18 ? compactValueFontSize : valueFontSize);
+        doc.text(String(value), x + 4, top + (valueY ?? (height < 18 ? 10.7 : 13)));
+        setText(mutedColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(height < 18 ? compactDetailFontSize : detailFontSize);
+        doc.text(
+          String(detail || ""),
+          height < 18 ? x + width - 3 : x + 4,
+          height < 18 ? top + 10.7 : top + height - 3.2,
+          { align: height < 18 ? "right" : "left", maxWidth: width - 8 },
+        );
+      };
+      const drawPanel = (title, x, top, width, height, titleFontSize = 7.3) => {
+        setFill(white);
+        setDraw(border);
+        doc.roundedRect(x, top, width, height, 2, 2, "FD");
         setText(titleColor);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(9.5);
-        doc.text(text, x, topY);
+        doc.setFontSize(titleFontSize);
+        doc.text(title, x + 4, top + 5.5);
       };
-      const compactTable = ({ title, x, startY, tableWidth, head, body, columnStyles = {}, didParseCell }) => {
-        drawCompactTitle(title, x, startY);
-        doc.autoTable({
-          startY: startY + 3.8,
-          margin: { left: x, right: pageWidth - x - tableWidth },
-          tableWidth,
-          theme: "grid",
-          head,
-          body,
-          styles: tableBaseStyles,
-          headStyles: tableHeadStyles,
-          alternateRowStyles: { fillColor: background },
-          columnStyles,
-          didParseCell,
-        });
-        return doc.lastAutoTable.finalY;
-      };
-      const colorLotsHotsCells = (data, lotsIndex, hotsIndex) => {
-        if (data.section !== "body") return;
-        if (data.column.index === lotsIndex) {
-          data.cell.styles.textColor = green;
-          data.cell.styles.fontStyle = "bold";
-        }
-        if (data.column.index === hotsIndex) {
-          data.cell.styles.textColor = orange;
-          data.cell.styles.fontStyle = "bold";
-        }
-      };
-
-      addPageHeading("IIT Foundation Cognitive Analysis & Subject Wise Analysis Reports");
-      setText(titleColor);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text("Exam-wise Cognitive Analysis", margin, y);
-      y += 6;
-
-      autoTable({
-        startY: y,
-        head: [["Metric", "Value", "Description"]],
-        body: bloomSummaryCards.map((card) => [card.title, card.value, card.helper]),
-        styles: { ...tableBaseStyles, fontSize: 6.8, cellPadding: 1.05 },
-        headStyles: tableHeadStyles,
-        columnStyles: {
-          0: { cellWidth: 64 },
-          1: { cellWidth: 34, halign: "center", fontStyle: "bold" },
-          2: { cellWidth: availableWidth - 98 },
-        },
-      });
-
-      const firstRowY = y;
-      const distributionEndY = compactTable({
-        title: "Question Distribution by Bloom Skill",
-        x: margin,
-        startY: firstRowY,
-        tableWidth: columnWidth,
-        head: [["Bloom Skill", "Questions", "%"]],
-        body: bloomDistribution.map((item) => [item.skill, item.count, `${item.percentage}%`]),
-        columnStyles: {
-          0: { cellWidth: 55 },
-          1: { cellWidth: 32, halign: "center" },
-          2: { cellWidth: columnWidth - 87, halign: "center" },
-        },
-      });
-      const performanceEndY = compactTable({
-        title: "Overall Performance by Bloom Skill",
-        x: margin + columnWidth + columnGap,
-        startY: firstRowY,
-        tableWidth: columnWidth,
-        head: [["Bloom Skill", "Performance %"]],
-        body: bloomPerformance.map((item) => [item.skill, `${item.percentage}%`]),
-        columnStyles: {
-          0: { cellWidth: 76 },
-          1: { cellWidth: columnWidth - 76, halign: "center", fontStyle: "bold" },
-        },
-      });
-
-      const secondRowY = Math.max(distributionEndY, performanceEndY) + 8;
-      const balanceEndY = compactTable({
-        title: "Cognitive Balance",
-        x: margin,
-        startY: secondRowY,
-        tableWidth: columnWidth,
-        head: [["Level", "Questions", "%"]],
-        body: [
-          ["LOTS (Remember + Understand)", cognitiveBalance.lotsCount, `${cognitiveBalance.lotsPercentage}%`],
-          ["HOTS (Apply + Analyse + Evaluate + Create)", cognitiveBalance.hotsCount, `${cognitiveBalance.hotsPercentage}%`],
-        ],
-        columnStyles: {
-          0: { cellWidth: 78 },
-          1: { cellWidth: 30, halign: "center" },
-          2: { cellWidth: columnWidth - 108, halign: "center", fontStyle: "bold" },
-        },
-        didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 0) {
-            data.cell.styles.textColor = data.row.index === 0 ? green : orange;
-            data.cell.styles.fontStyle = "bold";
+      const drawSkillBars = (items, x, top, width, valueKey, detailKey) => {
+        const rowGap = 5.2;
+        items.forEach((item, index) => {
+          const rowY = top + index * rowGap;
+          const color = colorFromHex(bloomDistributionColors[item.skill]);
+          setText(mutedColor);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.4);
+          doc.text(item.skill, x, rowY + 2.7);
+          const barX = x + 23;
+          const barWidth = width - 55;
+          setFill([235, 240, 247]);
+          doc.roundedRect(barX, rowY + 0.85, barWidth, 1.8, 0.8, 0.8, "F");
+          const percentage = Math.max(0, Math.min(100, Number(item[valueKey]) || 0));
+          if (percentage > 0) {
+            setFill(color);
+            doc.roundedRect(barX, rowY + 0.85, barWidth * percentage / 100, 1.8, 0.8, 0.8, "F");
           }
-        },
-      });
-      const studentEndY = compactTable({
-        title: "Student Distribution by Cognitive Level",
-        x: margin + columnWidth + columnGap,
-        startY: secondRowY,
-        tableWidth: columnWidth,
-        head: [["Level", "Range", "Students", "%"]],
-        body: studentCognitiveDistribution.map((band) => [
-          band.label,
-          band.range,
-          band.count,
-          `${band.percentage}%`,
-        ]),
-        columnStyles: {
-          0: { cellWidth: 58 },
-          1: { cellWidth: 31, halign: "center" },
-          2: { cellWidth: 28, halign: "center" },
-          3: { cellWidth: columnWidth - 117, halign: "center", fontStyle: "bold" },
-        },
+          setText(titleColor);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.4);
+          const detail = detailKey ? ` (${item[detailKey] ?? ""})` : "";
+          doc.text(`${percentage}%${detail}`, x + width, rowY + 2.7, { align: "right" });
+        });
+      };
+
+      const summaryGap = 1.75;
+      const summaryWidth = (availableWidth - summaryGap * 4) / 5;
+      const summaryTop = y - 5;
+      const summaryColors = [blue, green, orange, [99, 102, 241], [236, 72, 153]];
+      const summaryFills = [[239, 246, 255], [236, 253, 245], [255, 247, 237], [238, 242, 255], [253, 242, 248]];
+      bloomSummaryCards.forEach((card, index) => {
+        drawCard({
+          x: margin + index * (summaryWidth + summaryGap),
+          top: summaryTop,
+          width: summaryWidth,
+          height: 23,
+          title: card.title,
+          value: card.value,
+          detail: card.helper,
+          accent: summaryColors[index],
+          fill: summaryFills[index],
+          titleFontSize: 6.7,
+          valueFontSize: 16,
+          detailFontSize: 6.1,
+        });
       });
 
-      const insightsY = Math.max(balanceEndY, studentEndY) + 8;
-      compactTable({
-        title: "Key Insights",
-        x: margin,
-        startY: insightsY,
-        tableWidth: availableWidth,
-        head: [["Insight"]],
-        body: cognitiveKeyInsights.map((insight) => [insight.text]),
-        columnStyles: {
-          0: { cellWidth: availableWidth },
-        },
+      const panelTop = y + 22;
+      const panelGap = 1;
+      const panelWidth = (availableWidth - panelGap) / 2;
+      drawPanel("Question Distribution by Bloom Skill", margin, panelTop, panelWidth, 41, 9.3);
+      drawSkillBars(
+        bloomDistribution.map((item) => ({ ...item, detail: `${item.count} questions` })),
+        margin + 4,
+        panelTop + 9,
+        panelWidth - 8,
+        "percentage",
+        "detail",
+      );
+      drawPanel("Overall Performance by Bloom Skill", margin + panelWidth + panelGap, panelTop, panelWidth, 41, 9.3);
+      drawSkillBars(
+        bloomPerformance,
+        margin + panelWidth + panelGap + 4,
+        panelTop + 9,
+        panelWidth - 8,
+        "percentage",
+      );
+
+      const balanceTop = panelTop + 44;
+      drawPanel("Cognitive Balance", margin, balanceTop, panelWidth, 30, 9.3);
+      drawCard({
+        x: margin + 4,
+        top: balanceTop + 8,
+        width: panelWidth / 2 - 6,
+        height: 19,
+        title: "LOTS · Remember + Understand",
+        value: `${cognitiveBalance.lotsPercentage}%`,
+        detail: `${cognitiveBalance.lotsCount} questions`,
+        accent: green,
+        fill: [236, 253, 245],
+        valueFontSize: 14,
+        valueY: 12,
+        compactTitleFontSize: 6.2,
+        compactValueFontSize: 12.5,
+        compactDetailFontSize: 5.7,
+      });
+      drawCard({
+        x: margin + panelWidth / 2 + 1,
+        top: balanceTop + 8,
+        width: panelWidth / 2 - 6,
+        height: 19,
+        title: "HOTS · Apply through Create",
+        value: `${cognitiveBalance.hotsPercentage}%`,
+        detail: `${cognitiveBalance.hotsCount} questions`,
+        accent: orange,
+        fill: [255, 247, 237],
+        valueFontSize: 14,
+        valueY: 12,
+        compactTitleFontSize: 6.2,
+        compactValueFontSize: 12.5,
+        compactDetailFontSize: 5.7,
+      });
+
+      const studentPanelX = margin + panelWidth + panelGap;
+      drawPanel("Student Distribution by Cognitive Level", studentPanelX, balanceTop, panelWidth, 30, 9.3);
+      const bandGap = 2;
+      const bandWidth = (panelWidth - 10 - bandGap * 3) / 4;
+      studentCognitiveDistribution.forEach((band, index) => {
+        const colors = [[139, 92, 246], green, [245, 158, 11], [244, 63, 94]];
+        const color = colors[index] || blue;
+        drawCard({
+          x: studentPanelX + 4 + index * (bandWidth + bandGap),
+          top: balanceTop + 8,
+          width: bandWidth,
+          height: 19,
+          title: band.label,
+          value: band.count,
+          detail: `${band.percentage}% · ${band.range}`,
+          accent: color,
+          fill: [248, 250, 252],
+          valueFontSize: 14,
+          valueY: 12,
+          compactTitleFontSize: 6.2,
+          compactValueFontSize: 12.5,
+          compactDetailFontSize: 5.7,
+        });
+      });
+
+      const lowerPanelTop = balanceTop + 32;
+      const lowerPanelHeight = 48;
+      drawPanel("Cognitive Performance Trend", margin, lowerPanelTop, panelWidth, lowerPanelHeight, 9.3);
+      drawPanel("Key Insights", studentPanelX, lowerPanelTop, panelWidth, lowerPanelHeight, 9.3);
+
+      const chartLeft = margin + 10;
+      const chartTop = lowerPanelTop + 14;
+      const chartWidth = panelWidth - 15;
+      const chartHeight = 25;
+      const xAt = (index) =>
+        chartLeft + (cognitivePerformanceTrend.length <= 1
+          ? chartWidth / 2
+          : (chartWidth * index) / (cognitivePerformanceTrend.length - 1));
+      const yAt = (value) => chartTop + chartHeight - (value / 100) * chartHeight;
+      if (cognitivePerformanceTrend.length === 0) {
+        setText(mutedColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.text("No Bloom-tagged exam history available.", margin + 5, chartTop + 12);
+      } else {
+        [0, 50, 100].forEach((value) => {
+          const gridY = yAt(value);
+          setText(mutedColor);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(5.5);
+          doc.text(`${value}%`, chartLeft - 2, gridY + 1.2, { align: "right" });
+          setDraw([229, 235, 243]);
+          doc.setLineWidth(0.15);
+          doc.line(chartLeft, gridY, chartLeft + chartWidth, gridY);
+        });
+
+        const series = [
+          { key: "lots", label: "LOTS", color: green },
+          { key: "hots", label: "HOTS", color: orange },
+        ];
+        series.forEach((item, seriesIndex) => {
+          const legendX = margin + 8 + seriesIndex * 23;
+          setFill(item.color);
+          doc.circle(legendX, lowerPanelTop + 10, 1.1, "F");
+          setText(titleColor);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(4.8);
+          doc.text(item.label, legendX + 2.5, lowerPanelTop + 11.1);
+
+          let previousPoint = null;
+          cognitivePerformanceTrend.forEach((entry, index) => {
+            const value = entry[item.key];
+            if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+              previousPoint = null;
+              return;
+            }
+            const point = { x: xAt(index), y: yAt(Number(value)) };
+            if (previousPoint) {
+              setDraw(item.color);
+              doc.setLineWidth(0.7);
+              doc.line(previousPoint.x, previousPoint.y, point.x, point.y);
+            }
+            setFill(item.color);
+            doc.circle(point.x, point.y, 0.8, "F");
+            previousPoint = point;
+          });
+        });
+
+        const labelStep = Math.max(1, Math.ceil(cognitivePerformanceTrend.length / 6));
+        cognitivePerformanceTrend.forEach((entry, index) => {
+          if (index % labelStep !== 0 && index !== cognitivePerformanceTrend.length - 1) return;
+          setText(mutedColor);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(4.8);
+          doc.text(String(entry.label || `Exam ${index + 1}`).slice(0, 11), xAt(index), chartTop + chartHeight + 4, { align: "center" });
+        });
+      }
+
+      cognitiveKeyInsights.slice(0, 4).forEach((insight, index) => {
+        const insightColor = [blue, green, orange, [139, 92, 246]][index];
+        const top = lowerPanelTop + 10 + index * 8.5;
+        setFill(insightColor);
+        doc.roundedRect(studentPanelX + 4, top + 0.4, 1.4, 6.6, 0.6, 0.6, "F");
+        setText(titleColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.1);
+        doc.text(doc.splitTextToSize(insight.text, panelWidth - 14).slice(0, 2), studentPanelX + 8, top + 3.4);
       });
 
       doc.addPage();
-      addPageHeading("", false);
+      addPageHeading("Subject-wise Bloom's Taxonomy Analysis", false);
+
+      const subjectCardGap = 3;
+      const subjectCardWidth = (availableWidth - subjectCardGap * 3) / 4;
+      const subjectColors = [blue, green, orange, [139, 92, 246]];
+      const subjectCardTop = y;
+
+      // Four subject summary cards lead the subject-wise analysis page.
+      subjectBloomReportData.forEach((subject, index) => {
+        const x = margin + index * (subjectCardWidth + subjectCardGap);
+        const accent = subjectColors[index % subjectColors.length];
+        setFill(white);
+        setDraw(border);
+        doc.roundedRect(x, subjectCardTop, subjectCardWidth, 27, 2, 2, "FD");
+        setFill(accent);
+        doc.roundedRect(x + 0.6, subjectCardTop + 0.6, 1.5, 25.8, 0.6, 0.6, "F");
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        doc.text(subject.subject, x + 4, subjectCardTop + 6);
+        setText(mutedColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.text("Cognitive Mastery", x + subjectCardWidth - 4, subjectCardTop + 6, { align: "right" });
+        setText(accent);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(subject.questions > 0 ? `${subject.mastery}%` : "N/A", x + 4, subjectCardTop + 16);
+        setText(green);
+        doc.setFontSize(8.2);
+        doc.text(`LOTS ${subject.lotsQuestions ? `${subject.lots}%` : "N/A"}`, x + 4, subjectCardTop + 22);
+        setText(orange);
+        doc.text(`HOTS ${subject.hotsQuestions ? `${subject.hots}%` : "N/A"}`, x + subjectCardWidth - 4, subjectCardTop + 22, { align: "right" });
+        setText(mutedColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.3);
+        doc.text(`Questions  ${subject.questions}`, x + 4, subjectCardTop + 25.3);
+      });
+
+      const heatmapHeadingY = subjectCardTop + 34;
       setText(titleColor);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text("Subject-wise Bloom's Taxonomy Analysis", margin, y);
-      y += 6;
+      doc.setFontSize(10);
+      doc.text("Subject x Bloom's Skill Mastery (Heatmap)", margin, heatmapHeadingY);
+      const heatmapTop = heatmapHeadingY + 4;
+      const subjectColumnWidth = 34;
+      const skillWidth = (availableWidth - subjectColumnWidth) / bloomSkills.length;
+      const tableHeaderHeight = 8;
+      const tableRowHeight = 9;
+      const tableColors = {
+        strong: [37, 190, 143],
+        developing: [194, 218, 63],
+        support: [255, 143, 73],
+        critical: [246, 94, 130],
+      };
 
-      autoTable({
-        startY: y,
-        head: [["Subject", "Cognitive Mastery", "LOTS", "HOTS", "Questions"]],
-        body: subjectBloomReportData.map((subject) => [
-          subject.subject,
-          `${subject.mastery}%`,
-          `${subject.lots}%`,
-          `${subject.hots}%`,
-          subject.questions,
-        ]),
-        styles: { ...tableBaseStyles, fontSize: 7.2, cellPadding: 1.35 },
-        headStyles: tableHeadStyles,
-        columnStyles: {
-          0: { cellWidth: 64 },
-          1: { cellWidth: 54, halign: "center", fontStyle: "bold" },
-          2: { cellWidth: 45, halign: "center", fontStyle: "bold" },
-          3: { cellWidth: 45, halign: "center", fontStyle: "bold" },
-          4: { cellWidth: availableWidth - 208, halign: "center" },
-        },
-        didParseCell: (data) => colorLotsHotsCells(data, 2, 3),
+      setFill([248, 250, 252]);
+      setDraw(border);
+      doc.rect(margin, heatmapTop, availableWidth, tableHeaderHeight, "FD");
+      setText(titleColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.1);
+      doc.text("Subject", margin + 3, heatmapTop + 5.3);
+      bloomSkills.forEach((skill, skillIndex) => {
+        const x = margin + subjectColumnWidth + skillIndex * skillWidth;
+        doc.text(skill, x + skillWidth / 2, heatmapTop + 5.3, { align: "center" });
       });
 
-      const subjectStrengthGapRows = subjectBloomReportData.map((subject) => {
-        const sortedSkills = [...subject.skills].sort(
-          (first, second) => second.percentage - first.percentage,
-        );
-        const strongestSkill = sortedSkills[0] || { skill: "-", percentage: 0 };
-        const weakestSkill =
-          [...subject.skills]
-            .filter((skill) => Number(skill.percentage) > 0)
-            .sort((first, second) => first.percentage - second.percentage)[0] ||
-          sortedSkills[sortedSkills.length - 1] ||
-          { skill: "-", percentage: 0 };
+      if (subjectBloomReportData.length === 0) {
+        setText(mutedColor);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text("Subject-wise cognitive analysis is unavailable because Bloom-tagged subject data was not found.", margin, heatmapTop + 15);
+      }
 
-        return [
-          subject.subject,
-          `${strongestSkill.skill} (${strongestSkill.percentage}%)`,
-          `${weakestSkill.skill} (${weakestSkill.percentage}%)`,
-          `${Math.max(0, strongestSkill.percentage - weakestSkill.percentage)}%`,
-        ];
+      subjectBloomReportData.forEach((subject, subjectIndex) => {
+        const top = heatmapTop + tableHeaderHeight + subjectIndex * tableRowHeight;
+        setFill(white);
+        setDraw(border);
+        doc.rect(margin, top, subjectColumnWidth, tableRowHeight, "FD");
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.7);
+        doc.text(subject.subject, margin + 3, top + 5.8);
+
+        subject.skills.forEach((skill, skillIndex) => {
+          const x = margin + subjectColumnWidth + skillIndex * skillWidth;
+          const value = Math.max(0, Math.min(100, Number(skill.percentage) || 0));
+          const hasData = skill.total > 0;
+          const fillColor = value >= 80
+            ? tableColors.strong
+            : value >= 60
+              ? tableColors.developing
+              : value >= 40
+                ? tableColors.support
+                : tableColors.critical;
+          setFill(hasData ? fillColor : [248, 250, 252]);
+          setDraw(white);
+          doc.rect(x, top, skillWidth, tableRowHeight, "FD");
+          setText(hasData && value < 60 ? white : titleColor);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9.2);
+          doc.text(`${value}%`, x + skillWidth / 2, top + 5.8, { align: "center" });
+        });
       });
 
-      const subjectRowY = y;
-      const strengthGapEndY = compactTable({
-        title: "Subject-wise Cognitive Strengths & Gaps",
-        x: margin,
-        startY: subjectRowY,
-        tableWidth: columnWidth,
-        head: [["Subject", "Strength", "Gap", "Difference"]],
-        body: subjectStrengthGapRows,
-        columnStyles: {
-          0: { cellWidth: 34 },
-          1: { cellWidth: 44 },
-          2: { cellWidth: 40 },
-          3: { cellWidth: columnWidth - 118, halign: "center", fontStyle: "bold" },
-        },
+      const hotsLotsPanelTop = heatmapTop + tableHeaderHeight + subjectBloomReportData.length * tableRowHeight + 4;
+      const hotsLotsPanelHeight = 41;
+      drawPanel("Subject-wise HOTS vs LOTS", margin, hotsLotsPanelTop, availableWidth, hotsLotsPanelHeight, 10.3);
+      const hotsLotsBarX = margin + 38;
+      const hotsLotsBarWidth = availableWidth - 45;
+      subjectBloomReportData.forEach((subject, index) => {
+        const rowTop = hotsLotsPanelTop + 10 + index * 6;
+        setText(titleColor);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.2);
+        doc.text(subject.subject, margin + 4, rowTop + 3.5);
+        setFill([235, 240, 247]);
+        doc.roundedRect(hotsLotsBarX, rowTop, hotsLotsBarWidth, 4.2, 1.5, 1.5, "F");
+        const totalCognitiveQuestions = subject.lotsQuestions + subject.hotsQuestions;
+        if (totalCognitiveQuestions > 0) {
+          const lotsShare = Math.round((subject.lotsQuestions / totalCognitiveQuestions) * 100);
+          const hotsShare = 100 - lotsShare;
+          const lotsWidth = hotsLotsBarWidth * lotsShare / 100;
+          const hotsWidth = hotsLotsBarWidth - lotsWidth;
+          if (lotsWidth > 0) {
+            setFill(green);
+            doc.roundedRect(hotsLotsBarX, rowTop, lotsWidth, 4.2, 1.5, 1.5, "F");
+          }
+          if (hotsWidth > 0) {
+            setFill(orange);
+            doc.rect(hotsLotsBarX + lotsWidth, rowTop, hotsWidth, 4.2, "F");
+          }
+          setText(white);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.6);
+          if (lotsWidth > 10) doc.text(`${lotsShare}%`, hotsLotsBarX + lotsWidth / 2, rowTop + 3, { align: "center" });
+          if (hotsWidth > 10) doc.text(`${hotsShare}%`, hotsLotsBarX + lotsWidth + hotsWidth / 2, rowTop + 3, { align: "center" });
+        } else {
+          setText(mutedColor);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(4.6);
+          doc.text("No tagged questions", hotsLotsBarX + 2, rowTop + 3);
+        }
       });
-      const heatmapEndY = compactTable({
-        title: "Subject x Bloom Skill Mastery",
-        x: margin + columnWidth + columnGap,
-        startY: subjectRowY,
-        tableWidth: columnWidth,
-        head: [["Subject", ...bloomSkills]],
-        body: subjectBloomReportData.map((subject) => [
-          subject.subject,
-          ...subject.skills.map((skill) => `${skill.percentage}%`),
-        ]),
-        columnStyles: {
-          0: { cellWidth: 33 },
-          1: { cellWidth: 20, halign: "center" },
-          2: { cellWidth: 23, halign: "center" },
-          3: { cellWidth: 19, halign: "center" },
-          4: { cellWidth: 20, halign: "center" },
-          5: { cellWidth: 20, halign: "center" },
-          6: { cellWidth: columnWidth - 135, halign: "center" },
-        },
-        didParseCell: (data) => {
-          if (data.section !== "body" || data.column.index === 0) return;
-          const percentage = Number(String(data.cell.raw).replace("%", ""));
-          if (percentage >= 50) data.cell.styles.fillColor = [216, 239, 65];
-          else if (percentage >= 30) data.cell.styles.fillColor = [255, 143, 76];
-          else data.cell.styles.fillColor = [248, 96, 129];
-          data.cell.styles.fontStyle = "bold";
-          data.cell.styles.halign = "center";
-        },
-      });
+      const legendY = hotsLotsPanelTop + hotsLotsPanelHeight - 3;
+      setFill(green);
+      doc.circle(margin + 5, legendY - 1, 1.2, "F");
+      setText(titleColor);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
+      doc.text("LOTS (Remember + Understand)", margin + 8, legendY);
+      setFill(orange);
+      doc.circle(margin + 53, legendY - 1, 1.2, "F");
+      doc.text("HOTS (Apply + Analyse + Evaluate + Create)", margin + 56, legendY);
 
-      const lotsHotsY = Math.max(strengthGapEndY, heatmapEndY) + 8;
-      compactTable({
-        title: "Subject-wise LOTS vs HOTS",
-        x: margin,
-        startY: lotsHotsY,
-        tableWidth: availableWidth,
-        head: [["Subject", "Cognitive Mastery", "LOTS %", "HOTS %", "Questions"]],
-        body: subjectBloomReportData.map((subject) => [
-          subject.subject,
-          `${subject.mastery}%`,
-          `${subject.lots}%`,
-          `${subject.hots}%`,
-          subject.questions,
-        ]),
-        columnStyles: {
-          0: { cellWidth: 65 },
-          1: { cellWidth: 55, halign: "center", fontStyle: "bold" },
-          2: { cellWidth: 55, halign: "center", fontStyle: "bold" },
-          3: { cellWidth: 55, halign: "center", fontStyle: "bold" },
-          4: { cellWidth: availableWidth - 230, halign: "center" },
-        },
-        didParseCell: (data) => colorLotsHotsCells(data, 2, 3),
+      const strengthHeadingY = hotsLotsPanelTop + hotsLotsPanelHeight + 9;
+      setText(titleColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Subject-wise Cognitive Strengths & Gaps", margin, strengthHeadingY);
+      const strengthCardsTop = strengthHeadingY + 3;
+      const formatReportSkillList = (skills) => {
+        if (skills.length <= 1) return skills[0] || "";
+        if (skills.length === 2) return `${skills[0]} and ${skills[1]}`;
+        return `${skills.slice(0, -1).join(", ")} and ${skills[skills.length - 1]}`;
+      };
+      subjectBloomReportData.forEach((subject, index) => {
+        const x = margin + index * (subjectCardWidth + subjectCardGap);
+        const measuredSkills = subject.skills.filter((skill) => skill.total > 0);
+        const strongestSkills = [...measuredSkills]
+          .sort((first, second) => second.percentage - first.percentage)
+          .slice(0, 2)
+          .map((skill) => skill.skill);
+        const gapSkills = [...measuredSkills]
+          .filter((skill) => skill.percentage < 60)
+          .sort((first, second) => first.percentage - second.percentage)
+          .slice(0, 2)
+          .map((skill) => skill.skill);
+        const subjectLabel = subject.subject === "Maths" ? "Mathematics" : subject.subject;
+        const strengthText = strongestSkills.length
+          ? `Strong in ${formatReportSkillList(strongestSkills)}`
+          : "No Bloom skill strength available";
+        const gapText = gapSkills.length
+          ? `Needs focus on ${formatReportSkillList(gapSkills)}`
+          : "Consistent performance";
+        const cardColors = {
+          Physics: { header: [240, 234, 255], title: [143, 109, 246] },
+          Chemistry: { header: [234, 251, 246], title: [16, 168, 120] },
+          Maths: { header: [234, 244, 255], title: [22, 129, 255] },
+          Mathematics: { header: [234, 244, 255], title: [22, 129, 255] },
+          Biology: { header: [255, 240, 245], title: [251, 91, 123] },
+        };
+        const colors = cardColors[subject.subject] || {
+          header: [238, 246, 255],
+          title: blue,
+        };
+        setFill(white);
+        setDraw(border);
+        doc.roundedRect(x, strengthCardsTop, subjectCardWidth, 24, 2, 2, "FD");
+        setFill(colors.header);
+        doc.roundedRect(x + 0.4, strengthCardsTop + 0.4, subjectCardWidth - 0.8, 7.5, 1.5, 1.5, "F");
+        setText(colors.title);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(subjectLabel, x + subjectCardWidth / 2, strengthCardsTop + 5.4, { align: "center" });
+
+        const drawInsight = (text, color, top) => {
+          setFill(color);
+          doc.circle(x + 5.5, top - 0.8, 2.1, "F");
+          setText(titleColor);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.1);
+          const lines = doc.splitTextToSize(text, subjectCardWidth - 13).slice(0, 2);
+          doc.text(lines, x + 9, top);
+        };
+
+        drawInsight(strengthText, green, strengthCardsTop + 12.5);
+        drawInsight(gapText, [255, 95, 125], strengthCardsTop + 19.5);
       });
 
       doc.save(`Cognitive_Analysis_${currentOMRExam.id}.pdf`);
@@ -12026,11 +12237,11 @@ export default function SchoolOwnerDashboard({ onBack }) {
           })}
         </div>
         <div
-          className="subject-bloom-panels"
-          style={{
-            display: "grid",
-            gap: "14px",
-            marginTop: "14px",
+        className="subject-bloom-panels"
+        style={{
+          display: "grid",
+          gap: "14px",
+          marginTop: "14px",
           }}
         >
         <div
@@ -12359,9 +12570,9 @@ export default function SchoolOwnerDashboard({ onBack }) {
                   <div
                     style={{
                       color: "#0b1f5c",
-                      fontSize: "13px",
+                      fontSize: "11px",
                       fontWeight: "800",
-                      textAlign: "right",
+                      textAlign: "left",
                     }}
                   >
                     {item.label}
@@ -12384,7 +12595,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                         placeItems: "center",
                         background: "#34c99a",
                         color: "#0b1f5c",
-                        fontSize: "12px",
+                        fontSize: "10px",
                         fontWeight: "900",
                       }}
                     >
@@ -12398,7 +12609,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                         placeItems: "center",
                         background: "#ff8a45",
                         color: "#0b1f5c",
-                        fontSize: "12px",
+                        fontSize: "10px",
                         fontWeight: "900",
                       }}
                     >
@@ -12416,7 +12627,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
                 gap: "14px",
                 marginTop: "14px",
                 color: "#0b1f5c",
-                fontSize: "11px",
+                fontSize: "9px",
                 fontWeight: "700",
               }}
             >

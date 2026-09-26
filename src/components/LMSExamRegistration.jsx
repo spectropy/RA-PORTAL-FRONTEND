@@ -25,6 +25,64 @@ const createSubjectsForGroup = (group) =>
 const DEFAULT_SUBJECTS = createSubjectsForGroup("PCMB");
  
 const normalizeAnswer = (value) => (value || "").toString().trim().toUpperCase();
+const parseOptions = (value) => {
+  const normalized = normalizeAnswer(value);
+  if (!normalized) return { options: [], valid: true };
+
+  // LMS exports may join selected options with spaces, commas, pipes, or other
+  // punctuation. Only A-D are valid MCQ options; duplicates are malformed.
+  const compact = normalized.replace(/[\s,|;/+&-]+/g, "");
+  if (!/^[A-D]+$/.test(compact)) return { options: [], valid: false };
+  const options = [...compact];
+  return {
+    options: [...new Set(options)].sort(),
+    valid: new Set(options).size === options.length,
+  };
+};
+
+const scoreAnswer = (response, key, correctMark, wrongMark) => {
+  const parsedKey = parseOptions(key);
+  const parsedResponse = parseOptions(response);
+  if (parsedKey.valid && parsedResponse.valid && parsedKey.options.length) {
+    const keyOptions = parsedKey.options;
+    const responseOptions = parsedResponse.options;
+    const exact = responseOptions.length === keyOptions.length &&
+      responseOptions.every((option, index) => option === keyOptions[index]);
+    if (exact) return correctMark;
+
+    // Partial credit is only for keys with multiple correct options.
+    if (keyOptions.length === 1) return wrongMark;
+
+    const includesWrongOption = responseOptions.some((option) => !keyOptions.includes(option));
+    if (includesWrongOption || !responseOptions.length) return wrongMark;
+
+    const correctSelections = responseOptions.length;
+    if (keyOptions.length === 4) {
+      return correctSelections === 3 ? correctMark * 0.75
+        : correctSelections === 2 ? correctMark * 0.5
+        : correctMark * 0.25;
+    }
+    if (keyOptions.length === 3) {
+      return correctSelections === 2 ? correctMark * 0.5 : correctMark * 0.25;
+    }
+    if (keyOptions.length === 2 && correctSelections === 1) return correctMark * 0.25;
+    return wrongMark;
+  }
+
+  // Numerical answers can be exported as either numbers or numeric strings.
+  const numericKey = Number(normalizeAnswer(key));
+  const numericResponse = Number(normalizeAnswer(response));
+  if (
+    normalizeAnswer(key) !== "" &&
+    normalizeAnswer(response) !== "" &&
+    Number.isFinite(numericKey) &&
+    Number.isFinite(numericResponse)
+  ) {
+    return numericResponse === numericKey ? correctMark : wrongMark;
+  }
+
+  return wrongMark;
+};
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -414,12 +472,11 @@ function buildAttemptedStudent(row, answerKeyRow, questionPlan) {
     let marks = 0;
  
     if (response) {
-      if (response === key) {
+      marks = scoreAnswer(response, key, question.correctMark, question.wrongMark);
+      if (marks > 0) {
         status = "correct";
-        marks = question.correctMark;
       } else {
         status = "incorrect";
-        marks = question.wrongMark;
       }
     }
  
