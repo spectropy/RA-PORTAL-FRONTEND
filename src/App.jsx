@@ -13,7 +13,6 @@ import SchoolOwnerDashboard from "./components/SchoolOwnerDashboard";
 import TeacherDashboard from "./components/TeacherDashboard";
 import StudentDashboard from "./components/StudentDashboard";
 import ParentDashboard from "./components/ParentDashboard";
-import GuestPage from "./components/GuestPage";
 import portalLogo from "./assets/logo.png";
 
 // ─── Role → Route map ────────────────────────────────────────────
@@ -23,7 +22,6 @@ const ROLE_ROUTES = {
   TEACHER: "/teacher",
   STUDENT: "/student",
   PARENT: "/parent",
-  GUEST: "/guest",
 };
 
 const ROLE_ICONS = {
@@ -95,7 +93,7 @@ function AppShell() {
   const headerRoleLabel =
     {
       SPECTROPY_ADMIN: "SPECTROPY ADMIN",
-      SCHOOL_OWNER: "SCHOOL OWNER",
+      SCHOOL_OWNER: user?.name || "SCHOOL OWNER",
       TEACHER: "TEACHER LOGIN",
       STUDENT: "STUDENT LOGIN",
     }[user?.role] || user?.username || user?.name || user?.role;
@@ -243,7 +241,10 @@ function AppShell() {
             path="/school/*"
             element={
               <Protected user={user} allowedRole="SCHOOL_OWNER">
-                <SchoolOwnerDashboard onBack={handleLogout} />
+                <SchoolOwnerDashboard
+                  onBack={handleLogout}
+                  isCsm={user?.name === "CSM"}
+                />
               </Protected>
             }
           />
@@ -274,16 +275,6 @@ function AppShell() {
             element={
               <Protected user={user} allowedRole="PARENT">
                 <ParentDashboard onBack={handleLogout} />
-              </Protected>
-            }
-          />
-
-          {/* Guest */}
-          <Route
-            path="/guest"
-            element={
-              <Protected user={user} allowedRole="GUEST">
-                <GuestPage onBack={handleLogout} />
               </Protected>
             }
           />

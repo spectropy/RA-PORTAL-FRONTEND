@@ -46,6 +46,7 @@ import chemistryicon from "../assets/icons/chemistry.png";
 import mathsicon from "../assets/icons/Maths.png";
 import biologyicon from "../assets/icons/biology.png";
 import { generatePDF as generateNewReportPDF } from "./downloadpdf";
+import { assignTeacherToClass, createTeacher } from "../api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -83,8 +84,14 @@ const OWNER_TABS = [
   },
 ];
 
-export default function SchoolOwnerDashboard({ onBack }) {
+export default function SchoolOwnerDashboard({ onBack, isCsm = false }) {
   const [school, setSchool] = useState(null);
+  const [newTeacher, setNewTeacher] = useState({ teacherId: "", name: "", contact: "", email: "" });
+  const [addTeacherLoading, setAddTeacherLoading] = useState(false);
+  const [addTeacherError, setAddTeacherError] = useState("");
+  const [teacherAssignment, setTeacherAssignment] = useState({ teacherId: "", class: "", section: "", subject: "" });
+  const [assignTeacherLoading, setAssignTeacherLoading] = useState(false);
+  const [assignTeacherError, setAssignTeacherError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [classAverages, setClassAverages] = useState([]);
@@ -113,6 +120,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
   const [resultsLoading, setResultsLoading] = useState(false); // ?? New loading state
   const analysisDownloadButtonRef = useRef(null);
   const studentResultsDownloadButtonRef = useRef(null);
+  const downloadIITAnalysisPDFRef = useRef(null);
   const [examResultView, setExamResultView] = useState("cognitive");
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
 
@@ -949,7 +957,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
         // White text on badge
         doc.setTextColor(0, 0, 0);
-        doc.setFontSize(14);
+        doc.setFontSize(16);
         doc.text(`PROGRAM : ${fullProgram}`, 200, 41);
         //drawRoundedBox(4, "STRENGTH SUBJECT", strength.charAt(0).toUpperCase() + strength.slice(1), 14);
         //drawRoundedBox(5, "WEAK SUBJECT", weak.charAt(0).toUpperCase() + weak.slice(1), 14);
@@ -1457,18 +1465,51 @@ export default function SchoolOwnerDashboard({ onBack }) {
               <h3 className="school-overview-section-title" style={{ margin: 0 }}>
                 School Cognitive Analysis
               </h3>
-              <button
-                type="button"
-                className="exam-results-header-download"
-                onClick={() => setView("school-subject-bloom-analytics")}
-                style={{
-                  minHeight: "34px",
-                  padding: "8px 12px",
-                  fontSize: "12px",
-                }}
-              >
-                Subject Analysis
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="exam-results-header-download"
+                  onClick={() => setView("school-subject-bloom-analytics")}
+                  style={{
+                    minHeight: "34px",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                  }}
+                >
+                  Subject Analysis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadIITAnalysisPDFRef.current?.()}
+                  disabled={examLoading}
+                  style={{
+                    minHeight: "34px",
+                    padding: "8px 12px",
+                    background: examLoading ? "#94a3b8" : "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: examLoading ? "not-allowed" : "pointer",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {examLoading ? (
+                    <>
+                      <Loader2 size={15} />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={15} />
+                      Download PDF
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div
@@ -1890,15 +1931,125 @@ export default function SchoolOwnerDashboard({ onBack }) {
   };
   // renderMetricButtons replaced by sidebar tab navigation
 
+  const openAddTeacherForm = () => {
+    if (!isCsm) return;
+    const schoolPrefix = String(schoolId || "").toUpperCase();
+    const teacherNumbers = (school?.teachers || [])
+      .map((teacher) => {
+        const match = String(teacher.teacher_id || "").match(
+          new RegExp(`^${schoolPrefix}(\\d+)$`),
+        );
+        return match ? Number(match[1]) : 0;
+      })
+      .filter((number) => number > 0);
+    const nextNumber = Math.max(0, ...teacherNumbers) + 1;
+    setNewTeacher({
+      teacherId: `${schoolPrefix}${String(nextNumber).padStart(2, "0")}`,
+      name: "",
+      contact: "",
+      email: "",
+    });
+    setAddTeacherError("");
+    navigate("/school/teacher/add");
+  };
+
+  const handleAddTeacherSubmit = async (event) => {
+    event.preventDefault();
+    if (!isCsm || !schoolId) return;
+    setAddTeacherLoading(true);
+    setAddTeacherError("");
+    try {
+      const result = await createTeacher({
+        school_id: schoolId,
+        teacher_id: newTeacher.teacherId,
+        name: newTeacher.name.trim(),
+        contact: newTeacher.contact.trim(),
+        email: newTeacher.email.trim(),
+      });
+      const createdTeacher = result?.teacher || result?.data?.teacher || result?.data || result || {};
+      const addedTeacher = {
+        id: createdTeacher.id || Date.now(),
+        school_id: schoolId,
+        teacher_id: newTeacher.teacherId,
+        name: newTeacher.name.trim(),
+        contact: newTeacher.contact.trim() || "-",
+        email: newTeacher.email.trim() || "-",
+        teacher_assignments: [],
+      };
+      setSchool((current) => ({
+        ...current,
+        teachers: [...(current?.teachers || []), addedTeacher],
+      }));
+      setNewTeacher({ teacherId: "", name: "", contact: "", email: "" });
+      navigate("/school/overview");
+    } catch (error) {
+      setAddTeacherError(error.message || "Failed to add teacher.");
+    } finally {
+      setAddTeacherLoading(false);
+    }
+  };
+
+  const handleAssignTeacherSubmit = async (event) => {
+    event.preventDefault();
+    if (!isCsm || !schoolId) return;
+    const selectedTeacher = (school?.teachers || []).find((teacher) => teacher.teacher_id === teacherAssignment.teacherId);
+    if (selectedTeacher?.teacher_assignments?.some((assignment) =>
+      assignment.class === teacherAssignment.class &&
+      assignment.section === teacherAssignment.section &&
+      assignment.subject === teacherAssignment.subject
+    )) {
+      setAssignTeacherError("This teacher is already assigned to that class, section, and subject.");
+      return;
+    }
+    setAssignTeacherLoading(true);
+    setAssignTeacherError("");
+    try {
+      const { teacherId, ...assignmentFields } = teacherAssignment;
+      const result = await assignTeacherToClass({
+        school_id: schoolId,
+        teacher_id: teacherId,
+        ...assignmentFields,
+      });
+      const addedAssignment = {
+        id: result?.data?.id || result?.id || Date.now(),
+        class: teacherAssignment.class,
+        section: teacherAssignment.section,
+        subject: teacherAssignment.subject,
+      };
+      setSchool((current) => ({
+        ...current,
+        teachers: (current?.teachers || []).map((teacher) => teacher.teacher_id === teacherAssignment.teacherId
+          ? { ...teacher, teacher_assignments: [...(teacher.teacher_assignments || []), addedAssignment] }
+          : teacher),
+      }));
+      setTeacherAssignment({ teacherId: "", class: "", section: "", subject: "" });
+      navigate("/school/overview");
+    } catch (error) {
+      setAssignTeacherError(error.message || "Failed to assign teacher.");
+    } finally {
+      setAssignTeacherLoading(false);
+    }
+  };
+
   const renderTeachersTable = () => {
     const teacherList = Array.isArray(school?.teachers) ? school.teachers : [];
-
+    const teacherHeading = (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <h3 className="school-overview-section-title" style={{ margin: 0 }}>
+          <UserRoundCog size={18} /> Teachers ({teacherList.length})
+        </h3>
+        {isCsm && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={openAddTeacherForm} className="btn btn-primary btn-sm">Add Teacher</button>
+            <button type="button" onClick={() => { setAssignTeacherError(""); navigate("/school/teacher/assign"); }} className="btn btn-outline btn-sm">Assign Teacher</button>
+          </div>
+        )}
+      </div>
+    );
     if (teacherList.length === 0) {
       return (
         <section className="school-overview-section">
-          <h3 className="school-overview-section-title">
-            <UserRoundCog size={18} /> Teachers (0)
-          </h3>
+          {teacherHeading}
           <p
             style={{
               color: "var(--color-text-muted)",
@@ -1914,18 +2065,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
     return (
       <section className="school-overview-section">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <h3 className="school-overview-section-title" style={{ margin: 0 }}>
-            <UserRoundCog size={18} /> Teachers ({teacherList.length})
-          </h3>
-        </div>
+        {teacherHeading}
         <div style={{ overflowX: "auto" }}>
           <table
             className="detail-inner-table overview-teachers-table"
@@ -1967,9 +2107,16 @@ export default function SchoolOwnerDashboard({ onBack }) {
                         style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
                       >
                         {t.teacher_assignments.map((a, i) => (
-                          <span key={i} className="assignment-tag">
+                          <button
+                            key={i}
+                            type="button"
+                            className="assignment-tag"
+                            onClick={() => navigate(`/school/teacher/${encodeURIComponent(t.teacher_id)}/allotments`)}
+                            title={`View allotments for ${t.name || t.teacher_id}`}
+                            style={{ border: 0, cursor: "pointer", font: "inherit" }}
+                          >
                             {a.class} � {a.section} � {a.subject}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     ) : (
@@ -1993,6 +2140,114 @@ export default function SchoolOwnerDashboard({ onBack }) {
     );
   };
 
+  const renderCsmAddTeacherPage = () => (
+    <div className="animate-fade-in">
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-header-title">Add Teacher</h1>
+          <p className="page-header-subtitle">Register a teacher for {schoolName}.</p>
+        </div>
+        <button type="button" className="btn btn-outline" onClick={() => navigate("/school/overview")}>Back to Overview</button>
+      </div>
+      <div className="page-content">
+        <section className="school-overview-section" style={{ maxWidth: 720, margin: "0 auto" }}>
+          <form onSubmit={handleAddTeacherSubmit}>
+            <label className="form-label" htmlFor="csm-teacher-id">Teacher ID</label>
+            <input id="csm-teacher-id" className="form-input" value={newTeacher.teacherId} readOnly style={{ marginBottom: 12, background: "#f1f5f9" }} />
+            <label className="form-label" htmlFor="csm-teacher-name">Name *</label>
+            <input id="csm-teacher-name" className="form-input" value={newTeacher.name} onChange={(event) => setNewTeacher((current) => ({ ...current, name: event.target.value }))} required autoFocus style={{ marginBottom: 12 }} />
+            <label className="form-label" htmlFor="csm-teacher-contact">Contact</label>
+            <input id="csm-teacher-contact" className="form-input" value={newTeacher.contact} onChange={(event) => setNewTeacher((current) => ({ ...current, contact: event.target.value }))} style={{ marginBottom: 12 }} />
+            <label className="form-label" htmlFor="csm-teacher-email">Email</label>
+            <input id="csm-teacher-email" type="email" className="form-input" value={newTeacher.email} onChange={(event) => setNewTeacher((current) => ({ ...current, email: event.target.value }))} style={{ marginBottom: 12 }} />
+            {addTeacherError && <p role="alert" style={{ margin: "0 0 12px", color: "#dc2626", fontSize: 13 }}>{addTeacherError}</p>}
+            <button type="submit" className="btn btn-primary" disabled={addTeacherLoading}>{addTeacherLoading ? "Adding..." : "Add Teacher"}</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  );
+
+  const renderTeacherAllotmentsPage = () => {
+    const teacherIdFromPath = decodeURIComponent(location.pathname.split("/")[3] || "");
+    const teacher = (school?.teachers || []).find((item) => item.teacher_id === teacherIdFromPath);
+    const assignments = teacher?.teacher_assignments || [];
+    return (
+      <div className="animate-fade-in">
+        <div className="page-header">
+          <div className="page-header-left">
+            <h1 className="page-header-title">Teacher Allotments</h1>
+            <p className="page-header-subtitle">{teacher ? `${teacher.name} · ${teacher.teacher_id}` : "Teacher assignment details"}</p>
+          </div>
+          <button type="button" className="btn btn-outline" onClick={() => navigate("/school/overview")}>Back to Overview</button>
+        </div>
+        <div className="page-content">
+          <section className="school-overview-section">
+            {!teacher ? <p>Teacher not found.</p> : assignments.length ? (
+              <div style={{ overflowX: "auto" }}>
+                <table className="detail-inner-table" style={{ width: "100%" }}>
+                  <thead><tr><th>CLASS</th><th>SECTION</th><th>SUBJECT</th></tr></thead>
+                  <tbody>{assignments.map((assignment, index) => (
+                    <tr key={`${assignment.class}-${assignment.section}-${assignment.subject}-${index}`}>
+                      <td>{assignment.class || "-"}</td><td>{assignment.section || "-"}</td><td>{assignment.subject || "-"}</td>
+                    </tr>
+                  ) )}</tbody>
+                </table>
+              </div>
+            ) : <p style={{ color: "var(--color-text-muted)" }}>No allotments for this teacher.</p>}
+          </section>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCsmAssignTeacherPage = () => {
+    const classes = school?.classes || [];
+    const selectedClass = classes.find((item) => item.class === teacherAssignment.class && item.section === teacherAssignment.section);
+    const subjects = getActiveSubjects(selectedClass?.group);
+    const classOptions = [...new Set(classes.map((item) => item.class).filter(Boolean))];
+    const sectionOptions = [...new Set(classes.filter((item) => item.class === teacherAssignment.class).map((item) => item.section).filter(Boolean))];
+    return (
+      <div className="animate-fade-in">
+        <div className="page-header">
+          <div className="page-header-left">
+            <h1 className="page-header-title">Assign Teacher</h1>
+            <p className="page-header-subtitle">Assign a teacher to a class, section, and subject.</p>
+          </div>
+          <button type="button" className="btn btn-outline" onClick={() => navigate("/school/overview")}>Back to Overview</button>
+        </div>
+        <div className="page-content">
+          <section className="school-overview-section" style={{ maxWidth: 720, margin: "0 auto" }}>
+            <form onSubmit={handleAssignTeacherSubmit}>
+              <label className="form-label" htmlFor="assign-teacher-id">Teacher *</label>
+              <select id="assign-teacher-id" className="form-input" value={teacherAssignment.teacherId} onChange={(event) => setTeacherAssignment((current) => ({ ...current, teacherId: event.target.value }))} required style={{ marginBottom: 12 }}>
+                <option value="">Select a teacher</option>
+                {(school?.teachers || []).map((teacher) => <option key={teacher.teacher_id} value={teacher.teacher_id}>{teacher.name} ({teacher.teacher_id})</option>)}
+              </select>
+              <label className="form-label" htmlFor="assign-teacher-class">Class *</label>
+              <select id="assign-teacher-class" className="form-input" value={teacherAssignment.class} onChange={(event) => setTeacherAssignment((current) => ({ ...current, class: event.target.value, section: "", subject: "" }))} required style={{ marginBottom: 12 }}>
+                <option value="">Select a class</option>
+                {classOptions.map((className) => <option key={className} value={className}>{className}</option>)}
+              </select>
+              <label className="form-label" htmlFor="assign-teacher-section">Section *</label>
+              <select id="assign-teacher-section" className="form-input" value={teacherAssignment.section} onChange={(event) => setTeacherAssignment((current) => ({ ...current, section: event.target.value, subject: "" }))} required disabled={!teacherAssignment.class} style={{ marginBottom: 12 }}>
+                <option value="">Select a section</option>
+                {sectionOptions.map((section) => <option key={section} value={section}>{section}</option>)}
+              </select>
+              <label className="form-label" htmlFor="assign-teacher-subject">Subject *</label>
+              <select id="assign-teacher-subject" className="form-input" value={teacherAssignment.subject} onChange={(event) => setTeacherAssignment((current) => ({ ...current, subject: event.target.value }))} required disabled={!teacherAssignment.section} style={{ marginBottom: 12 }}>
+                <option value="">Select a subject</option>
+                {subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+              {assignTeacherError && <p role="alert" style={{ margin: "0 0 12px", color: "#dc2626", fontSize: 13 }}>{assignTeacherError}</p>}
+              <button type="submit" className="btn btn-primary" disabled={assignTeacherLoading || !school?.teachers?.length}>{assignTeacherLoading ? "Assigning..." : "Assign Teacher"}</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
   const renderIITBatches = () => {
     const analysis = computeOverallAnalysis();
     const totalStrength = Array.isArray(school.classes)
@@ -2009,7 +2264,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
     const globalActive = Array.from(globalActiveSubjects);
 
     // ?? Download Performance Analysis + Batches Table as Single A4 PDF
-    const downloadIITAnalysisPDF = () => {
+    const downloadIITAnalysisPDF = async () => {
       if (
         !school ||
         !Array.isArray(school.classes) ||
@@ -2018,6 +2273,46 @@ export default function SchoolOwnerDashboard({ onBack }) {
         alert("No data to export");
         return;
       }
+
+      const makeCircularLogo = (source) => new Promise((resolve) => {
+        if (!source || typeof Image === "undefined" || typeof document === "undefined") {
+          resolve(null);
+          return;
+        }
+        const image = new Image();
+        if (!String(source).startsWith("data:")) image.crossOrigin = "anonymous";
+        image.onload = () => {
+          try {
+            const size = 512;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const context = canvas.getContext("2d");
+            if (!context) {
+              resolve(null);
+              return;
+            }
+            const scale = Math.max(size / image.width, size / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            context.clearRect(0, 0, size, size);
+            context.beginPath();
+            context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            context.clip();
+            context.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (error) {
+            console.warn("Unable to crop a school report logo into a circle:", error);
+            resolve(null);
+          }
+        };
+        image.onerror = () => resolve(null);
+        image.src = source;
+      });
+      const [circularSchoolLogo, circularSpectropyLogo] = await Promise.all([
+        makeCircularLogo(school.logo_url),
+        makeCircularLogo(spectropyLogoUrl),
+      ]);
 
       const doc = new jsPDF({
         orientation: "landscape",
@@ -2059,6 +2354,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         greenBorder: [187, 247, 208],
 
         amber: [217, 119, 6],
+        orange: [249, 115, 22],
         lightAmber: [255, 251, 235],
         amberBorder: [253, 230, 138],
 
@@ -2193,7 +2489,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
           `${safeText(
             school.school_name,
             "Unknown School",
-          ).toUpperCase()} � IIT Foundation Performance Report`,
+          ).toUpperCase()} - School Cognitive & Performance Report`,
           pageMargin,
           pageHeight - 7,
         );
@@ -2338,6 +2634,458 @@ export default function SchoolOwnerDashboard({ onBack }) {
         "Unknown School",
       ).toUpperCase();
 
+      const schoolCognitive = computeSchoolCognitiveAnalysis(schoolCognitiveRows);
+      const schoolBloomSkills = [
+        "Remember",
+        "Understand",
+        "Apply",
+        "Analyse",
+        "Evaluate",
+        "Create",
+      ];
+      const schoolReportSubjects = ["Physics", "Chemistry", "Maths", "Biology"];
+      const schoolSubjectCognitive = Object.fromEntries(
+        schoolReportSubjects.map((subject) => [subject, {
+          subject,
+          correct: 0,
+          total: 0,
+          lotsCorrect: 0,
+          lotsTotal: 0,
+          hotsCorrect: 0,
+          hotsTotal: 0,
+          skills: Object.fromEntries(schoolBloomSkills.map((skill) => [skill, { correct: 0, total: 0 }]))
+        }]),
+      );
+      const normalizeReportSubject = (value) => {
+        const normalized = String(value || "").toLowerCase().replace(/[^a-z]/g, "");
+        if (normalized.includes("physics")) return "Physics";
+        if (normalized.includes("chem")) return "Chemistry";
+        if (normalized.includes("math")) return "Maths";
+        if (normalized.includes("bio")) return "Biology";
+        return "";
+      };
+      const normalizeReportSkill = (value) => {
+        const normalized = String(value || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+        if (["analysis", "analyze", "analyzing", "analysing"].includes(normalized)) return "Analyse";
+        return schoolBloomSkills.find((skill) => normalized === skill.toLowerCase() || normalized === `${skill.toLowerCase()}ing`) ||
+          "";
+      };
+      const parseReportQuestionResults = (value) => {
+        if (!value) return {};
+        if (typeof value === "string") {
+          try { return JSON.parse(value) || {}; } catch { return {}; }
+        }
+        return typeof value === "object" ? value : {};
+      };
+      schoolCognitiveRows.forEach((row) => {
+        Object.entries(parseReportQuestionResults(row.question_results)).forEach(([question, details]) => {
+          const skill = normalizeReportSkill(
+            details?.blooms_skill || details?.bloomsSkill || details?.["Blooms Skill"] || details?.["Bloom's Skill"],
+          );
+          if (!skill) return;
+          let subject = normalizeReportSubject(details?.subject || details?.Subject || details?.subject_name);
+          if (!subject) {
+            const questionNumber = parseInt(String(question).replace(/[^0-9]/g, ""), 10);
+            const subjectsForClass = getActiveSubjects(row.group || getGroupByClassSection(row.class, row.section));
+            if (questionNumber && subjectsForClass.length) {
+              const subjectIndex = Math.min(subjectsForClass.length - 1, Math.floor((questionNumber - 1) / Math.max(1, Math.ceil(100 / subjectsForClass.length))));
+              subject = subjectsForClass[subjectIndex];
+            }
+          }
+          const aggregate = schoolSubjectCognitive[subject];
+          if (!aggregate) return;
+          const status = String(details?.status || "").toLowerCase();
+          const answer = details?.option ?? details?.options;
+          const correct = status.includes("correct") && !status.includes("incorrect") || (!status && Number(details?.marks) > 0);
+          aggregate.total += 1;
+          aggregate.skills[skill].total += 1;
+          if (["Remember", "Understand"].includes(skill)) aggregate.lotsTotal += 1;
+          else aggregate.hotsTotal += 1;
+          if (correct) {
+            aggregate.correct += 1;
+            aggregate.skills[skill].correct += 1;
+            if (["Remember", "Understand"].includes(skill)) aggregate.lotsCorrect += 1;
+            else aggregate.hotsCorrect += 1;
+          }
+        });
+      });
+      const schoolSubjectRows = schoolReportSubjects.map((subject) => {
+        const item = schoolSubjectCognitive[subject];
+        const percent = (correct, total) => total ? Math.round(correct * 100 / total) : 0;
+        return {
+          subject: subject === "Maths" ? "Mathematics" : subject,
+          total: item.total,
+          mastery: percent(item.correct, item.total),
+          lots: percent(item.lotsCorrect, item.lotsTotal),
+          hots: percent(item.hotsCorrect, item.hotsTotal),
+          lotsTotal: item.lotsTotal,
+          hotsTotal: item.hotsTotal,
+          skills: schoolBloomSkills.map((skill) => ({
+            skill,
+            total: item.skills[skill].total,
+            percentage: percent(item.skills[skill].correct, item.skills[skill].total),
+          })),
+        };
+      });
+
+      const drawCenteredSubtitleWithRules = (subtitle, baselineY) => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        const subtitleWidth = doc.getTextWidth(subtitle);
+        const centerX = pageWidth / 2;
+        const ruleGap = 3;
+        const ruleLength = 18;
+        const ruleY = baselineY - 1.2;
+        setDraw([147, 197, 253]);
+        doc.setLineWidth(0.35);
+        doc.line(centerX - subtitleWidth / 2 - ruleGap - ruleLength, ruleY, centerX - subtitleWidth / 2 - ruleGap, ruleY);
+        doc.line(centerX + subtitleWidth / 2 + ruleGap, ruleY, centerX + subtitleWidth / 2 + ruleGap + ruleLength, ruleY);
+        setText(COLORS.white);
+        doc.text(subtitle, centerX, baselineY, { align: "center" });
+      };
+      const drawCognitivePageHeader = (title, subtitle) => {
+        setFill(COLORS.background);
+        doc.rect(0, 0, pageWidth, pageHeight, "F");
+        setFill(COLORS.navy);
+        doc.rect(0, 0, pageWidth, 28, "F");
+
+        const schoolLogoX = pageMargin + 1;
+        const schoolLogoY = 14;
+        setFill(COLORS.white);
+        setDraw(COLORS.blueBorder);
+        doc.circle(schoolLogoX, schoolLogoY, 9, "FD");
+        let schoolLogoLoaded = false;
+        if (circularSchoolLogo) {
+          try {
+            doc.addImage(circularSchoolLogo, "PNG", schoolLogoX - 7.5, schoolLogoY - 7.5, 15, 15);
+            schoolLogoLoaded = true;
+          } catch (error) {
+            console.warn("Failed to load school logo on cognitive report page:", error);
+          }
+        }
+        if (!schoolLogoLoaded) {
+          setText(COLORS.blue);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.text(schoolName.charAt(0) || "S", schoolLogoX, schoolLogoY + 3, { align: "center" });
+        }
+
+        setText(COLORS.white);
+        const cognitiveHeaderSchoolNameSize = fitTextToWidth({
+          text: schoolName,
+          maxWidth: 78,
+          maximumFontSize: 9.5,
+          minimumFontSize: 6.5,
+          fontStyle: "bold",
+        });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(cognitiveHeaderSchoolNameSize);
+        doc.text(schoolName, pageMargin + 13, 9);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.2);
+        doc.text(`Area: ${safeText(school?.area, "Not Set")}`, pageMargin + 13, 15);
+        doc.text(`Academic Year: ${safeText(school?.academic_year, "Not Set")}`, pageMargin + 13, 21);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(19.5);
+        doc.text("School Performance Report", pageWidth / 2, 14, { align: "center" });
+        drawCenteredSubtitleWithRules(
+          "School-wide academic performance and cognitive insights across classes and subjects",
+          21,
+        );
+
+        const brandLogoX = pageWidth - pageMargin - 33;
+        const brandLogoY = 14;
+        setFill(COLORS.white);
+        setDraw(COLORS.blueBorder);
+        doc.circle(brandLogoX, brandLogoY, 9, "FD");
+        try {
+          if (!circularSpectropyLogo) throw new Error("Circular Spectropy logo unavailable");
+          doc.addImage(circularSpectropyLogo, "PNG", brandLogoX - 7.5, brandLogoY - 7.5, 15, 15);
+        } catch (error) {
+          setFill(COLORS.blue);
+          doc.circle(brandLogoX, brandLogoY, 6.5, "F");
+          setText(COLORS.white);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.text("S", brandLogoX, brandLogoY + 3, { align: "center" });
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        setText(COLORS.white);
+        doc.text("SPECTROPY", pageWidth - pageMargin, 12, { align: "right" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.2);
+        doc.text("Powered by Spectropy", pageWidth - pageMargin + 3, 16, { align: "right" });
+
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(title, pageMargin, 36);
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text(subtitle, pageMargin, 42);
+      };
+      const drawCognitivePanel = (title, x, top, width, height, titleFontSize = 11) => {
+        drawCard({ x, y: top, width, height, fillColor: COLORS.white, borderColor: COLORS.border, radius: 2 });
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(titleFontSize);
+        doc.text(title, x + 4, top + 7);
+      };
+
+      // Page 1: school cognitive analysis.
+      drawCognitivePageHeader(
+        "School Cognitive Analysis",
+        "Bloom's skill mastery and cognitive performance across the school",
+      );
+      const cognitiveCards = [
+        ["OVERALL COGNITIVE MASTERY", `${schoolCognitive?.overall ?? 0}%`, "Across school exams", COLORS.blue, COLORS.lightBlue, COLORS.blueBorder],
+        ["LOWER ORDER THINKING", `${schoolCognitive?.lots ?? 0}%`, "Remember + Understand", COLORS.green, COLORS.lightGreen, COLORS.greenBorder],
+        ["HIGHER ORDER THINKING", `${schoolCognitive?.hots ?? 0}%`, "Apply through Create", COLORS.amber, COLORS.lightAmber, COLORS.amberBorder],
+        ["QUESTIONS ANALYSED", String(schoolCognitive?.questions ?? 0), "Unique Bloom-tagged questions", COLORS.purple, COLORS.lightPurple, COLORS.purpleBorder],
+        ["STUDENTS", String(schoolCognitive?.students ?? 0), "Unique students in school", COLORS.red, COLORS.lightRed, COLORS.redBorder],
+      ];
+      const cogGap = 3;
+      const cogCardWidth = (printableWidth - cogGap * 4) / 5;
+      cognitiveCards.forEach((card, index) => {
+        const x = pageMargin + index * (cogCardWidth + cogGap);
+        drawCard({ x, y: 48, width: cogCardWidth, height: 21, fillColor: card[4], borderColor: card[5], radius: 2 });
+        setFill(card[3]);
+        doc.roundedRect(x, 48, 2.2, 21, 1, 1, "F");
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.1);
+        doc.text(card[0], x + 4, 53.5, { maxWidth: cogCardWidth - 6 });
+        setText(COLORS.dark);
+        doc.setFontSize(16);
+        doc.text(card[1], x + 4, 61);
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.8);
+        doc.text(card[2], x + 4, 66, { maxWidth: cogCardWidth - 6 });
+      });
+      const cogPanelGap = 4;
+      const cogPanelWidth = (printableWidth - cogPanelGap * 2) / 3;
+      const cogColumns = [pageMargin, pageMargin + cogPanelWidth + cogPanelGap, pageMargin + 2 * (cogPanelWidth + cogPanelGap)];
+      const drawSkillDistribution = (x, top) => {
+        drawCognitivePanel("Question Distribution by Bloom's Skill", x, top, cogPanelWidth, 52);
+        (schoolCognitive?.distribution || []).forEach((item, index) => {
+          const rowY = top + 14 + index * 5.4;
+          setFill(COLORS[item.skill === "Remember" ? "blue" : item.skill === "Understand" ? "green" : item.skill === "Apply" ? "amber" : item.skill === "Analyse" ? "orange" : item.skill === "Evaluate" ? "red" : "purple"]);
+          doc.roundedRect(x + 4, rowY - 2.2, 2.5, 2.5, 0.6, 0.6, "F");
+          setText(COLORS.dark);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.3);
+          doc.text(item.skill, x + 9, rowY);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.3);
+          doc.text(`${item.percentage}% (${item.count})`, x + cogPanelWidth - 4, rowY, { align: "right" });
+        });
+      };
+      const drawSkillBars = (x, top) => {
+        drawCognitivePanel("Overall Performance by Bloom's Skill", x, top, cogPanelWidth, 52);
+        (schoolCognitive?.distribution || []).forEach((item, index) => {
+          const rowY = top + 15 + index * 5.3;
+          setText(COLORS.dark);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9.2);
+          doc.text(item.skill, x + 4, rowY);
+          doc.text(`${item.performance}%`, x + cogPanelWidth - 4, rowY, { align: "right" });
+          const barX = x + 31;
+          const barWidth = cogPanelWidth - 47;
+          const barY = rowY - 2.1;
+          setFill(COLORS.lightGray);
+          doc.roundedRect(barX, barY, barWidth, 2.2, 1, 1, "F");
+          const barColor = [COLORS.blue, COLORS.green, COLORS.amber, COLORS.orange, COLORS.red, COLORS.purple][index];
+          setFill(barColor);
+          doc.roundedRect(barX, barY, Math.max(0.5, barWidth * item.performance / 100), 2.2, 1, 1, "F");
+        });
+      };
+      drawSkillDistribution(cogColumns[0], 73);
+      drawSkillBars(cogColumns[1], 73);
+      drawCognitivePanel("Cognitive Balance", cogColumns[2], 73, cogPanelWidth, 52);
+      const balanceX = cogColumns[2] + 5;
+      const balanceY = 95;
+      const balanceWidth = cogPanelWidth - 10;
+      const lotsShare = schoolCognitive?.lotsQuestionPercentage || 0;
+      setFill(COLORS.green);
+      doc.roundedRect(balanceX, balanceY, balanceWidth * lotsShare / 100, 7, 2, 2, "F");
+      setFill(COLORS.amber);
+      doc.rect(balanceX + balanceWidth * lotsShare / 100, balanceY, balanceWidth * (100 - lotsShare / 1) / 100, 7, "F");
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(`LOTS ${lotsShare}%`, balanceX, 108);
+      doc.text(`HOTS ${schoolCognitive?.hotsQuestionPercentage || 0}%`, balanceX + balanceWidth, 108, { align: "right" });
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.6);
+      doc.text(`Mastery ${schoolCognitive?.lots ?? 0}%`, balanceX, 116);
+      doc.text(`Mastery ${schoolCognitive?.hots ?? 0}%`, balanceX + balanceWidth, 116, { align: "right" });
+
+      const lowerTop = 129;
+      drawCognitivePanel("Cognitive Performance Trend", cogColumns[0], lowerTop, cogPanelWidth, 63);
+      (schoolCognitive?.trend || []).slice(0, 6).forEach((entry, index) => {
+        const rowY = lowerTop + 15 + index * 8;
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(String(entry.label).slice(0, 18), cogColumns[0] + 4, rowY);
+        setText(COLORS.green);
+        doc.text(`LOTS ${entry.lots}%`, cogColumns[0] + cogPanelWidth - 47, rowY);
+        setText(COLORS.orange);
+        doc.text(`HOTS ${entry.hots}%`, cogColumns[0] + cogPanelWidth - 4, rowY, { align: "right" });
+      });
+      drawCognitivePanel("Student Distribution by Cognitive Level", cogColumns[1], lowerTop, cogPanelWidth, 63);
+      (schoolCognitive?.studentBands || []).forEach((band, index) => {
+        const rowY = lowerTop + 17 + index * 11;
+        setFill([COLORS.purple, COLORS.green, COLORS.amber, COLORS.red][index]);
+        doc.roundedRect(cogColumns[1] + 5, rowY - 4, 2.5, 6, 0.8, 0.8, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.1);
+        doc.text(`${band.label} (${band.range})`, cogColumns[1] + 10, rowY);
+        doc.text(`${band.percentage}% (${band.count})`, cogColumns[1] + cogPanelWidth - 4, rowY, { align: "right" });
+      });
+      drawCognitivePanel("Key Insights", cogColumns[2], lowerTop, cogPanelWidth, 63);
+      (schoolCognitive?.insights || []).forEach((insight, index) => {
+        const rowY = lowerTop + 17 + index * 15;
+        setFill([COLORS.blue, COLORS.green, COLORS.purple][index]);
+        doc.circle(cogColumns[2] + 5, rowY - 1.2, 1.4, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.2);
+        doc.text(doc.splitTextToSize(insight, cogPanelWidth - 14).slice(0, 2), cogColumns[2] + 9, rowY);
+      });
+      drawFooter();
+
+      // Page 2: school-wise subject cognitive analysis.
+      doc.addPage();
+      drawCognitivePageHeader(
+        "School-wise Subject Cognitive Analysis",
+        "Subject mastery, Bloom skill performance and HOTS versus LOTS balance",
+      );
+      const subjectGap = 3;
+      const subjectWidth = (printableWidth - subjectGap * 3) / 4;
+      const subjectPalette = [COLORS.blue, COLORS.amber, COLORS.purple, COLORS.green];
+      schoolSubjectRows.slice(0, 4).forEach((subject, index) => {
+        const x = pageMargin + index * (subjectWidth + subjectGap);
+        const color = subjectPalette[index];
+        drawCard({ x, y: 48, width: subjectWidth, height: 24, fillColor: COLORS.white, borderColor: COLORS.border, radius: 2 });
+        setFill(color);
+        doc.roundedRect(x, 48, 2.2, 24, 1, 1, "F");
+        setText(color);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(subject.subject, x + 5, 55);
+        setText(COLORS.dark);
+        doc.setFontSize(16);
+        doc.text(subject.total ? `${subject.mastery}%` : "N/A", x + 5, 64);
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.3);
+        doc.text(`LOTS ${subject.lots}%  |  HOTS ${subject.hots}%  |  ${subject.total} questions`, x + 5, 69, { maxWidth: subjectWidth - 8 });
+      });
+
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.text("Subject x Bloom's Skill Mastery (Heatmap)", pageMargin, 79);
+      const heatTop = 83;
+      const subjectColumnWidth = 32;
+      const skillCellWidth = (printableWidth - subjectColumnWidth) / schoolBloomSkills.length;
+      const tableHeaderHeight = 8;
+      const tableRowHeight = 8;
+      setFill(COLORS.lightGray);
+      setDraw(COLORS.border);
+      doc.rect(pageMargin, heatTop, printableWidth, tableHeaderHeight, "FD");
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.2);
+      doc.text("Subject", pageMargin + 2, heatTop + 5.2);
+      doc.setFontSize(8.2);
+      schoolBloomSkills.forEach((skill, index) => doc.text(skill, pageMargin + subjectColumnWidth + skillCellWidth * (index + 0.5), heatTop + 5.2, { align: "center" }));
+      schoolSubjectRows.slice(0, 4).forEach((subject, rowIndex) => {
+        const rowY = heatTop + tableHeaderHeight + rowIndex * tableRowHeight;
+        setFill(COLORS.white);
+        setDraw(COLORS.border);
+        doc.rect(pageMargin, rowY, subjectColumnWidth, tableRowHeight, "FD");
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.6);
+        doc.text(subject.subject, pageMargin + 2, rowY + 5.2);
+        subject.skills.forEach((skill, columnIndex) => {
+          const cellX = pageMargin + subjectColumnWidth + skillCellWidth * columnIndex;
+          const value = skill.percentage;
+          const cellColor = skill.total === 0 ? COLORS.lightGray : value >= 70 ? COLORS.green : value >= 50 ? COLORS.amber : COLORS.red;
+          setFill(cellColor);
+          setDraw(COLORS.white);
+          doc.rect(cellX, rowY, skillCellWidth, tableRowHeight, "FD");
+          setText(skill.total > 0 && value < 50 ? COLORS.white : COLORS.navy);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.6);
+          doc.text(skill.total ? `${value}%` : "-", cellX + skillCellWidth / 2, rowY + 5.2, { align: "center" });
+        });
+      });
+
+      const hotsTop = 125;
+      drawCognitivePanel("Subject-wise HOTS vs LOTS", pageMargin, hotsTop, printableWidth, 34, 9);
+      const barX = pageMargin + 36;
+      const barWidth = printableWidth - 42;
+      schoolSubjectRows.slice(0, 4).forEach((subject, index) => {
+        const rowY = hotsTop + 11 + index * 5.2;
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.3);
+        doc.text(subject.subject, pageMargin + 4, rowY + 2.8);
+        const total = subject.lotsTotal + subject.hotsTotal;
+        const lotsShare = total ? Math.round(subject.lotsTotal * 100 / total) : 0;
+        setFill(COLORS.lightGray);
+        doc.roundedRect(barX, rowY, barWidth, 3.6, 1, 1, "F");
+        setFill(COLORS.green);
+        doc.roundedRect(barX, rowY, barWidth * lotsShare / 100, 3.6, 1, 1, "F");
+        setFill(COLORS.amber);
+        doc.rect(barX + barWidth * lotsShare / 100, rowY, barWidth * (100 - lotsShare) / 100, 3.6, "F");
+        setText(COLORS.white);
+        doc.setFontSize(7.5);
+        if (lotsShare > 8) doc.text(`${lotsShare}%`, barX + barWidth * lotsShare / 200, rowY + 2.6, { align: "center" });
+        if (100 - lotsShare > 8) doc.text(`${100 - lotsShare}%`, barX + barWidth * (lotsShare + (100 - lotsShare) / 2) / 100, rowY + 2.6, { align: "center" });
+      });
+
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.text("Subject-wise Cognitive Strengths & Gaps", pageMargin, 165);
+      schoolSubjectRows.slice(0, 4).forEach((subject, index) => {
+        const x = pageMargin + index * (subjectWidth + subjectGap);
+        const top = 169;
+        drawCard({ x, y: top, width: subjectWidth, height: 27, fillColor: COLORS.white, borderColor: COLORS.border, radius: 2 });
+        setFill(subjectPalette[index]);
+        doc.roundedRect(x + 0.5, top + 0.5, subjectWidth - 1, 7, 1.5, 1.5, "F");
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.8);
+        doc.text(subject.subject, x + subjectWidth / 2, top + 5.2, { align: "center" });
+        const measured = subject.skills.filter((skill) => skill.total > 0).sort((a, b) => b.percentage - a.percentage);
+        const strength = measured.length ? `Strong in ${measured.slice(0, 2).map((item) => item.skill).join(" and ")}` : "No tagged skill data";
+        const gaps = measured.filter((item) => item.percentage < 60).sort((a, b) => a.percentage - b.percentage).slice(0, 2);
+        const gapText = gaps.length ? `Needs focus on ${gaps.map((item) => item.skill).join(" and ")}` : "Consistent performance";
+        setFill(COLORS.green);
+        doc.circle(x + 4, top + 14, 1, "F");
+        setText(COLORS.dark);
+        doc.setFontSize(7.3);
+        doc.text(doc.splitTextToSize(strength, subjectWidth - 10).slice(0, 2), x + 7, top + 14.5);
+        setFill(COLORS.red);
+        doc.circle(x + 4, top + 22, 1, "F");
+        doc.text(doc.splitTextToSize(gapText, subjectWidth - 10).slice(0, 2), x + 7, top + 22.5);
+      });
+      drawFooter();
+
+      // Page 3: school performance overview (existing summary and batch table).
+      doc.addPage();
+
       // =========================================================
       // PAGE BACKGROUND
       // =========================================================
@@ -2376,15 +3124,15 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
       let schoolLogoLoaded = false;
 
-      if (school?.logo_url) {
+      if (circularSchoolLogo) {
         try {
           doc.addImage(
-            school.logo_url,
+            circularSchoolLogo,
             "PNG",
-            schoolLogoBoxX + 2,
-            schoolLogoBoxY + 2,
-            schoolLogoBoxSize - 4,
-            schoolLogoBoxSize - 4,
+            schoolLogoBoxX,
+            schoolLogoBoxY,
+            schoolLogoBoxSize,
+            schoolLogoBoxSize,
           );
 
           schoolLogoLoaded = true;
@@ -2423,7 +3171,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       const brandBoxWidth = 67;
       const brandBoxX = pageWidth - pageMargin - brandBoxWidth;
 
-      const schoolTextMaximumWidth = brandBoxX - schoolTextX - 7;
+      const schoolTextMaximumWidth = Math.min(68, brandBoxX - schoolTextX - 7);
 
       fitTextToWidth({
         text: schoolName,
@@ -2441,12 +3189,20 @@ export default function SchoolOwnerDashboard({ onBack }) {
       doc.setTextColor(219, 234, 254);
 
       doc.text(
-        `Area: ${safeText(
-          school.area,
-          "Not Set",
-        )}  �  IIT Foundation Academic Analytics`,
+        `Area: ${safeText(school.area, "Not Set")}`,
         schoolTextX,
         20,
+      );
+      doc.setFontSize(6.2);
+      doc.text(`Academic Year: ${safeText(school.academic_year, "Not Set")}`, schoolTextX, 26);
+
+      setText(COLORS.white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(19.5);
+      doc.text("School Performance Report", pageWidth / 2, 14, { align: "center" });
+      drawCenteredSubtitleWithRules(
+        "School-wide academic performance and cognitive insights across classes and subjects",
+        21,
       );
 
       // =========================================================
@@ -2470,15 +3226,16 @@ export default function SchoolOwnerDashboard({ onBack }) {
       );
 
       const spectropyLogoSize = 14;
-      const spectropyLogoX = brandBoxX + 4;
+      const spectropyLogoX = brandBoxX + 1;
       const spectropyLogoY =
         brandBoxY + (brandBoxHeight - spectropyLogoSize) / 2;
 
       let spectropyLogoLoaded = false;
 
       try {
+        if (!circularSpectropyLogo) throw new Error("Circular Spectropy logo unavailable");
         doc.addImage(
-          spectropyLogoUrl,
+          circularSpectropyLogo,
           "PNG",
           spectropyLogoX,
           spectropyLogoY,
@@ -2515,7 +3272,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       }
 
       // Brand divider
-      const brandDividerX = spectropyLogoX + spectropyLogoSize + 4;
+      const brandDividerX = brandBoxX + 22;
 
       setDraw(COLORS.border);
       doc.setLineWidth(0.3);
@@ -2528,20 +3285,15 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
       const brandTextX = brandDividerX + 4;
 
-      setText(COLORS.gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.3);
-      doc.text("Powered by", brandTextX, brandBoxY + 6.5);
-
       setText(COLORS.navy);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.text("SPECTROPY", brandTextX, brandBoxY + 13.5);
+      doc.setFontSize(12.5);
+      doc.text("SPECTROPY", brandTextX, brandBoxY + 9.5);
 
       setText(COLORS.gray);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(5.8);
-      doc.text("Learning Analytics", brandTextX, brandBoxY + 18);
+      doc.setFontSize(8.3);
+      doc.text("Powered by Spectropy", brandTextX + 3, brandBoxY + 12.5);
 
       // =========================================================
       // REPORT TITLE
@@ -2552,7 +3304,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(17);
 
-      doc.text("IIT Foundation School Performance Report", pageMargin, y);
+      doc.text("School Performance Overview", pageMargin, y);
 
       setText(COLORS.gray);
       doc.setFont("helvetica", "normal");
@@ -2562,6 +3314,12 @@ export default function SchoolOwnerDashboard({ onBack }) {
         "Consolidated academic analysis across classes, sections and active subjects",
         pageMargin,
         y + 5.5,
+      );
+
+      // Repaint page 3 with the exact same report header used on pages 1 and 2.
+      drawCognitivePageHeader(
+        "School Performance Overview",
+        "Consolidated academic analysis across classes, sections and active subjects",
       );
 
       // Generated date badge
@@ -3053,7 +3811,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
             doc.internal.getCurrentPageInfo().pageNumber;
 
           // Compact header on continuation pages
-          if (currentPageNumber > 1) {
+          if (currentPageNumber > 3) {
             setFill(COLORS.navy);
             doc.rect(0, 0, pageWidth, 13, "F");
 
@@ -3092,38 +3850,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
       doc.save(`IIT_Foundation_Analysis_${school.school_id || "school"}.pdf`);
     };
 
+    downloadIITAnalysisPDFRef.current = downloadIITAnalysisPDF;
+
     return (
       <section className="school-overview-section school-overview-section--batches">
-        <button
-          onClick={downloadIITAnalysisPDF}
-          disabled={examLoading}
-          style={{
-            padding: "8px 16px",
-            background: examLoading ? "#94a3b8" : "#3b82f6",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: examLoading ? "not-allowed" : "pointer",
-            fontSize: "14px",
-            fontWeight: "500",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
-          {examLoading ? (
-            <>
-              <Loader2 size={15} />
-              Loading...
-            </>
-          ) : (
-            <>
-              <FileText size={15} />
-              Download PDF
-            </>
-          )}
-        </button>
-
         {/* ===== PERFORMANCE ANALYSIS SECTION ===== */}
         {analysis && (
           <div
@@ -3562,6 +4292,55 @@ export default function SchoolOwnerDashboard({ onBack }) {
           { skill, correct: 0, total: 0, uniqueQuestions: new Set() },
         ]),
       );
+      const subjectNames = activeSubs.length ? activeSubs : ["Physics", "Chemistry", "Maths", "Biology"];
+      const normalizeSubjectName = (value) => {
+        const normalized = String(value || "").toLowerCase();
+        if (normalized.includes("physics")) return "Physics";
+        if (normalized.includes("chem")) return "Chemistry";
+        if (normalized.includes("math")) return "Maths";
+        if (normalized.includes("bio")) return "Biology";
+        return "";
+      };
+      const questionNumbers = new Set();
+      rows.forEach((row) => {
+        Object.keys(parseQuestionResults(row.question_results)).forEach((question) => {
+          const number = Number(String(question || "").match(/\d+/)?.[0] || 0);
+          if (number) questionNumbers.add(number);
+        });
+      });
+      const totalQuestionCountForMapping = Math.max(
+        ...Array.from(questionNumbers),
+        questionNumbers.size,
+        1,
+      );
+      const subjectTotals = Object.fromEntries(subjectNames.map((subject) => [
+        subject,
+        {
+          correct: 0,
+          total: 0,
+          lotsCorrect: 0,
+          lotsTotal: 0,
+          hotsCorrect: 0,
+          hotsTotal: 0,
+          questions: new Set(),
+          lotsQuestions: new Set(),
+          hotsQuestions: new Set(),
+          skills: Object.fromEntries(bloomSkills.map((skill) => [skill, {
+            correct: 0,
+            total: 0,
+            questions: new Set(),
+          }])),
+        },
+      ]));
+      const getQuestionSubject = (question, details = {}) => {
+        const stored = normalizeSubjectName(details?.subject || details?.Subject);
+        if (stored && subjectTotals[stored]) return stored;
+        const number = Number(String(question || "").match(/\d+/)?.[0] || 0);
+        if (!number || !subjectNames.length) return subjectNames[0];
+        const perSubject = Math.max(1, Math.ceil(totalQuestionCountForMapping / subjectNames.length));
+        const index = Math.min(subjectNames.length - 1, Math.floor((number - 1) / perSubject));
+        return subjectNames[index];
+      };
       const studentTotals = new Map();
       const examTotals = new Map();
 
@@ -3611,6 +4390,28 @@ export default function SchoolOwnerDashboard({ onBack }) {
           const bucket = ["Remember", "Understand"].includes(skill)
             ? "lots"
             : "hots";
+          const subjectName = getQuestionSubject(question, details);
+          const subjectTotal = subjectTotals[subjectName];
+          if (subjectTotal) {
+            const subjectSkillTotal = subjectTotal.skills[skill];
+            subjectTotal.total += 1;
+            subjectTotal.questions.add(questionKey);
+            subjectSkillTotal.total += 1;
+            subjectSkillTotal.questions.add(questionKey);
+            if (bucket === "lots") {
+              subjectTotal.lotsTotal += 1;
+              subjectTotal.lotsQuestions.add(questionKey);
+            } else {
+              subjectTotal.hotsTotal += 1;
+              subjectTotal.hotsQuestions.add(questionKey);
+            }
+            if (isCorrect) {
+              subjectTotal.correct += 1;
+              subjectSkillTotal.correct += 1;
+              if (bucket === "lots") subjectTotal.lotsCorrect += 1;
+              else subjectTotal.hotsCorrect += 1;
+            }
+          }
           const studentRow = studentTotals.get(studentKey);
           const examRow = examTotals.get(examKey);
 
@@ -3682,6 +4483,29 @@ export default function SchoolOwnerDashboard({ onBack }) {
           color: bloomColors[skill],
         };
       });
+      const subjectAnalysis = subjectNames.map((subject) => {
+        const subjectTotal = subjectTotals[subject];
+        return {
+          subject,
+          label: subject === "Maths" ? "Mathematics" : subject,
+          mastery: percentage(subjectTotal.correct, subjectTotal.total),
+          lots: percentage(subjectTotal.lotsCorrect, subjectTotal.lotsTotal),
+          hots: percentage(subjectTotal.hotsCorrect, subjectTotal.hotsTotal),
+          lotsCount: subjectTotal.lotsQuestions.size,
+          hotsCount: subjectTotal.hotsQuestions.size,
+          questions: subjectTotal.questions.size,
+          skills: bloomSkills.map((skill) => ({
+            skill,
+            correct: subjectTotal.skills[skill].correct,
+            total: subjectTotal.skills[skill].total,
+            count: subjectTotal.skills[skill].questions.size,
+            percentage: percentage(
+              subjectTotal.skills[skill].correct,
+              subjectTotal.skills[skill].total,
+            ),
+          })),
+        };
+      });
       const lotsQuestionPercentage =
         totals.uniqueQuestions > 0
           ? Math.round((totals.lots.uniqueQuestions / totals.uniqueQuestions) * 100)
@@ -3706,6 +4530,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         questions: totals.uniqueQuestions,
         students: studentTotals.size,
         distribution,
+        subjectAnalysis,
         lotsQuestionPercentage,
         hotsQuestionPercentage:
           totals.uniqueQuestions > 0 ? 100 - lotsQuestionPercentage : 0,
@@ -4162,7 +4987,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         setFill(COLORS.background);
         doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-        const headerHeight = 30;
+        const headerHeight = 28;
 
         setFill(COLORS.navy);
         doc.rect(0, 0, pageWidth, headerHeight, "F");
@@ -4244,7 +5069,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         const schoolNameFontSize = fitTextToWidth({
           text: schoolName,
           maxWidth: schoolTextMaximumWidth,
-          maximumFontSize: 12,
+          maximumFontSize: 10,
           minimumFontSize: 7,
           fontStyle: "bold",
         });
@@ -4268,18 +5093,36 @@ export default function SchoolOwnerDashboard({ onBack }) {
 
         setText(COLORS.white);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(15);
-        doc.text("Batch-Wise Performance Report", pageWidth / 2, 15, {
+        doc.setFontSize(18);
+        const reportHeaderCenterX = pageWidth / 2 + 3;
+        doc.text("Batch-Wise Performance Report", reportHeaderCenterX, 15, {
           align: "center",
           maxWidth: pageWidth - 116,
         });
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
+        doc.setFontSize(7.5);
         doc.setTextColor(219, 234, 254);
-        doc.text("Batch cognitive analysis and subject performance overview", pageWidth / 2, 21, {
+        const headerSubtitle = "Batch cognitive analysis and subject performance overview";
+        const subtitleWidth = doc.getTextWidth(headerSubtitle);
+        const subtitleY = 21;
+        doc.text(headerSubtitle, reportHeaderCenterX, subtitleY, {
           align: "center",
           maxWidth: pageWidth - 116,
         });
+        setDraw([147, 197, 253]);
+        doc.setLineWidth(0.3);
+        doc.line(
+          reportHeaderCenterX - subtitleWidth / 2 - 19,
+          subtitleY - 1.1,
+          reportHeaderCenterX - subtitleWidth / 2 - 3,
+          subtitleY - 1.1,
+        );
+        doc.line(
+          reportHeaderCenterX + subtitleWidth / 2 + 3,
+          subtitleY - 1.1,
+          reportHeaderCenterX + subtitleWidth / 2 + 19,
+          subtitleY - 1.1,
+        );
       };
 
       // =========================================================
@@ -4327,9 +5170,10 @@ export default function SchoolOwnerDashboard({ onBack }) {
         doc.text("CONFIDENTIAL ACADEMIC REPORT", pageMargin, pageHeight - 7);
 
         doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.2);
 
         doc.text(
-          `IIT Foundation � Batch ${cls}-${sec}`,
+          `IIT Foundation Batch ${cls}-${sec}`,
           pageWidth / 2,
           pageHeight - 7,
           {
@@ -4338,6 +5182,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
         );
 
         doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.2);
 
         doc.text(
           `Page ${currentPageNumber} of ${totalPagesExpression}`,
@@ -4349,45 +5194,398 @@ export default function SchoolOwnerDashboard({ onBack }) {
         );
       };
 
+      const cognitive = batchCognitiveAnalysis || {
+        overall: 0,
+        lots: 0,
+        hots: 0,
+        questions: 0,
+        students: 0,
+        lotsQuestionPercentage: 0,
+        hotsQuestionPercentage: 0,
+        distribution: [],
+        trend: [],
+        studentBands: [],
+        insights: ["Bloom-tagged cognitive data is not available for this batch."],
+        subjectAnalysis: [],
+      };
+      const bloomPdfColors = {
+        Remember: [47, 140, 255],
+        Understand: [52, 201, 154],
+        Apply: [255, 200, 61],
+        Analyse: [255, 138, 69],
+        Evaluate: [255, 95, 125],
+        Create: [143, 109, 246],
+      };
+      const drawBatchPdfPanel = (title, x, top, width, height, titleFontSize = 8.2) => {
+        setFill(COLORS.white);
+        setDraw(COLORS.border);
+        doc.setLineWidth(0.25);
+        doc.roundedRect(x, top, width, height, 2, 2, "FD");
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(titleFontSize);
+        doc.text(title, x + 4, top + 7);
+      };
+      const formatSkillNames = (skills) => {
+        if (skills.length <= 1) return skills[0] || "No tagged skills";
+        if (skills.length === 2) return `${skills[0]} and ${skills[1]}`;
+        return `${skills.slice(0, -1).join(", ")} and ${skills[skills.length - 1]}`;
+      };
+
       // =========================================================
-      // FIRST PAGE
+      // PAGE 1: BATCH COGNITIVE ANALYSIS
       // =========================================================
+      drawMainHeader();
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Cognitive Analysis", pageMargin, 35);
+
+      const cognitiveBatchBadgeWidth = 34;
+      const cognitiveBatchBadgeX = pageWidth - pageMargin - cognitiveBatchBadgeWidth;
+      drawCard({
+        x: cognitiveBatchBadgeX,
+        y: 29,
+        width: cognitiveBatchBadgeWidth,
+        height: 9,
+        fillColor: COLORS.lightBlue,
+        borderColor: COLORS.blueBorder,
+        radius: 2,
+      });
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text(`${cls}-${sec}`, cognitiveBatchBadgeX + 6, 35.5);
+
+      const cognitiveCards = [
+        ["Overall Cognitive Mastery", `${cognitive.overall}%`, "Across all batch exams", COLORS.blue, COLORS.lightBlue, COLORS.blueBorder],
+        ["Lower Order Thinking", `${cognitive.lots}%`, "Remember + Understand", COLORS.green, COLORS.lightGreen, COLORS.greenBorder],
+        ["Higher Order Thinking", `${cognitive.hots}%`, "Apply through Create", COLORS.amber, COLORS.lightAmber, COLORS.amberBorder],
+        ["Questions Analysed", String(cognitive.questions), "Unique Bloom-tagged questions", COLORS.purple, COLORS.lightPurple, COLORS.purpleBorder],
+        ["Students", String(cognitive.students), "Unique students in batch", COLORS.red, COLORS.lightRed, COLORS.redBorder],
+      ];
+      const cognitiveCardGap = 3;
+      const cognitiveCardWidth = (printableWidth - cognitiveCardGap * 4) / 5;
+      cognitiveCards.forEach(([label, value, helper, accent, fill, borderColor], index) => {
+        const x = pageMargin + index * (cognitiveCardWidth + cognitiveCardGap);
+        drawCard({ x, y: 39, width: cognitiveCardWidth, height: 25, fillColor: fill, borderColor, radius: 2.5 });
+        setFill(accent);
+        doc.roundedRect(x, 39, 2.2, 25, 1, 1, "F");
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.4);
+        doc.text(label.toUpperCase(), x + 5, 45);
+        setText(COLORS.dark);
+        doc.setFontSize(15);
+        doc.text(value, x + 5, 53, { maxWidth: cognitiveCardWidth - 8 });
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(index === 0 ? 6.1 : 5.1);
+        doc.text(helper, x + 5, 60, { maxWidth: cognitiveCardWidth - 8 });
+      });
+
+      const cognitivePanelGap = 4;
+      const cognitivePanelWidth = (printableWidth - cognitivePanelGap * 2) / 3;
+      const upperPanelTop = 68;
+      const upperPanelHeight = 56;
+      const distributionX = pageMargin;
+      const performanceX = distributionX + cognitivePanelWidth + cognitivePanelGap;
+      const balanceX = performanceX + cognitivePanelWidth + cognitivePanelGap;
+      drawBatchPdfPanel("Question Distribution by Bloom's Skill", distributionX, upperPanelTop, cognitivePanelWidth, upperPanelHeight, 10.2);
+      const distributionRows = cognitive.distribution.length ? cognitive.distribution : [];
+      if (distributionRows.length) {
+        distributionRows.forEach((item, index) => {
+          const rowY = upperPanelTop + 15 + index * 5.7;
+          setFill(bloomPdfColors[item.skill] || COLORS.blue);
+          doc.roundedRect(distributionX + 4, rowY - 2.5, 2.7, 2.7, 0.6, 0.6, "F");
+          setText(COLORS.dark);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9.1);
+          doc.text(item.skill, distributionX + 9, rowY);
+          doc.text(`${item.percentage}% (${item.count})`, distributionX + cognitivePanelWidth - 4, rowY, { align: "right" });
+        });
+      } else {
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text("No Bloom-tagged question data", distributionX + 5, upperPanelTop + 30);
+      }
+
+      drawBatchPdfPanel("Overall Performance by Bloom's Skill", performanceX, upperPanelTop, cognitivePanelWidth, upperPanelHeight, 10.2);
+      if (distributionRows.length) {
+        distributionRows.forEach((item, index) => {
+          const rowY = upperPanelTop + 15 + index * 6;
+          setText(COLORS.dark);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.8);
+          doc.text(item.skill, performanceX + 4, rowY);
+          doc.text(`${item.performance}%`, performanceX + cognitivePanelWidth - 4, rowY, { align: "right" });
+          const performanceLineX = performanceX + 34;
+          const performanceLineWidth = cognitivePanelWidth - 54;
+          setFill(COLORS.lightGray);
+          doc.roundedRect(performanceLineX, rowY - 2.3, performanceLineWidth, 2, 0.8, 0.8, "F");
+          setFill(bloomPdfColors[item.skill] || COLORS.blue);
+          doc.roundedRect(performanceLineX, rowY - 2.3, performanceLineWidth * Math.max(0, Math.min(100, item.performance)) / 100, 2, 0.8, 0.8, "F");
+        });
+      }
+
+      drawBatchPdfPanel("Cognitive Balance", balanceX, upperPanelTop, cognitivePanelWidth, upperPanelHeight, 10.2);
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.2);
+      doc.text("Share of tagged questions", balanceX + 5, upperPanelTop + 16);
+      const balanceBarX = balanceX + 5;
+      const balanceBarY = upperPanelTop + 23;
+      const balanceBarWidth = cognitivePanelWidth - 10;
+      setFill(COLORS.lightGray);
+      doc.roundedRect(balanceBarX, balanceBarY, balanceBarWidth, 9, 2, 2, "F");
+      const lotsBarWidth = balanceBarWidth * cognitive.lotsQuestionPercentage / 100;
+      const balanceLotsColor = COLORS.green;
+      const balanceHotsColor = COLORS.amber;
+      setFill(balanceLotsColor);
+      if (lotsBarWidth > 0) doc.roundedRect(balanceBarX, balanceBarY, lotsBarWidth, 9, 2, 2, "F");
+      setFill(balanceHotsColor);
+      if (balanceBarWidth - lotsBarWidth > 0) doc.rect(balanceBarX + lotsBarWidth, balanceBarY, balanceBarWidth - lotsBarWidth, 9, "F");
+      setText(balanceLotsColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.2);
+      doc.text(`LOTS  ${cognitive.lotsQuestionPercentage}%`, balanceX + 5, upperPanelTop + 39);
+      setText(balanceHotsColor);
+      doc.text(`HOTS  ${cognitive.hotsQuestionPercentage}%`, balanceX + cognitivePanelWidth - 5, upperPanelTop + 39, { align: "right" });
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(`${cognitive.lots}% LOTS mastery`, balanceX + 5, upperPanelTop + 47);
+      doc.text(`${cognitive.hots}% HOTS mastery`, balanceX + cognitivePanelWidth - 5, upperPanelTop + 47, { align: "right" });
+
+      const lowerPanelTop = 126;
+      const lowerPanelHeight = 64;
+      const trendX = pageMargin;
+      const studentsX = trendX + cognitivePanelWidth + cognitivePanelGap;
+      const insightsX = studentsX + cognitivePanelWidth + cognitivePanelGap;
+      drawBatchPdfPanel("Cognitive Performance Trend", trendX, lowerPanelTop, cognitivePanelWidth, lowerPanelHeight, 10.2);
+      const trendRows = cognitive.trend.slice(0, 6);
+      if (trendRows.length) {
+        trendRows.forEach((item, index) => {
+          const rowY = lowerPanelTop + 15 + index * 7;
+          setText(COLORS.dark);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.7);
+          doc.text(String(item.label).slice(0, 19), trendX + 4, rowY);
+          setText(COLORS.green);
+          doc.text(`LOTS ${item.lots}%`, trendX + cognitivePanelWidth - 38, rowY);
+          setText(COLORS.amber);
+          doc.text(`HOTS ${item.hots}%`, trendX + cognitivePanelWidth - 4, rowY, { align: "right" });
+        });
+      } else {
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.text("No exam trend data", trendX + 5, lowerPanelTop + 30);
+      }
+
+      drawBatchPdfPanel("Student Distribution by Cognitive Level", studentsX, lowerPanelTop, cognitivePanelWidth, lowerPanelHeight, 10.2);
+      const studentBands = cognitive.studentBands.length ? cognitive.studentBands : [];
+      studentBands.forEach((band, index) => {
+        const rowY = lowerPanelTop + 16 + index * 10;
+        setFill(band.color === "#8f6df6" ? COLORS.purple : band.color === "#34c99a" ? COLORS.green : band.color === "#ffc83d" ? COLORS.amber : COLORS.red);
+        doc.roundedRect(studentsX + 4, rowY - 3.5, 2.5, 6, 0.8, 0.8, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.8);
+        doc.text(`${band.label} (${band.range})`, studentsX + 9, rowY);
+        doc.text(`${band.percentage}% (${band.count})`, studentsX + cognitivePanelWidth - 4, rowY, { align: "right" });
+      });
+
+      drawBatchPdfPanel("Key Insights", insightsX, lowerPanelTop, cognitivePanelWidth, lowerPanelHeight, 10.2);
+      cognitive.insights.slice(0, 3).forEach((insight, index) => {
+        const lines = doc.splitTextToSize(insight, cognitivePanelWidth - 12).slice(0, 2);
+        setFill(index === 0 ? COLORS.blue : index === 1 ? COLORS.green : COLORS.purple);
+        doc.circle(insightsX + 5.5, lowerPanelTop + 16 + index * 10, 1.3, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.6);
+        doc.text(lines, insightsX + 9, lowerPanelTop + 17 + index * 10);
+      });
+      drawFooter();
+
+      // =========================================================
+      // PAGE 2: SUBJECT-WISE COGNITIVE ANALYSIS
+      // =========================================================
+      doc.addPage();
+      drawMainHeader();
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Subject-wise Cognitive Analysis", pageMargin, 35);
+
+      const subjectCognitive = cognitive.subjectAnalysis || [];
+      const subjectSummaryGap = 3;
+      const subjectSummaryWidth = (printableWidth - subjectSummaryGap * 3) / 4;
+      subjectCognitive.forEach((subject, index) => {
+        const x = pageMargin + index * (subjectSummaryWidth + subjectSummaryGap);
+        const subjectColor = getSubjectColor(subject.subject);
+        drawCard({ x, y: 40, width: subjectSummaryWidth, height: 22, fillColor: subjectColor.light, borderColor: subjectColor.border, radius: 2.5 });
+        setText(subjectColor.primary);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.3);
+        doc.text(subject.label, x + 4, 46);
+        setText(COLORS.dark);
+        doc.setFontSize(14.5);
+        doc.text(`${subject.mastery}%`, x + 4, 54);
+        setText(COLORS.gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.text(`LOTS ${subject.lots}%  |  HOTS ${subject.hots}%  |  ${subject.questions} questions`, x + 4, 59, { maxWidth: subjectSummaryWidth - 8 });
+      });
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.2);
+      doc.text("Subject x Bloom's Skill Mastery (Heatmap)", pageMargin, 68);
+      const heatmapTop = 71;
+      const subjectColumnWidth = 35;
+      const skillColumnWidth = (printableWidth - subjectColumnWidth) / 6;
+      const heatmapHeaderHeight = 8;
+      const heatmapRowHeight = 6.5;
+      const bloomSkillsForPdf = ["Remember", "Understand", "Apply", "Analyse", "Evaluate", "Create"];
+      const heatmapHeaders = ["Subject", ...bloomSkillsForPdf];
+      heatmapHeaders.forEach((label, index) => {
+        const x = index === 0 ? pageMargin : pageMargin + subjectColumnWidth + (index - 1) * skillColumnWidth;
+        const width = index === 0 ? subjectColumnWidth : skillColumnWidth;
+        setFill(COLORS.background);
+        setDraw(COLORS.border);
+        doc.rect(x, heatmapTop, width, heatmapHeaderHeight, "FD");
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.8);
+        doc.text(label, x + width / 2, heatmapTop + 5.2, { align: "center", maxWidth: width - 2 });
+      });
+      subjectCognitive.forEach((subject, rowIndex) => {
+        const y = heatmapTop + heatmapHeaderHeight + rowIndex * heatmapRowHeight;
+        setFill(COLORS.white);
+        setDraw(COLORS.border);
+        doc.rect(pageMargin, y, subjectColumnWidth, heatmapRowHeight, "FD");
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        doc.text(subject.label, pageMargin + 3, y + 4.1);
+        bloomSkillsForPdf.forEach((skill, skillIndex) => {
+          const item = subject.skills.find((entry) => entry.skill === skill);
+          const value = item?.percentage || 0;
+          const x = pageMargin + subjectColumnWidth + skillIndex * skillColumnWidth;
+          const heatColor = value >= 80 ? [52, 201, 154] : value >= 60 ? [255, 200, 61] : value >= 40 ? [255, 138, 69] : [255, 95, 125];
+          setFill(item?.total ? heatColor : COLORS.background);
+          setDraw(COLORS.white);
+          doc.rect(x, y, skillColumnWidth, heatmapRowHeight, "FD");
+          setText(item?.total && value >= 40 ? COLORS.white : COLORS.navy);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9.2);
+          doc.text(`${value}%`, x + skillColumnWidth / 2, y + 4.5, { align: "center" });
+        });
+      });
+
+      const hotsPanelTop = heatmapTop + heatmapHeaderHeight + subjectCognitive.length * heatmapRowHeight + 5;
+      const hotsPanelHeight = 43;
+      drawBatchPdfPanel("Subject-wise HOTS vs LOTS", pageMargin, hotsPanelTop, printableWidth, hotsPanelHeight, 9.2);
+      subjectCognitive.forEach((subject, index) => {
+        const rowY = hotsPanelTop + 13 + index * 6.2;
+        setText(COLORS.navy);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.1);
+        doc.text(subject.label, pageMargin + 4, rowY + 2.6);
+        const barX = pageMargin + 39;
+        const barWidth = printableWidth - 45;
+        const total = subject.lotsCount + subject.hotsCount;
+        if (!total) {
+          setText(COLORS.gray);
+          doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.8);
+          doc.text("No tagged questions", barX, rowY + 2.6);
+          return;
+        }
+        const lotsWidth = barWidth * subject.lotsCount / total;
+        const hotsWidth = barWidth - lotsWidth;
+        setFill(COLORS.green);
+        if (lotsWidth > 0) doc.roundedRect(barX, rowY, lotsWidth, 4, 1.2, 1.2, "F");
+        setFill(COLORS.amber);
+        if (hotsWidth > 0) doc.rect(barX + lotsWidth, rowY, hotsWidth, 4, "F");
+        setText(COLORS.white);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.3);
+        const lotsPercent = Math.round(subject.lotsCount / total * 100);
+        const hotsPercent = 100 - lotsPercent;
+        if (lotsWidth > 12) doc.text(`${lotsPercent}%`, barX + lotsWidth / 2, rowY + 2.8, { align: "center" });
+        if (hotsWidth > 12) doc.text(`${hotsPercent}%`, barX + lotsWidth + hotsWidth / 2, rowY + 2.8, { align: "center" });
+      });
+      setFill(COLORS.green);
+      doc.circle(pageMargin + 5, hotsPanelTop + 39, 1, "F");
+      setText(COLORS.navy);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.3);
+      doc.text("LOTS (Remember + Understand)", pageMargin + 8, hotsPanelTop + 39.8);
+      setFill(COLORS.amber);
+      doc.circle(pageMargin + 54, hotsPanelTop + 39, 1, "F");
+      doc.text("HOTS (Apply + Analyse + Evaluate + Create)", pageMargin + 57, hotsPanelTop + 39.8);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.2);
+      const strengthsHeadingY = hotsPanelTop + hotsPanelHeight + 5;
+      doc.text("Subject-wise Cognitive Strengths & Gaps", pageMargin, strengthsHeadingY);
+      subjectCognitive.forEach((subject, index) => {
+        const x = pageMargin + index * (subjectSummaryWidth + subjectSummaryGap);
+        const subjectColor = getSubjectColor(subject.subject);
+        const cardY = strengthsHeadingY + 3;
+        drawCard({ x, y: cardY, width: subjectSummaryWidth, height: 29, fillColor: COLORS.white, borderColor: subjectColor.border, radius: 2.5 });
+        setFill(subjectColor.light);
+        doc.roundedRect(x + 0.4, cardY + 0.4, subjectSummaryWidth - 0.8, 7, 1.5, 1.5, "F");
+        setText(subjectColor.primary);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.6);
+        doc.text(subject.label, x + subjectSummaryWidth / 2, cardY + 5, { align: "center" });
+        const measuredSkills = subject.skills.filter((skill) => skill.total > 0);
+        const strongest = [...measuredSkills].sort((a, b) => b.percentage - a.percentage).slice(0, 2).map((item) => item.skill);
+        const gaps = [...measuredSkills].filter((item) => item.percentage < 60).sort((a, b) => a.percentage - b.percentage).slice(0, 2).map((item) => item.skill);
+        setFill(COLORS.green);
+        doc.circle(x + 5, cardY + 12, 1.2, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(doc.splitTextToSize(strongest.length ? `Strong in ${formatSkillNames(strongest)}` : "No Bloom skill strength available", subjectSummaryWidth - 12).slice(0, 2), x + 8, cardY + 13);
+        setFill(COLORS.red);
+        doc.circle(x + 5, cardY + 21, 1.2, "F");
+        setText(COLORS.dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(doc.splitTextToSize(gaps.length ? `Needs focus on ${formatSkillNames(gaps)}` : "Consistent performance", subjectSummaryWidth - 12).slice(0, 2), x + 8, cardY + 22);
+      });
+      drawFooter();
+
+      // =========================================================
+      // PAGE 3: SUBJECT PERFORMANCE OVERVIEW
+      // =========================================================
+      doc.addPage();
       drawMainHeader();
 
       let y = 38;
 
-      // Batch badge
-      const batchBadgeWidth = 34;
-      const batchBadgeHeight = 14;
-      const batchBadgeX = pageWidth - pageMargin - batchBadgeWidth;
-
-      drawCard({
-        x: batchBadgeX,
-        y: y - 7,
-        width: batchBadgeWidth,
-        height: batchBadgeHeight,
-        fillColor: COLORS.lightBlue,
-        borderColor: COLORS.blueBorder,
-        radius: 3,
-      });
-
-      setText(COLORS.gray);
+      const performanceTitleY = y + 5;
+      setText(COLORS.dark);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(5.8);
-
-      doc.text("BATCH", batchBadgeX + 4, y - 2);
+      doc.setFontSize(15);
+      doc.text("Batch Performance Overview", pageMargin, performanceTitleY);
 
       setText(COLORS.navy);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-
-      doc.text(`${cls}-${sec}`, batchBadgeX + 4, y + 4.3);
+      doc.setFontSize(11);
+      doc.text(`${cls}-${sec}`, pageWidth - pageMargin, performanceTitleY, { align: "right" });
 
       setText(COLORS.gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.3);
 
-      doc.text(`Generated: ${generatedDate}`, pageWidth - pageMargin, y + 11, {
+      doc.text(`Generated: ${generatedDate}`, pageWidth - pageMargin, y + 8, {
         align: "right",
       });
 
@@ -4740,12 +5938,12 @@ export default function SchoolOwnerDashboard({ onBack }) {
       drawFooter();
 
       // =========================================================
-      // SECOND PAGE
+      // PAGE 4: EXAM RESULTS TABLE
       // =========================================================
       doc.addPage();
-      drawContinuationHeader();
+      drawMainHeader();
 
-      y = 25;
+      y = 35;
 
       setText(COLORS.blue);
       doc.setFont("helvetica", "bold");
@@ -4940,6 +6138,7 @@ export default function SchoolOwnerDashboard({ onBack }) {
       // =========================================================
       // FULL-WIDTH EXAM RESULTS TABLE
       // =========================================================
+      const examTableStartPage = doc.internal.getCurrentPageInfo().pageNumber;
       doc.autoTable({
         startY: y,
 
@@ -5020,8 +6219,8 @@ export default function SchoolOwnerDashboard({ onBack }) {
           const currentPageNumber =
             doc.internal.getCurrentPageInfo().pageNumber;
 
-          if (currentPageNumber > 2) {
-            drawContinuationHeader();
+          if (currentPageNumber > examTableStartPage) {
+            drawMainHeader();
           }
         },
 
@@ -12911,6 +14110,18 @@ export default function SchoolOwnerDashboard({ onBack }) {
             }
           />
           <Route path="student" element={renderStudentWiseView()} />
+          <Route
+            path="teacher/add"
+            element={isCsm ? renderCsmAddTeacherPage() : <Navigate to="/school/overview" replace />}
+          />
+          <Route
+            path="teacher/assign"
+            element={isCsm ? renderCsmAssignTeacherPage() : <Navigate to="/school/overview" replace />}
+          />
+          <Route
+            path="teacher/:teacherId/allotments"
+            element={renderTeacherAllotmentsPage()}
+          />
           <Route path="teacher" element={renderTeacherWiseView()} />
           <Route
             path="top-students-poster"

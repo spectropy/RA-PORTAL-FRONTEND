@@ -6,7 +6,6 @@ import ownerImg from "../assets/school owner.png";
 import teacherImg from "../assets/Teacher Portal.png";
 import studentImg from "../assets/Student Portal.png";
 import parentImg from "../assets/Parent Portal.png";
-import guestImg from "../assets/Guest Access.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -16,7 +15,7 @@ const ROLES = {
   TEACHER: "TEACHER",
   STUDENT: "STUDENT",
   PARENT: "PARENT",
-  GUEST: "GUEST",
+  CSM: "CSM",
 };
 
 // 🔐 Credentials for admin login
@@ -142,7 +141,11 @@ export default function LoginPage({ onLogin }) {
           schoolData.school_name ||
           "Unknown School",
       );
-      const userObj = { role: ROLES.OWNER, school_id: sId };
+      const userObj = {
+        role: ROLES.OWNER,
+        school_id: sId,
+        ...(loginStep === "csm-login" ? { name: "CSM" } : {}),
+      };
       sessionStorage.setItem("sp_user", JSON.stringify(userObj));
       localStorage.setItem("sp_user", JSON.stringify(userObj));
 
@@ -447,9 +450,9 @@ export default function LoginPage({ onLogin }) {
   );
 
   // --- School Owner Login Sub-View ---
-  if (loginStep === "owner-login") {
+  if (loginStep === "owner-login" || loginStep === "csm-login") {
     return renderLoginForm(
-      "School Owner",
+      loginStep === "csm-login" ? "CSM Login" : "School Owner",
       "🏫",
       ownerImg,
       "#f0fdf4",
@@ -704,15 +707,8 @@ export default function LoginPage({ onLogin }) {
       setLoginStep("student-login");
     } else if (roleKey === ROLES.PARENT) {
       setLoginStep("parent-login");
-    } else if (roleKey === ROLES.GUEST) {
-      const userObj = { role: ROLES.GUEST };
-      sessionStorage.setItem("sp_user", JSON.stringify(userObj));
-      localStorage.setItem("sp_user", JSON.stringify(userObj));
-      if (onLogin) {
-        onLogin(userObj);
-      } else {
-        setLoginStep("guest-dashboard");
-      }
+    } else if (roleKey === ROLES.CSM) {
+      setLoginStep("csm-login");
     }
   };
 
@@ -768,10 +764,10 @@ export default function LoginPage({ onLogin }) {
       iconBorder: "#fecdd3",
     },
     {
-      key: ROLES.GUEST,
-      title: "Guest Access",
+      key: ROLES.CSM,
+      title: "CSM Login",
       emoji: "👤",
-      blurb: "Explore system features with sample data.",
+      blurb: "Access school performance and management features.",
       accent: "#475569",
       hoverBg: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
       iconBg: "#f8fafc",
@@ -823,7 +819,15 @@ export default function LoginPage({ onLogin }) {
                 aria-label={`Login as ${title}`}
               >
                 <div className="role-icon-box">
-                  <span>{emoji}</span>
+                  <span
+                    style={
+                      key === ROLES.CSM
+                        ? { fontSize: "12px", fontWeight: 800, lineHeight: 1 }
+                        : undefined
+                    }
+                  >
+                    {key === ROLES.CSM ? "CSM" : emoji}
+                  </span>
                 </div>
                 <h3 className="role-card-title">{title}</h3>
                 <p className="role-card-blurb">{blurb}</p>
