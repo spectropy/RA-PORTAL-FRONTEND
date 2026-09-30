@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { ImagePlus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { getExamWiseTopStudentsPosterData, getPosterTemplates, getSchoolById } from "../../api.js";
 import { buildPosterData } from "../../utils/posterBindings.js";
@@ -30,6 +31,25 @@ export default function ExamWiseTopStudentsPosterGenerator({ mode = "admin", sch
   const [previewCanvas, setPreviewCanvas] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [photoPreviews, setPhotoPreviews] = useState({});
+  const [photoStatus, setPhotoStatus] = useState({});
+
+  const uploadPhoto = (student, index, file) => {
+    if (!file || !student?.student_id) return;
+    if (!file.type.startsWith("image/")) return setPhotoStatus((s) => ({ ...s, [index]: "Choose an image file." }));
+    const reader = new FileReader();
+    reader.onload = () => setPhotoPreviews((p) => ({ ...p, [index]: reader.result }));
+    reader.readAsDataURL(file);
+    const body = new FormData();
+    body.append("file", file); body.append("school_id", selectedSchoolId); body.append("student_id", student.student_id); body.append("class", classValue); body.append("section", sectionValue);
+    setPhotoStatus((s) => ({ ...s, [index]: "Uploading..." }));
+    fetch(`${API_BASE}/api/student-photos`, { method: "POST", body }).then(async (response) => {
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Upload failed");
+      setPhotoPreviews((p) => ({ ...p, [index]: result.data.photo_url }));
+      setPhotoStatus((s) => ({ ...s, [index]: "Saved" }));
+    }).catch((uploadError) => setPhotoStatus((s) => ({ ...s, [index]: uploadError.message })));
+  };
 
   useEffect(() => {
     getPosterTemplates({ category: "top_students", status: "active" }).then((rows) => {
@@ -107,12 +127,19 @@ export default function ExamWiseTopStudentsPosterGenerator({ mode = "admin", sch
           <label>Section<select value={sectionValue} onChange={(e) => { setSectionValue(e.target.value); setExamKey(""); }}><option value="">Choose a section</option>{sectionOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label>Exam<select value={examKey} onChange={(e) => setExamKey(e.target.value)} disabled={!classValue || !sectionValue}><option value="">Choose an exam</option>{examOptions.map((exam) => <option key={exam.key} value={exam.key}>{exam.label}</option>)}</select></label>
           <TemplateSelector templates={templates} selectedId={selectedTemplateId} onSelect={setSelectedTemplateId} />
+          <div className="poster-inline-photos">
+            <h3><ImagePlus size={16} /> Student photos</h3>
+            {!posterData?.students?.length && <p>Select a class, section, and exam first.</p>}
+            {(posterData?.students || []).slice(0, 5).map((student, index) => (
+              <label className="poster-photo-row" key={student.student_id || index}><span className="poster-photo-thumb">{photoPreviews[index] ? <img src={photoPreviews[index]} alt="" /> : <ImagePlus size={17} />}</span><span><strong>Rank {student.rank || index + 1}: {student.name || `Student ${index + 1}`}</strong><small>{photoStatus[index] || "Choose a photo"}</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadPhoto(student, index, event.target.files?.[0])} /></span></label>
+            ))}
+          </div>
           <PosterDownloadOptions canvas={previewCanvas} filename={filename} posterData={posterData} schoolDetail={schoolDetail} className={classValue} sectionName={sectionValue} />
         </section>
         <section>
           {error && <div className="alert-banner alert-banner--error">{error}</div>}
           {loading && <div className="poster-empty poster-empty--compact">Loading exam-wise results...</div>}
-          <PosterPreview template={selectedTemplate} posterData={posterData} onCanvasReady={setPreviewCanvas} />
+          <PosterPreview template={selectedTemplate} posterData={posterData ? { ...posterData, students: posterData.students.map((student, index) => ({ ...student, photo: photoPreviews[index] || student.photo || "" })) } : posterData} onCanvasReady={setPreviewCanvas} />
         </section>
       </div>
     </div>

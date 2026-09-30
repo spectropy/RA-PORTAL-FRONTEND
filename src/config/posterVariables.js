@@ -32,8 +32,16 @@ const STUDENT_NAME_VARIABLES = [0, 1, 2, 3, 4].map((index) => ({
   sample: `Student ${index + 1} Name`,
 }));
 
+const STUDENT_PHOTO_VARIABLES = [0, 1, 2, 3, 4].map((index) => ({
+  label: `Student Photo ${index + 1}`,
+  binding: `students.${index}.photo`,
+  type: "image",
+  sample: "",
+}));
+
 export const CUMULATIVE_POSTER_VARIABLES = [
   ...SCHOOL_VARIABLES,
+  ...STUDENT_PHOTO_VARIABLES,
   ...STUDENT_NAME_VARIABLES,
   ...[0, 1, 2, 3, 4].map((index) => ({
     label: `Cumulative Percentage ${index + 1}`,
@@ -46,6 +54,7 @@ export const CUMULATIVE_POSTER_VARIABLES = [
 export const EXAM_WISE_POSTER_VARIABLES = [
   ...SCHOOL_VARIABLES,
   { label: "Exam", binding: "exam.name", type: "text", sample: "UNIT TEST 1" },
+  ...STUDENT_PHOTO_VARIABLES,
   ...STUDENT_NAME_VARIABLES,
   ...[0, 1, 2, 3, 4].map((index) => ({
     label: `Percentage ${index + 1}`,

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { ImagePlus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   getPosterTemplates,
@@ -77,6 +78,36 @@ export default function TopStudentsPosterGenerator({
   const [previewCanvas, setPreviewCanvas] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [photoPreviews, setPhotoPreviews] = useState({});
+  const [photoStatus, setPhotoStatus] = useState({});
+
+
+  const uploadStudentPhoto = async (student, index, file) => {
+    if (!file || !student?.student_id) return;
+    if (!file.type.startsWith("image/")) {
+      setPhotoStatus((current) => ({ ...current, [index]: "Choose an image file." }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setPhotoPreviews((current) => ({ ...current, [index]: reader.result }));
+    reader.readAsDataURL(file);
+    const body = new FormData();
+    body.append("file", file);
+    body.append("school_id", selectedSchoolId);
+    body.append("student_id", student.student_id);
+    body.append("class", classValue);
+    body.append("section", sectionValue);
+    setPhotoStatus((current) => ({ ...current, [index]: "Uploading..." }));
+    try {
+      const response = await fetch(`${API_BASE}/api/student-photos`, { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Upload failed");
+      setPhotoPreviews((current) => ({ ...current, [index]: result.data.photo_url }));
+      setPhotoStatus((current) => ({ ...current, [index]: "Saved" }));
+    } catch (uploadError) {
+      setPhotoStatus((current) => ({ ...current, [index]: uploadError.message }));
+    }
+  };
 
   useEffect(() => {
     getPosterTemplates({ category: "top_students", status: "active" }).then(
@@ -243,6 +274,16 @@ export default function TopStudentsPosterGenerator({
             selectedId={selectedTemplateId}
             onSelect={setSelectedTemplateId}
           />
+          <div className="poster-inline-photos">
+            <h3><ImagePlus size={16} /> Student photos</h3>
+            {!posterData?.students?.length && <p>Select a class and section first.</p>}
+            {(posterData?.students || []).slice(0, 5).map((student, index) => (
+              <label className="poster-photo-row" key={student.student_id || index}>
+                <span className="poster-photo-thumb">{photoPreviews[index] ? <img src={photoPreviews[index]} alt="" /> : <ImagePlus size={17} />}</span>
+                <span><strong>Rank {student.rank || index + 1}: {student.name || `Student ${index + 1}`}</strong><small>{photoStatus[index] || "Choose a photo"}</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadStudentPhoto(student, index, event.target.files?.[0])} /></span>
+              </label>
+            ))}
+          </div>
           <PosterDownloadOptions
             canvas={previewCanvas}
             filename={filename}
@@ -264,7 +305,7 @@ export default function TopStudentsPosterGenerator({
           )}
           <PosterPreview
             template={selectedTemplate}
-            posterData={posterData}
+            posterData={posterData ? { ...posterData, students: posterData.students.map((student, index) => ({ ...student, photo: photoPreviews[index] || student.photo || "" })) } : posterData}
             onCanvasReady={setPreviewCanvas}
           />
         </section>

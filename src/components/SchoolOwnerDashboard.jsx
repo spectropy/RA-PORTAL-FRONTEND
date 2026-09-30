@@ -14134,9 +14134,6 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false }) {
                       Generate poster downloads for your school.
                     </p>
                   </div>
-                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
-                    ? Back to Top Students
-                  </button>
                 </div>
                 <div className="page-content">
                   <TopStudentsPosterGenerator mode="school" school={school} />

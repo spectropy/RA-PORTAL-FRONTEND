@@ -508,9 +508,15 @@ export default function Dashboard({ user, onLogout }) {
                       Select a template and export posters for top 5 students.
                     </p>
                   </div>
-                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
-                    ← Back to Top 5 Students by Class &amp; Section
-                  </button>
+                  <div className="poster-toolbar-actions">
+                    <button
+                      type="button"
+                      className="poster-secondary-btn"
+                      onClick={() => navigate(-1)}
+                    >
+                      ← Back to Top 5 Students by Class &amp; Section
+                    </button>
+                  </div>
                 </div>
                 <div className="page-content">
                   <TopStudentsPosterGenerator mode="admin" schools={schools} />
@@ -546,9 +552,7 @@ export default function Dashboard({ user, onLogout }) {
                     <h1 className="page-header-title">Exam-wise Top Students Poster</h1>
                     <p className="page-header-subtitle">Select a template and export the selected exam poster.</p>
                   </div>
-                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>
-                    ← Back to Top 5 Students by Exam
-                  </button>
+                  <button type="button" className="poster-secondary-btn" onClick={() => navigate(-1)}>← Back to Top 5 Students by Exam</button>
                 </div>
                 <div className="page-content">
                   <ExamWiseTopStudentsPosterGenerator mode="admin" schools={schools} />
