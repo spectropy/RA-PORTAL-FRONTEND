@@ -84,7 +84,7 @@ const OWNER_TABS = [
   },
 ];
 
-export default function SchoolOwnerDashboard({ onBack, isCsm = false }) {
+export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSchool }) {
   const [school, setSchool] = useState(null);
   const [newTeacher, setNewTeacher] = useState({ teacherId: "", name: "", contact: "", email: "" });
   const [addTeacherLoading, setAddTeacherLoading] = useState(false);
@@ -14074,6 +14074,11 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false }) {
             </div>
           </div>
 
+          {isCsm && onChangeSchool && (
+            <button className="btn btn-outline" style={{ width: "100%", marginBottom: 12 }} onClick={onChangeSchool}>
+              Change School
+            </button>
+          )}
           <button className="sidebar-logout-btn" onClick={handleLogout}>
             <span>?</span>
             <span className="sidebar-nav-label">Sign Out</span>

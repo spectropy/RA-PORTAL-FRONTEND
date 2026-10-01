@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { GraduationCap, School, User, Users } from "lucide-react";
 import LoginPage from "./components/LoginPage";
+import CsmSchoolSelection from "./components/CsmSchoolSelection";
 import Dashboard from "./Dashboard";
 import SchoolOwnerDashboard from "./components/SchoolOwnerDashboard";
 import TeacherDashboard from "./components/TeacherDashboard";
@@ -17,6 +18,7 @@ import portalLogo from "./assets/logo.png";
 
 // ─── Role → Route map ────────────────────────────────────────────
 const ROLE_ROUTES = {
+  CSM: "/csm",
   SPECTROPY_ADMIN: "/admin",
   SCHOOL_OWNER: "/school",
   TEACHER: "/teacher",
@@ -42,7 +44,7 @@ function RoleIcon({ role }) {
 function Protected({ user, allowedRole, children }) {
   const location = useLocation();
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (user.role !== allowedRole) {
+  if (!(Array.isArray(allowedRole) ? allowedRole : [allowedRole]).includes(user.role)) {
     const correctRoute = ROLE_ROUTES[user.role] || "/login";
     return <Navigate to={correctRoute} replace />;
   }
@@ -90,9 +92,26 @@ function AppShell() {
     navigate("/login", { replace: true });
   };
 
+  const handleCsmSchool = (school) => {
+    const nextUser = { role: "CSM", username: user.username,
+      ...(school ? { school_id: school.school_id, school_name: school.school_name } : {}) };
+    for (const storage of [localStorage, sessionStorage]) {
+      storage.setItem("sp_user", JSON.stringify(nextUser));
+      storage.removeItem("sp_school_id");
+      storage.removeItem("sp_school_name");
+      if (school) {
+        storage.setItem("sp_school_id", school.school_id);
+        storage.setItem("sp_school_name", school.school_name || "");
+      }
+    }
+    setUser(nextUser);
+    navigate(school ? "/school/overview" : "/csm", { replace: true });
+  };
+
   const headerRoleLabel =
     {
       SPECTROPY_ADMIN: "SPECTROPY ADMIN",
+      CSM: `CSM — ${user?.username || ""}`,
       SCHOOL_OWNER: user?.name || "SCHOOL OWNER",
       TEACHER: "TEACHER LOGIN",
       STUDENT: "STUDENT LOGIN",
@@ -134,7 +153,7 @@ function AppShell() {
           </button>
         )}
         {/* Hamburger — School Owner */}
-        {user?.role === "SCHOOL_OWNER" && (
+        {(user?.role === "SCHOOL_OWNER" || (user?.role === "CSM" && user?.school_id)) && (
           <button
             className="app-hamburger-btn"
             onClick={() =>
@@ -236,15 +255,25 @@ function AppShell() {
             }
           />
 
+          <Route path="/csm" element={
+            <Protected user={user} allowedRole="CSM">
+              {user?.school_id ? <Navigate to="/school/overview" replace /> :
+                <CsmSchoolSelection onSelect={handleCsmSchool} />}
+            </Protected>
+          } />
+
           {/* School Owner — /* allows nested tab routes */}
           <Route
             path="/school/*"
             element={
-              <Protected user={user} allowedRole="SCHOOL_OWNER">
+              <Protected user={user} allowedRole={["SCHOOL_OWNER", "CSM"]}>
+                {user?.role === "CSM" && !user?.school_id ? <Navigate to="/csm" replace /> :
                 <SchoolOwnerDashboard
+                  key={user?.school_id}
                   onBack={handleLogout}
-                  isCsm={user?.name === "CSM"}
-                />
+                  isCsm={user?.role === "CSM"}
+                  onChangeSchool={() => handleCsmSchool(null)}
+                />}
               </Protected>
             }
           />

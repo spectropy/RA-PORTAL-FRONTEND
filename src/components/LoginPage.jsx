@@ -20,6 +20,11 @@ const ROLES = {
 
 // 🔐 Credentials for admin login
 const CREDENTIALS = {
+  CSM: [
+    { username: "Rajinikanth", password: "Rajinikanth@123" },
+    { username: "Sravan", password: "Sravan@123" },
+    { username: "Sai Kiran", password: "Sai Kiran@123" },
+  ],
   ADMIN: [
     { username: "admin", password: "spectropy@123" },
     { username: "Krishna", password: "Krishna@123" },
@@ -144,7 +149,6 @@ export default function LoginPage({ onLogin }) {
       const userObj = {
         role: ROLES.OWNER,
         school_id: sId,
-        ...(loginStep === "csm-login" ? { name: "CSM" } : {}),
       };
       sessionStorage.setItem("sp_user", JSON.stringify(userObj));
       localStorage.setItem("sp_user", JSON.stringify(userObj));
@@ -450,9 +454,45 @@ export default function LoginPage({ onLogin }) {
   );
 
   // --- School Owner Login Sub-View ---
-  if (loginStep === "owner-login" || loginStep === "csm-login") {
+  if (loginStep === "csm-login") {
     return renderLoginForm(
-      loginStep === "csm-login" ? "CSM Login" : "School Owner",
+      "CSM", "", ownerImg, "#f8fafc", "#475569",
+      (e) => {
+        e.preventDefault();
+        const account = CREDENTIALS.CSM.find(
+          (entry) => entry.username.toLowerCase() === roleUsername.trim().toLowerCase()
+            && entry.password === rolePassword,
+        );
+        if (!account) {
+          setRoleError("Invalid CSM username or password.");
+          return;
+        }
+        for (const storage of [localStorage, sessionStorage]) {
+          storage.removeItem("sp_school_id");
+          storage.removeItem("sp_school_name");
+        }
+        onLogin({ role: ROLES.CSM, username: account.username });
+      },
+      <>
+        <div style={customStyles.inputFieldGroup}>
+          <label htmlFor="csm-username" style={customStyles.fieldLabel}>CSM Username</label>
+          <input id="csm-username" value={roleUsername}
+            onChange={(e) => setRoleUsername(e.target.value)}
+            placeholder="Enter CSM username" autoComplete="username" autoFocus required />
+        </div>
+        <div style={customStyles.inputFieldGroup}>
+          <label style={customStyles.fieldLabel}>Password</label>
+          <PasswordInput value={rolePassword}
+            onChange={(e) => setRolePassword(e.target.value)} placeholder="Enter password" />
+        </div>
+      </>,
+      roleError,
+    );
+  }
+
+  if (loginStep === "owner-login") {
+    return renderLoginForm(
+      "School Owner",
       "🏫",
       ownerImg,
       "#f0fdf4",
