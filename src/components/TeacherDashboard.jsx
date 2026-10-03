@@ -32,6 +32,29 @@ import { getTeacherRanks } from "../api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+const BLOOM_SKILLS = [
+  { key: "Remember", group: "LOTS" },
+  { key: "Understand", group: "LOTS" },
+  { key: "Apply", group: "HOTS" },
+  { key: "Analyse", group: "HOTS" },
+  { key: "Evaluate", group: "HOTS" },
+  { key: "Create", group: "HOTS" },
+];
+
+const SUBJECT_KEYS = {
+  Physics: ["phy", "physics"],
+  Chemistry: ["chem", "chemistry"],
+  Biology: ["bio", "biology"],
+  Maths: ["math", "maths", "mathematics"],
+};
+
+const SUBJECT_PERCENTAGE_FIELDS = {
+  Physics: ["phy_exam_per_average", "physics_percentage"],
+  Chemistry: ["chem_exam_per_average", "chemistry_percentage"],
+  Biology: ["bioexam_per_average", "bio_exam_per_average", "biology_percentage"],
+  Maths: ["math_exam_per_average", "maths_percentage", "math_percentage"],
+};
+
 // ─── Tab Definitions ────────────────────────────────────────────
 const TEACHER_TABS = [
   {
@@ -134,29 +157,40 @@ function computeExamAnalytics(exams, teacherAssignments) {
     };
   };
 
-  const examPatterns = Object.entries(patternMap).map(([pattern, csData]) => {
-    const averagesByClassSection = {};
-    const detailsByClassSection = {};
-    for (const [cs, s] of Object.entries(csData)) {
-      averagesByClassSection[cs] = {
-        Physics: avg(s.physics),
-        Chemistry: avg(s.chemistry),
-        Biology: avg(s.biology),
-        Maths: avg(s.maths),
-      };
-      detailsByClassSection[cs] = {
-        Physics: stats(s.physics),
-        Chemistry: stats(s.chemistry),
-        Biology: stats(s.biology),
-        Maths: stats(s.maths),
-      };
-    }
-    return {
-      exam_pattern: pattern,
-      averagesByClassSection,
-      detailsByClassSection,
-    };
-  });
+  const examPatterns = Object.entries(patternMap)
+    .map(([pattern, csData]) => {
+      const averagesByClassSection = {};
+      const detailsByClassSection = {};
+      let hasUploadedResults = false;
+
+      for (const [cs, s] of Object.entries(csData)) {
+        averagesByClassSection[cs] = {
+          Physics: avg(s.physics),
+          Chemistry: avg(s.chemistry),
+          Biology: avg(s.biology),
+          Maths: avg(s.maths),
+        };
+        detailsByClassSection[cs] = {
+          Physics: stats(s.physics),
+          Chemistry: stats(s.chemistry),
+          Biology: stats(s.biology),
+          Maths: stats(s.maths),
+        };
+
+        hasUploadedResults ||= Object.values(s).some(
+          (subjectResults) => subjectResults.length > 0,
+        );
+      }
+
+      return hasUploadedResults
+        ? {
+            exam_pattern: pattern,
+            averagesByClassSection,
+            detailsByClassSection,
+          }
+        : null;
+    })
+    .filter(Boolean);
   examPatterns.sort((a, b) => a.exam_pattern.localeCompare(b.exam_pattern));
 
   // Best week test per grade — only for teacher's assigned subjects
@@ -199,6 +233,419 @@ function computeExamAnalytics(exams, teacherAssignments) {
   return { examPatterns, bestWeekTestsByGrade };
 }
 
+function emptyCounts() {
+  return { correct: 0, incorrect: 0, unattempted: 0, total: 0 };
+}
+
+function addCount(bucket, status) {
+  bucket.total += 1;
+  bucket[status] += 1;
+}
+
+function percentFromCounts(bucket) {
+  return bucket.total > 0 ? (bucket.correct / bucket.total) * 100 : null;
+}
+
+function getFocusLevel(score) {
+  if (score >= 70) return { label: "Monitor", priority: 1 };
+  if (score >= 45) return { label: "Medium Focus", priority: 2 };
+  return { label: "High Focus", priority: 3 };
+}
+
+function getStudentId(exam = {}) {
+  return (
+    exam.student_id ||
+    exam.roll_no ||
+    exam.admission_no ||
+    exam.hall_ticket ||
+    exam.id ||
+    "Unknown"
+  );
+}
+
+function getStudentName(exam = {}) {
+  const fullName =
+    exam.name ||
+    exam.student_name ||
+    exam.full_name ||
+    [exam.first_name, exam.last_name].filter(Boolean).join(" ");
+  return fullName || getStudentId(exam);
+}
+
+function getExamTime(exam = {}) {
+  const rawDate = exam.exam_date || exam.date || exam.created_at;
+  const time = rawDate ? new Date(rawDate).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getQuestionNumber(question) {
+  return Number(String(question || "").match(/\d+/)?.[0] || 0);
+}
+
+function normalizeBloomSkill(value) {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z\s]/g, "")
+    .trim();
+
+  if (["remember", "remembering"].includes(normalized)) return "Remember";
+  if (["understand", "understanding"].includes(normalized)) return "Understand";
+  if (["apply", "applying"].includes(normalized)) return "Apply";
+  if (["analyse", "analysis", "analyze", "analysing", "analyzing"].includes(normalized)) {
+    return "Analyse";
+  }
+  if (["evaluate", "evaluating"].includes(normalized)) return "Evaluate";
+  if (["create", "creating"].includes(normalized)) return "Create";
+  return null;
+}
+
+function normalizeSubject(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    Object.entries(SUBJECT_KEYS).find(([, aliases]) =>
+      aliases.some((alias) => normalized.includes(alias)),
+    )?.[0] || null
+  );
+}
+
+function parseQuestionResults(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getQuestionStatus(details = {}) {
+  const status = String(details.status || "").toLowerCase();
+  const marks = Number(details.marks);
+  const option = details.option ?? details.options ?? details.selected_option;
+
+  if (status.includes("unattempt") || status.includes("blank")) return "unattempted";
+  if (status.includes("incorrect") || status.includes("wrong")) return "incorrect";
+  if (status.includes("correct") || marks > 0) return "correct";
+  if (option === "" || option === null || option === undefined) return "unattempted";
+  return "incorrect";
+}
+
+function buildTeacherInsights(exams, teacherAssignments) {
+  const assignments = Array.isArray(teacherAssignments) ? teacherAssignments : [];
+  const assignedKeys = new Set(
+    assignments.map((a) => `${a.class}-${a.section}|${a.subject}`),
+  );
+  const subjectRows = {};
+  const cognitive = {
+    overall: emptyCounts(),
+    lots: emptyCounts(),
+    hots: emptyCounts(),
+    questionCount: 0,
+    skills: Object.fromEntries(
+      BLOOM_SKILLS.map(({ key }) => [key, emptyCounts()]),
+    ),
+  };
+  const studentMap = {};
+
+  assignments.forEach((assignment) => {
+    const classSection = `${assignment.class}-${assignment.section}`;
+    const key = `${classSection}|${assignment.subject}`;
+    subjectRows[key] = {
+      subject: assignment.subject,
+      classSection,
+      scores: [],
+      examPatterns: new Set(),
+      students: new Set(),
+      skills: Object.fromEntries(
+        BLOOM_SKILLS.map(({ key }) => [key, emptyCounts()]),
+      ),
+    };
+  });
+
+  exams.forEach((exam) => {
+    const classSection = `${exam.class || "N/A"}-${exam.section || "N/A"}`;
+    const studentId = getStudentId(exam);
+    const studentName = getStudentName(exam);
+    const examTime = getExamTime(exam);
+
+    Object.keys(SUBJECT_KEYS).forEach((subject) => {
+      const rowKey = `${classSection}|${subject}`;
+      if (!assignedKeys.has(rowKey)) return;
+
+      const percentage = SUBJECT_PERCENTAGE_FIELDS[subject]
+        .map((field) => exam[field])
+        .find((value) => value !== null && value !== undefined && value !== "");
+      const score = Number(percentage);
+      if (Number.isFinite(score)) subjectRows[rowKey]?.scores.push(score);
+      if (exam.exam_pattern) subjectRows[rowKey]?.examPatterns.add(exam.exam_pattern);
+      if (exam.student_id || exam.admission_no || exam.roll_no) {
+        subjectRows[rowKey]?.students.add(
+          exam.student_id || exam.admission_no || exam.roll_no,
+        );
+      }
+
+      const focusKey = `${studentId}|${rowKey}`;
+      if (!studentMap[focusKey]) {
+        studentMap[focusKey] = {
+          studentId,
+          studentName,
+          classSection,
+          subject,
+          scores: [],
+          exams: [],
+          lots: emptyCounts(),
+          hots: emptyCounts(),
+          skills: Object.fromEntries(
+            BLOOM_SKILLS.map(({ key }) => [key, emptyCounts()]),
+          ),
+          unattemptedQuestions: 0,
+        };
+      }
+
+      if (Number.isFinite(score)) {
+        studentMap[focusKey].scores.push(score);
+        studentMap[focusKey].exams.push({
+          score,
+          time: examTime,
+          pattern: exam.exam_pattern || "Exam",
+        });
+      }
+    });
+
+    const questions = parseQuestionResults(exam.question_results);
+    cognitive.questionCount = Math.max(
+      cognitive.questionCount,
+      Object.keys(questions).length,
+    );
+    const activeSubjects = [
+      ...new Set(
+        assignments
+          .filter((assignment) => `${assignment.class}-${assignment.section}` === classSection)
+          .map((assignment) => normalizeSubject(assignment.subject))
+          .filter((subject) => subject && SUBJECT_KEYS[subject]),
+      ),
+    ];
+    const totalQuestionCount = Math.max(
+      ...Object.keys(questions).map(getQuestionNumber),
+      Object.keys(questions).length,
+      0,
+    );
+
+    Object.entries(questions).forEach(([question, details]) => {
+      const skill = normalizeBloomSkill(
+        details?.blooms_skill ||
+          details?.bloomsSkill ||
+          details?.["Blooms Skill"] ||
+          details?.["Bloom's Skill"],
+      );
+      if (!skill) return;
+
+      const storedSubject = normalizeSubject(
+        details?.subject ||
+          details?.Subject ||
+          details?.subject_name ||
+          details?.subjectName,
+      );
+      const questionNumber = getQuestionNumber(question);
+      const questionsPerSubject = Math.max(
+        1,
+        Math.ceil(
+          (totalQuestionCount || questionNumber || Object.keys(questions).length || 1) /
+            Math.max(activeSubjects.length, 1),
+        ),
+      );
+      const fallbackIndex = Math.min(
+        Math.max(activeSubjects.length - 1, 0),
+        Math.floor(Math.max(questionNumber, 1) - 1) / questionsPerSubject,
+      );
+      const subject =
+        storedSubject || activeSubjects[Math.floor(fallbackIndex)] || null;
+      if (!subject || !assignedKeys.has(`${classSection}|${subject}`)) return;
+
+      const group = BLOOM_SKILLS.find((item) => item.key === skill)?.group;
+      const status = getQuestionStatus(details);
+      const focusKey = `${studentId}|${classSection}|${subject}`;
+
+      addCount(cognitive.overall, status);
+      addCount(group === "LOTS" ? cognitive.lots : cognitive.hots, status);
+      addCount(cognitive.skills[skill], status);
+      addCount(subjectRows[`${classSection}|${subject}`].skills[skill], status);
+
+      if (studentMap[focusKey]) {
+        addCount(group === "LOTS" ? studentMap[focusKey].lots : studentMap[focusKey].hots, status);
+        addCount(studentMap[focusKey].skills[skill], status);
+        if (status === "unattempted") {
+          studentMap[focusKey].unattemptedQuestions += 1;
+        }
+      }
+    });
+  });
+
+  const subjectAnalysis = Object.values(subjectRows).map((row) => {
+    const sorted = [...row.scores].sort((a, b) => a - b);
+    const average =
+      sorted.length > 0
+        ? sorted.reduce((sum, value) => sum + value, 0) / sorted.length
+        : null;
+    const middle = Math.floor(sorted.length / 2);
+    const median =
+      sorted.length === 0
+        ? null
+        : sorted.length % 2
+          ? sorted[middle]
+          : (sorted[middle - 1] + sorted[middle]) / 2;
+
+    return {
+      subject: row.subject,
+      classSection: row.classSection,
+      average,
+      highest: sorted.length ? sorted[sorted.length - 1] : null,
+      lowest: sorted.length ? sorted[0] : null,
+      median,
+      studentCount: row.students.size || sorted.length,
+      examCount: row.examPatterns.size,
+      bloomSkills: BLOOM_SKILLS.map(({ key, group }) => ({
+        skill: key,
+        group,
+        ...row.skills[key],
+        percentage: percentFromCounts(row.skills[key]),
+      })),
+    };
+  }).map((row) => {
+    const measuredSkills = row.bloomSkills
+      .filter((skill) => skill.total > 0 && skill.percentage !== null)
+      .sort((a, b) => b.percentage - a.percentage);
+
+    return {
+      ...row,
+      strongestBloom: measuredSkills[0] || null,
+      focusBloom: measuredSkills[measuredSkills.length - 1] || null,
+    };
+  });
+
+  const skillRows = BLOOM_SKILLS.map(({ key, group }) => ({
+    skill: key,
+    group,
+    ...cognitive.skills[key],
+    percentage: percentFromCounts(cognitive.skills[key]),
+  }));
+  const measuredSkills = skillRows
+    .filter((row) => row.total > 0 && row.percentage !== null)
+    .sort((a, b) => b.percentage - a.percentage);
+
+  const focusStudents = Object.values(studentMap)
+    .map((student) => {
+      const sortedExams = [...student.exams].sort((a, b) => a.time - b.time);
+      const average =
+        student.scores.length > 0
+          ? student.scores.reduce((sum, value) => sum + value, 0) /
+            student.scores.length
+          : null;
+      const latest = sortedExams[sortedExams.length - 1] || null;
+      const previous = sortedExams[sortedExams.length - 2] || null;
+      const lotsPercentage = percentFromCounts(student.lots);
+      const hotsPercentage = percentFromCounts(student.hots);
+      const weakestSkill = BLOOM_SKILLS.map(({ key }) => ({
+        skill: key,
+        percentage: percentFromCounts(student.skills[key]),
+        total: student.skills[key].total,
+      }))
+        .filter((item) => item.total > 0 && item.percentage !== null)
+        .sort((a, b) => a.percentage - b.percentage)[0];
+      const scoreForLevel = Math.min(
+        average ?? 100,
+        lotsPercentage ?? 100,
+        hotsPercentage ?? 100,
+      );
+      const focus = getFocusLevel(scoreForLevel);
+      const reasons = [];
+
+      if (average !== null && average < 45) reasons.push("Low subject average");
+      else if (average !== null && average < 60) reasons.push("Subject average needs support");
+      if (lotsPercentage !== null && lotsPercentage < 50) reasons.push("LOTS weak");
+      if (hotsPercentage !== null && hotsPercentage < 50) reasons.push("HOTS weak");
+      if (previous && latest && latest.score < previous.score - 5) {
+        reasons.push("Latest score dropped");
+      }
+      if (student.unattemptedQuestions > 0) reasons.push("Unattempted questions");
+      if (weakestSkill) reasons.push(`${weakestSkill.skill} focus`);
+
+      return {
+        ...student,
+        average,
+        latestScore: latest?.score ?? null,
+        previousScore: previous?.score ?? null,
+        trend:
+          latest && previous ? latest.score - previous.score : null,
+        lotsPercentage,
+        hotsPercentage,
+        weakestSkill,
+        focusLevel: focus.label,
+        focusPriority: focus.priority,
+        reasons: reasons.length ? reasons : ["Maintain practice"],
+      };
+    })
+    .filter((student) => student.average !== null)
+    .sort((a, b) => {
+      if (b.focusPriority !== a.focusPriority) return b.focusPriority - a.focusPriority;
+      return (a.average ?? 100) - (b.average ?? 100);
+    });
+
+  const classFocus = Object.values(
+    focusStudents.reduce((acc, student) => {
+      const key = `${student.classSection}|${student.subject}`;
+      if (!acc[key]) {
+        acc[key] = {
+          classSection: student.classSection,
+          subject: student.subject,
+          students: 0,
+          highFocus: 0,
+          mediumFocus: 0,
+          lotsWeak: 0,
+          hotsWeak: 0,
+          averageSum: 0,
+          lotsValues: [],
+          hotsValues: [],
+        };
+      }
+      acc[key].students += 1;
+      acc[key].averageSum += student.average ?? 0;
+      if (student.focusLevel === "High Focus") acc[key].highFocus += 1;
+      if (student.focusLevel === "Medium Focus") acc[key].mediumFocus += 1;
+      if (student.lotsPercentage !== null) acc[key].lotsValues.push(student.lotsPercentage);
+      if (student.hotsPercentage !== null) acc[key].hotsValues.push(student.hotsPercentage);
+      if (student.lotsPercentage !== null && student.lotsPercentage < 50) acc[key].lotsWeak += 1;
+      if (student.hotsPercentage !== null && student.hotsPercentage < 50) acc[key].hotsWeak += 1;
+      return acc;
+    }, {}),
+  ).map((row) => ({
+    ...row,
+    average: row.students ? row.averageSum / row.students : null,
+    lotsPercentage: row.lotsValues.length
+      ? row.lotsValues.reduce((sum, value) => sum + value, 0) / row.lotsValues.length
+      : null,
+    hotsPercentage: row.hotsValues.length
+      ? row.hotsValues.reduce((sum, value) => sum + value, 0) / row.hotsValues.length
+      : null,
+  }));
+
+  return {
+    cognitive: {
+      overall: { ...cognitive.overall, percentage: percentFromCounts(cognitive.overall) },
+      lots: { ...cognitive.lots, percentage: percentFromCounts(cognitive.lots) },
+      hots: { ...cognitive.hots, percentage: percentFromCounts(cognitive.hots) },
+      skills: skillRows,
+      strongest: measuredSkills[0] || null,
+      weakest: measuredSkills[measuredSkills.length - 1] || null,
+    },
+    subjectAnalysis,
+    focusStudents,
+    classFocus,
+  };
+}
+
 // ─── Main Component ──────────────────────────────────────────────
 export default function TeacherDashboard({
   onBack,
@@ -220,6 +667,10 @@ export default function TeacherDashboard({
   const [error, setError] = useState("");
   const [examPatterns, setExamPatterns] = useState([]);
   const [bestWeekTestsByGrade, setBestWeekTestsByGrade] = useState([]);
+  const [cognitiveAnalysis, setCognitiveAnalysis] = useState(null);
+  const [subjectAnalysis, setSubjectAnalysis] = useState([]);
+  const [focusStudents, setFocusStudents] = useState([]);
+  const [classFocus, setClassFocus] = useState([]);
   const [teacherRankRows, setTeacherRankRows] = useState([]);
   const [teacherRankLoading, setTeacherRankLoading] = useState(false);
   const [teacherRankError, setTeacherRankError] = useState("");
@@ -338,8 +789,17 @@ export default function TeacherDashboard({
           exams,
           teacherData.teacher_assignments,
         );
+        const { cognitive, subjectAnalysis, focusStudents, classFocus } =
+          buildTeacherInsights(
+          exams,
+          teacherData.teacher_assignments,
+        );
         setExamPatterns(examPatterns);
         setBestWeekTestsByGrade(bestWeekTestsByGrade);
+        setCognitiveAnalysis(cognitive);
+        setSubjectAnalysis(subjectAnalysis);
+        setFocusStudents(focusStudents);
+        setClassFocus(classFocus);
 
         setTeacherRankLoading(true);
         setTeacherRankError("");
@@ -393,8 +853,19 @@ export default function TeacherDashboard({
     const safeBestWeekTests = Array.isArray(bestWeekTestsByGrade)
       ? bestWeekTestsByGrade
       : [];
+    const safeTeacherRanks = Array.isArray(teacherRankRows)
+      ? teacherRankRows
+      : [];
 
     const safeExamPatterns = Array.isArray(examPatterns) ? examPatterns : [];
+    const safeSubjectAnalysis = Array.isArray(subjectAnalysis)
+      ? subjectAnalysis
+      : [];
+    const safeFocusStudents = Array.isArray(focusStudents)
+      ? focusStudents
+      : [];
+    const safeClassFocus = Array.isArray(classFocus) ? classFocus : [];
+    const safeCognitiveAnalysis = cognitiveAnalysis || null;
 
     // =========================================================
     // DESIGN SYSTEM
@@ -1023,7 +1494,7 @@ export default function TeacherDashboard({
     // =========================================================
     // BEST WEEK TEST TABLE
     // =========================================================
-    if (safeBestWeekTests.length > 0) {
+    if (false && safeBestWeekTests.length > 0) {
       y = ensureSectionSpace(y, 35);
 
       setText(COLORS.dark);
@@ -1122,6 +1593,54 @@ export default function TeacherDashboard({
         },
       });
 
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    // =========================================================
+    // TEACHER PERFORMANCE RANKINGS
+    // =========================================================
+    if (safeTeacherRanks.length > 0) {
+      y = ensureSectionSpace(y, 40);
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Teacher Performance Rankings", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Teacher ranking by uploaded exam performance", margin, y + 4);
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Exam", "Date", "Class", "Subject", "Average", "All India Rank"]],
+        body: safeTeacherRanks.map((row) => [
+          safeText(row.exam_pattern),
+          safeText(row.exam_date),
+          safeText(row.class_section),
+          safeText(row.subject),
+          row.average != null ? formatPercentage(row.average) : "N/A",
+          row.all_india_rank != null ? `#${row.all_india_rank}` : "-",
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 7.5,
+          cellPadding: 1.8,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+        },
+      });
       y = doc.lastAutoTable.finalY + 9;
     }
 
@@ -1296,6 +1815,357 @@ export default function TeacherDashboard({
           }
         },
       });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    // =========================================================
+    // COGNITIVE ANALYSIS
+    // =========================================================
+    if (safeClassFocus.length > 0) {
+      y = ensureSectionSpace(y, 40);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Class Focus Summary", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Assigned class-section focus counts by LOTS, HOTS and score risk", margin, y + 4);
+
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Class", "Subject", "Avg", "LOTS", "HOTS", "Students", "High Focus", "Medium Focus", "LOTS Weak", "HOTS Weak"]],
+        body: safeClassFocus.map((row) => [
+          row.classSection,
+          row.subject,
+          row.average != null ? formatPercentage(row.average) : "N/A",
+          row.lotsPercentage != null ? formatPercentage(row.lotsPercentage) : "N/A",
+          row.hotsPercentage != null ? formatPercentage(row.hotsPercentage) : "N/A",
+          row.students,
+          row.highFocus,
+          row.mediumFocus,
+          row.lotsWeak,
+          row.hotsWeak,
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 6.8,
+          cellPadding: 1.5,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.5,
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1, 0.9, 0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 0.8, 0.8],
+          leftAlignedIndexes: [0, 1],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    if (safeFocusStudents.length > 0) {
+      y = ensureSectionSpace(y, 45);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Students Needing Focus", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Highest priority students based on score, LOTS/HOTS and trend signals", margin, y + 4);
+
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Student", "ID", "Class", "Subject", "Avg", "Latest", "LOTS", "HOTS", "Focus", "Why Focus"]],
+        body: safeFocusStudents.slice(0, 20).map((student) => [
+          safeText(student.studentName),
+          safeText(student.studentId),
+          student.classSection,
+          student.subject,
+          student.average != null ? formatPercentage(student.average) : "N/A",
+          student.latestScore != null ? formatPercentage(student.latestScore) : "N/A",
+          student.lotsPercentage != null ? formatPercentage(student.lotsPercentage) : "N/A",
+          student.hotsPercentage != null ? formatPercentage(student.hotsPercentage) : "N/A",
+          student.focusLevel,
+          student.reasons.slice(0, 3).join(", "),
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 6.5,
+          cellPadding: 1.4,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.3,
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1.1, 0.9, 0.8, 0.8, 0.65, 0.65, 0.65, 0.65, 0.9, 1.8],
+          leftAlignedIndexes: [0, 9],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    if (safeCognitiveAnalysis?.overall?.total > 0) {
+      y = ensureSectionSpace(y, 38);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Overall Cognitive Analysis", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Bloom skill performance for assigned subjects", margin, y + 4);
+
+      y += 7;
+
+      const cognitiveSummaryRows = [
+        ["Overall", formatPercentage(safeCognitiveAnalysis.overall.percentage), safeCognitiveAnalysis.questionCount || safeCognitiveAnalysis.overall.total],
+        ["LOTS", formatPercentage(safeCognitiveAnalysis.lots.percentage), safeCognitiveAnalysis.questionCount || safeCognitiveAnalysis.lots.total],
+        ["HOTS", formatPercentage(safeCognitiveAnalysis.hots.percentage), safeCognitiveAnalysis.questionCount || safeCognitiveAnalysis.hots.total],
+        [
+          "Strongest Skill",
+          safeText(safeCognitiveAnalysis.strongest?.skill),
+          safeCognitiveAnalysis.strongest?.percentage != null
+            ? formatPercentage(safeCognitiveAnalysis.strongest.percentage)
+            : "N/A",
+        ],
+        [
+          "Focus Skill",
+          safeText(safeCognitiveAnalysis.weakest?.skill),
+          safeCognitiveAnalysis.weakest?.percentage != null
+            ? formatPercentage(safeCognitiveAnalysis.weakest.percentage)
+            : "N/A",
+        ],
+      ];
+
+      doc.autoTable({
+        startY: y,
+        head: [["Metric", "Result", "Questions"]],
+        body: cognitiveSummaryRows,
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 8.2,
+          cellPadding: 2,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1.2, 1, 1],
+          leftAlignedIndexes: [0],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+      });
+
+      y = doc.lastAutoTable.finalY + 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Bloom Skill", "Group", "Score", "Correct", "Incorrect", "Unattempted", "Total"]],
+        body: safeCognitiveAnalysis.skills.map((skill) => [
+          skill.skill,
+          skill.group,
+          skill.percentage != null ? formatPercentage(skill.percentage) : "N/A",
+          skill.correct,
+          skill.incorrect,
+          skill.unattempted,
+          skill.total,
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 7.5,
+          cellPadding: 1.8,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1.2, 0.8, 0.9, 0.8, 0.8, 0.9, 0.7],
+          leftAlignedIndexes: [0],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 2) {
+            const average = parseFloat(data.cell.raw);
+            if (!Number.isNaN(average)) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = getPerformanceColor(average);
+            }
+          }
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    // =========================================================
+    // SUBJECT WISE ANALYSIS
+    // =========================================================
+    if (safeSubjectAnalysis.length > 0) {
+      y = ensureSectionSpace(y, 40);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Batch Wise Cognitive Analysis", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Assigned subject performance by class-section", margin, y + 4);
+
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Subject", "Class-Section", "Average", "Highest", "Lowest", "Median", "Students", "Exams"]],
+        body: safeSubjectAnalysis.map((row) => [
+          row.subject,
+          row.classSection,
+          row.average != null ? formatPercentage(row.average) : "N/A",
+          row.highest != null ? formatPercentage(row.highest) : "N/A",
+          row.lowest != null ? formatPercentage(row.lowest) : "N/A",
+          row.median != null ? formatPercentage(row.median) : "N/A",
+          row.studentCount,
+          row.examCount,
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 7.5,
+          cellPadding: 1.8,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [0.9, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6],
+          leftAlignedIndexes: [0, 1],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+        didParseCell: (data) => {
+          if (data.section === "body" && [2, 3, 4, 5].includes(data.column.index)) {
+            const average = parseFloat(data.cell.raw);
+            if (!Number.isNaN(average)) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.textColor = getPerformanceColor(average);
+            }
+          }
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+      y = ensureSectionSpace(y, 38);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      setText(COLORS.dark);
+      doc.text("Batch Wise x Bloom's Skill Mastery (Heatmap)", margin, y);
+      y += 5;
+
+      const bloomHeatmapRows = safeSubjectAnalysis.map((row) => [
+        safeText(row.subject),
+        ...BLOOM_SKILLS.map(({ key }) => {
+          const skill = row.bloomSkills?.find((item) => item.skill === key);
+          return skill?.percentage != null
+            ? formatPercentage(skill.percentage)
+            : "N/A";
+        }),
+      ]);
+      doc.autoTable({
+        startY: y,
+        head: [["Subject", ...BLOOM_SKILLS.map(({ key }) => key)]],
+        body: bloomHeatmapRows,
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 7.2,
+          cellPadding: 1.8,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+        },
+        columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
+      });
     }
 
     // =========================================================
@@ -1426,6 +2296,10 @@ export default function TeacherDashboard({
           teacher={teacher}
           examPatterns={examPatterns}
           bestWeekTestsByGrade={bestWeekTestsByGrade}
+          cognitiveAnalysis={cognitiveAnalysis}
+          subjectAnalysis={subjectAnalysis}
+          focusStudents={focusStudents}
+          classFocus={classFocus}
           teacherRankRows={teacherRankRows}
           teacherRankLoading={teacherRankLoading}
           teacherRankError={teacherRankError}
@@ -1578,6 +2452,10 @@ export default function TeacherDashboard({
                   teacher={teacher}
                   examPatterns={examPatterns}
                   bestWeekTestsByGrade={bestWeekTestsByGrade}
+                  cognitiveAnalysis={cognitiveAnalysis}
+                  subjectAnalysis={subjectAnalysis}
+                  focusStudents={focusStudents}
+                  classFocus={classFocus}
                   teacherRankRows={teacherRankRows}
                   teacherRankLoading={teacherRankLoading}
                   teacherRankError={teacherRankError}
@@ -1654,7 +2532,7 @@ function OverviewContent({ teacher, bestWeekTestsByGrade = [] }) {
         )}
       </section>
 
-      {bestWeekTestsByGrade.length > 0 && (
+      {false && bestWeekTestsByGrade.length > 0 && (
         <section className="td-card">
           <h2 className="td-section-title">
             <Award size={18} /> Best Week Test by Grade
@@ -1695,10 +2573,15 @@ function PerformanceContent({
   teacher,
   examPatterns,
   bestWeekTestsByGrade,
+  cognitiveAnalysis,
+  subjectAnalysis = [],
+  focusStudents = [],
+  classFocus = [],
   teacherRankRows,
   teacherRankLoading,
   teacherRankError,
 }) {
+  const [selectedFocusGroup, setSelectedFocusGroup] = useState(null);
   const teacherCS = [
     ...new Set(
       teacher.teacher_assignments.map((a) => `${a.class}-${a.section}`),
@@ -1725,7 +2608,10 @@ function PerformanceContent({
     patternData.detailsByClassSection?.[classSection]?.[subject] || null;
 
   const scoreClassName = (value) => {
-    const n = value ? parseFloat(value) : null;
+    const n =
+      value === null || value === undefined || value === ""
+        ? null
+        : parseFloat(value);
     if (n == null || Number.isNaN(n)) return "td-score td-score--na";
     if (n >= 75) return "td-score td-score--high";
     if (n >= 50) return "td-score td-score--mid";
@@ -1737,6 +2623,9 @@ function PerformanceContent({
     return Number.isFinite(number) ? `${number.toFixed(1)}%` : "N/A";
   };
 
+  const formatCount = (value) =>
+    value === null || value === undefined || value === "" ? "-" : value;
+
   const rankClassName = (rank) => {
     const number = parseInt(rank, 10);
     if (!Number.isFinite(number)) return "td-rank-badge td-rank-badge--muted";
@@ -1745,13 +2634,125 @@ function PerformanceContent({
     return "td-rank-badge";
   };
 
+  const focusClassName = (level) => {
+    if (level === "High Focus") return "td-score td-score--low";
+    if (level === "Medium Focus") return "td-score td-score--mid";
+    return "td-score td-score--high";
+  };
+
+  const bloomHeatClassName = (value) => {
+    const number = parseFloat(value);
+    if (!Number.isFinite(number)) return "td-bloom-cell td-bloom-cell--na";
+    if (number >= 80) return "td-bloom-cell td-bloom-cell--strong";
+    if (number >= 60) return "td-bloom-cell td-bloom-cell--developing";
+    if (number >= 40) return "td-bloom-cell td-bloom-cell--support";
+    return "td-bloom-cell td-bloom-cell--critical";
+  };
+
   const validTeacherRanks = teacherRankRows
     .map((row) => parseInt(row.all_india_rank, 10))
     .filter((rank) => Number.isFinite(rank));
+  const visibleFocusStudents = selectedFocusGroup
+    ? focusStudents.filter(
+        (student) =>
+          student.classSection === selectedFocusGroup.classSection &&
+          student.subject === selectedFocusGroup.subject,
+      )
+    : focusStudents;
+  const focusTitle = selectedFocusGroup
+    ? `${selectedFocusGroup.classSection} - ${selectedFocusGroup.subject}`
+    : "All assigned classes";
+  const renderFocusStudentsSection = ({ showBack = false } = {}) => (
+    <section className="td-card">
+      <h2 className="td-section-title">
+        <UserRoundCog size={18} /> Students Needing Focus
+      </h2>
+      <div className="td-rank-summary-grid">
+        <div className="td-rank-summary">
+          <span>Showing</span>
+          <strong>{focusTitle}</strong>
+        </div>
+        <div className="td-rank-summary">
+          <span>Students</span>
+          <strong>{visibleFocusStudents.length}</strong>
+        </div>
+        {showBack && (
+          <div className="td-rank-summary">
+            <span>Action</span>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setSelectedFocusGroup(null)}
+            >
+              Back to Class Focus
+            </button>
+          </div>
+        )}
+      </div>
+      {visibleFocusStudents.length > 0 ? (
+        <div className="td-table-scroll">
+          <table className="td-table">
+            <thead>
+              <tr>
+                <th className="td-th">Student</th>
+                <th className="td-th">Class</th>
+                <th className="td-th">Subject</th>
+                <th className="td-th">Average</th>
+                <th className="td-th">Latest</th>
+                <th className="td-th">LOTS</th>
+                <th className="td-th">HOTS</th>
+                <th className="td-th">Focus</th>
+                <th className="td-th">Why Focus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleFocusStudents.slice(0, 20).map((student, index) => (
+                <tr
+                  key={`${student.studentId}-${student.classSection}-${student.subject}`}
+                  className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                >
+                  <td className="td-td td-td--pattern">
+                    {student.studentName}
+                    <span className="td-rank-date">{student.studentId}</span>
+                  </td>
+                  <td className="td-td">{student.classSection}</td>
+                  <td className="td-td">{student.subject}</td>
+                  <td className="td-td">
+                    <span className={scoreClassName(student.average)}>
+                      {formatPercent(student.average)}
+                    </span>
+                  </td>
+                  <td className="td-td">{formatPercent(student.latestScore)}</td>
+                  <td className="td-td">{formatPercent(student.lotsPercentage)}</td>
+                  <td className="td-td">{formatPercent(student.hotsPercentage)}</td>
+                  <td className="td-td">
+                    <span className={focusClassName(student.focusLevel)}>
+                      {student.focusLevel}
+                    </span>
+                  </td>
+                  <td className="td-td">
+                    {student.reasons.slice(0, 3).join(", ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="td-no-data">
+          No student focus list found for this class and subject.
+        </p>
+      )}
+    </section>
+  );
+
+  if (selectedFocusGroup) {
+    return <>{renderFocusStudentsSection({ showBack: true })}</>;
+  }
 
   return (
-    <>
-      <section className="td-card">
+    <div className="td-performance-stack">
+      <section className="td-card td-performance-rankings">
         <h2 className="td-section-title">
           <Award size={18} /> Teacher Performance Rankings
         </h2>
@@ -1848,15 +2849,268 @@ function PerformanceContent({
           </>
         ) : (
           <p className="td-no-data">
-            {teacherRanksError ||
+            {teacherRankError ||
               "No teacher ranking data found for the assigned classes."}
+          </p>
+        )}
+      </section>
+
+      <section className="td-card td-class-focus">
+        <h2 className="td-section-title">
+          <Award size={18} /> Class Focus Summary
+        </h2>
+        {classFocus.length > 0 ? (
+          <div className="td-table-scroll">
+            <table className="td-table">
+              <thead>
+                <tr>
+                  <th className="td-th">Class-Section</th>
+                  <th className="td-th">Subject</th>
+                  <th className="td-th">Class Avg</th>
+                  <th className="td-th">LOTS</th>
+                  <th className="td-th">HOTS</th>
+                  <th className="td-th">Students</th>
+                  <th className="td-th">High Focus</th>
+                  <th className="td-th">Medium Focus</th>
+                  <th className="td-th">LOTS Weak</th>
+                  <th className="td-th">HOTS Weak</th>
+                  <th className="td-th">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {classFocus.map((row, index) => (
+                  <tr
+                    key={`${row.classSection}-${row.subject}`}
+                    className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                  >
+                    <td className="td-td td-td--pattern">{row.classSection}</td>
+                    <td className="td-td">{row.subject}</td>
+                    <td className="td-td">
+                      <span className={scoreClassName(row.average)}>
+                        {formatPercent(row.average)}
+                      </span>
+                    </td>
+                    <td className="td-td">{formatPercent(row.lotsPercentage)}</td>
+                    <td className="td-td">{formatPercent(row.hotsPercentage)}</td>
+                    <td className="td-td">{row.students}</td>
+                    <td className="td-td">{row.highFocus}</td>
+                    <td className="td-td">{row.mediumFocus}</td>
+                    <td className="td-td">{row.lotsWeak}</td>
+                    <td className="td-td">{row.hotsWeak}</td>
+                    <td className="td-td">
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() =>
+                          setSelectedFocusGroup({
+                            classSection: row.classSection,
+                            subject: row.subject,
+                          })
+                        }
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="td-no-data">
+            No class focus data found for your allotments.
+          </p>
+        )}
+      </section>
+
+      <section className="td-card td-cognitive-analysis">
+        <h2 className="td-section-title">
+          <BarChart3 size={18} /> Overall Cognitive Analysis
+        </h2>
+        {cognitiveAnalysis?.overall?.total > 0 ? (
+          <>
+            <div className="td-rank-summary-grid">
+              <div className="td-rank-summary">
+                <span>Overall</span>
+                <strong>{formatPercent(cognitiveAnalysis.overall.percentage)}</strong>
+              </div>
+              <div className="td-rank-summary">
+                <span>LOTS</span>
+                <strong>{formatPercent(cognitiveAnalysis.lots.percentage)}</strong>
+              </div>
+              <div className="td-rank-summary">
+                <span>HOTS</span>
+                <strong>{formatPercent(cognitiveAnalysis.hots.percentage)}</strong>
+              </div>
+              <div className="td-rank-summary">
+                <span>Questions</span>
+                <strong>{cognitiveAnalysis.questionCount || cognitiveAnalysis.overall.total}</strong>
+              </div>
+            </div>
+            <div className="td-table-scroll">
+              <table className="td-table">
+                <thead>
+                  <tr>
+                    <th className="td-th">Bloom Skill</th>
+                    <th className="td-th">Group</th>
+                    <th className="td-th">Score</th>
+                    <th className="td-th">Correct</th>
+                    <th className="td-th">Incorrect</th>
+                    <th className="td-th">Unattempted</th>
+                    <th className="td-th">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cognitiveAnalysis.skills.map((skill, index) => (
+                    <tr
+                      key={skill.skill}
+                      className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                    >
+                      <td className="td-td td-td--pattern">{skill.skill}</td>
+                      <td className="td-td">{skill.group}</td>
+                      <td className="td-td">
+                        <span className={scoreClassName(skill.percentage)}>
+                          {formatPercent(skill.percentage)}
+                        </span>
+                      </td>
+                      <td className="td-td">{skill.correct}</td>
+                      <td className="td-td">{skill.incorrect}</td>
+                      <td className="td-td">{skill.unattempted}</td>
+                      <td className="td-td">{skill.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="td-rank-cards">
+              {cognitiveAnalysis.strongest && (
+                <article className="td-rank-card">
+                  <div>
+                    <strong>Strongest Skill</strong>
+                    <span>{cognitiveAnalysis.strongest.skill}</span>
+                  </div>
+                  <span className={scoreClassName(cognitiveAnalysis.strongest.percentage)}>
+                    {formatPercent(cognitiveAnalysis.strongest.percentage)}
+                  </span>
+                </article>
+              )}
+              {cognitiveAnalysis.weakest && (
+                <article className="td-rank-card">
+                  <div>
+                    <strong>Focus Skill</strong>
+                    <span>{cognitiveAnalysis.weakest.skill}</span>
+                  </div>
+                  <span className={scoreClassName(cognitiveAnalysis.weakest.percentage)}>
+                    {formatPercent(cognitiveAnalysis.weakest.percentage)}
+                  </span>
+                </article>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="td-no-data">No cognitive analysis data available.</p>
+        )}
+      </section>
+
+      <section className="td-card td-subject-analysis">
+        <h2 className="td-section-title">Batch Wise Cognitive Analysis</h2>
+        {subjectAnalysis.length > 0 ? (
+          <>
+            <div className="td-table-scroll">
+            <table className="td-table">
+              <thead>
+                <tr>
+                  <th className="td-th">Subject</th>
+                  <th className="td-th">Class-Section</th>
+                  <th className="td-th">Average</th>
+                  <th className="td-th">Highest</th>
+                  <th className="td-th">Lowest</th>
+                  <th className="td-th">Median</th>
+                  <th className="td-th">Students</th>
+                  <th className="td-th">Exams</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjectAnalysis.map((row, index) => (
+                  <tr
+                    key={`${row.subject}-${row.classSection}`}
+                    className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
+                  >
+                    <td className="td-td td-td--pattern">{row.subject}</td>
+                    <td className="td-td">{row.classSection}</td>
+                    <td className="td-td">
+                      <span className={scoreClassName(row.average)}>
+                        {formatPercent(row.average)}
+                      </span>
+                    </td>
+                    <td className="td-td">{formatPercent(row.highest)}</td>
+                    <td className="td-td">{formatPercent(row.lowest)}</td>
+                    <td className="td-td">{formatPercent(row.median)}</td>
+                    <td className="td-td">{formatCount(row.studentCount)}</td>
+                    <td className="td-td">{formatCount(row.examCount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+            <div className="td-bloom-heatmap-wrap">
+            <h3 className="td-bloom-heatmap-title">
+              Batch Wise x Bloom&apos;s Skill Mastery (Heatmap)
+            </h3>
+            <div className="td-table-scroll">
+              <table className="td-bloom-heatmap">
+                <thead>
+                  <tr>
+                    <th className="td-bloom-label">Subject</th>
+                    {BLOOM_SKILLS.map(({ key }) => (
+                      <th key={key} className="td-bloom-heading">
+                        {key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {subjectAnalysis.map((row) => (
+                    <tr key={`${row.subject}-${row.classSection}-bloom`}>
+                      <th className="td-bloom-label">
+                        {row.subject === "Maths" ? "Mathematics" : row.subject}
+                      </th>
+                      {BLOOM_SKILLS.map(({ key }) => {
+                        const skill = row.bloomSkills?.find(
+                          (item) => item.skill === key,
+                        );
+                        return (
+                          <td
+                            key={key}
+                            className={bloomHeatClassName(skill?.percentage)}
+                          >
+                            {formatPercent(skill?.percentage)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="td-bloom-legend" aria-label="Bloom skill mastery levels">
+              <span><i className="td-bloom-swatch td-bloom-swatch--strong" /> &gt;= 80% (Strong)</span>
+              <span><i className="td-bloom-swatch td-bloom-swatch--developing" /> 60-79% (Developing)</span>
+              <span><i className="td-bloom-swatch td-bloom-swatch--support" /> 40-59% (Needs Support)</span>
+              <span><i className="td-bloom-swatch td-bloom-swatch--critical" /> &lt; 40% (Critical)</span>
+            </div>
+            </div>
+          </>
+        ) : (
+          <p className="td-no-data">
+            No subject-wise analysis found for your allotments.
           </p>
         )}
       </section>
 
       {/* Exam Performance Averages Table */}
       {examPatterns.length > 0 && (
-        <section className="td-card">
+        <section className="td-card td-exam-averages">
           <h2 className="td-section-title">Exam Performance Averages</h2>
           <div className="td-table-scroll">
             <table className="td-table">
@@ -1935,7 +3189,7 @@ function PerformanceContent({
         </section>
       )}
 
-      {teacher.teacher_assignments.length > 0 && (
+      {false && teacher.teacher_assignments.length > 0 && (
         <section className="td-card">
           <h2 className="td-section-title">Teacher Performance Rankings</h2>
           {teacherRankLoading ? (
@@ -1972,9 +3226,7 @@ function PerformanceContent({
                       <td className="td-td">{row.class_section || "-"}</td>
                       <td className="td-td">{row.subject || "-"}</td>
                       <td className="td-td">
-                        {row.average !== null &&
-                        row.average !== undefined &&
-                        row.average !== ""
+                        {row.average !== null && row.average !== undefined && row.average !== ""
                           ? `${row.average}%`
                           : "-"}
                       </td>
@@ -1997,7 +3249,7 @@ function PerformanceContent({
           </p>
         </section>
       )}
-    </>
+    </div>
   );
 }
 

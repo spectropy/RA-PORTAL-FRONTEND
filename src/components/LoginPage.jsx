@@ -24,6 +24,13 @@ const CREDENTIALS = {
     { username: "Rajinikanth", password: "Rajinikanth@123" },
     { username: "Sravan", password: "Sravan@123" },
     { username: "Sai Kiran", password: "Sai Kiran@123" },
+    { username: "Sumathi", password: "Sumathi@123" },
+    { username: "Naresh", password: "Naresh@123" },
+    { username: "Manju", password: "Manju@123"},
+    { username: "Pooja", password: "Pooja@123" },
+    { username: "Rahul", password: "Rahul@123" },
+    { username: "Ramesh", password: "Ramesh@123" },
+    { username: "Teja", password: "Teja@123" },
   ],
   ADMIN: [
     { username: "admin", password: "spectropy@123" },

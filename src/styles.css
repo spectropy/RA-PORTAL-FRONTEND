@@ -5700,6 +5700,15 @@ textarea:focus {
   margin-bottom: 20px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
+.td-performance-stack {
+  display: flex;
+  flex-direction: column;
+}
+.td-performance-rankings { order: 1; }
+.td-exam-averages { order: 2; }
+.td-class-focus { order: 3; }
+.td-cognitive-analysis { order: 4; }
+.td-subject-analysis { order: 5; }
 
 .td-section-title {
   margin: 0 0 16px 0;
@@ -5908,6 +5917,85 @@ textarea:focus {
   font-weight: 600;
   color: var(--color-text-main);
   white-space: nowrap;
+}
+.td-bloom-heatmap-wrap {
+  margin-top: 24px;
+}
+.td-bloom-heatmap-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  color: var(--color-text-main);
+}
+.td-bloom-heatmap {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.td-bloom-heading,
+.td-bloom-label {
+  padding: 10px 12px;
+  color: var(--color-text-main);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.td-bloom-heading {
+  text-align: center;
+}
+.td-bloom-label {
+  text-align: left;
+  width: 120px;
+}
+.td-bloom-cell {
+  padding: 11px 10px;
+  text-align: center;
+  font-weight: 700;
+  border: 1px solid var(--color-surface);
+}
+.td-bloom-cell--strong,
+.td-bloom-swatch--strong {
+  background: #35c997;
+  color: #073b2b;
+}
+.td-bloom-cell--developing,
+.td-bloom-swatch--developing {
+  background: #cddd3d;
+  color: #253000;
+}
+.td-bloom-cell--support,
+.td-bloom-swatch--support {
+  background: #ff994e;
+  color: #552400;
+}
+.td-bloom-cell--critical,
+.td-bloom-swatch--critical {
+  background: #f96888;
+  color: #ffffff;
+}
+.td-bloom-cell--na {
+  background: var(--color-bg-alt);
+  color: var(--color-text-muted);
+}
+.td-bloom-legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 14px;
+  color: var(--color-text-main);
+  font-size: 12px;
+  font-weight: 600;
+}
+.td-bloom-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.td-bloom-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }
 .td-tr-even {
   background: var(--color-surface);
