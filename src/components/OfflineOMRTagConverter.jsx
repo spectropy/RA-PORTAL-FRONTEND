@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import * as XLSX from "xlsx";
 
 const QUESTION_TAG_FIELDS = [
+  {
+    key: "subject",
+    label: "Subject",
+    aliases: ["Subject", "Subject Name"],
+  },
   { key: "chapter", label: "Chapter", aliases: ["Chapter"] },
   { key: "topic", label: "Topic", aliases: ["Topic"] },
   { key: "subtopic", label: "Subtopic", aliases: ["Subtopic", "Sub Topic"] },
@@ -317,6 +322,9 @@ function readQuestionTags(file) {
       if (!questionNumber) return;
 
       tagsByQuestion.set(questionNumber, {
+        subject: cleanText(
+          getByHeaderAliases(object, ["Subject", "Subject Name"]),
+        ),
         chapter: cleanText(getByHeaderAliases(object, ["Chapter"])),
         topic: cleanText(getByHeaderAliases(object, ["Topic"])),
         subtopic: cleanText(getByHeaderAliases(object, ["Subtopic", "Sub Topic"])),
@@ -366,6 +374,7 @@ function validateQuestionTagHeaders(headers) {
     ["Q.No.", "Q.No", "Q No", "Question No"],
     ["Chapter"],
     ["Topic"],
+    ["Subject", "Subject Name"],
     ["Subtopic", "Sub Topic"],
     ["Blooms Skill", "Bloom's Skill", "Bloom Skill"],
     ["Difficulty Level", "Difficulty"],

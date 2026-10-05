@@ -419,21 +419,7 @@ function buildTeacherInsights(exams, teacherAssignments) {
       cognitive.questionCount,
       Object.keys(questions).length,
     );
-    const activeSubjects = [
-      ...new Set(
-        assignments
-          .filter((assignment) => `${assignment.class}-${assignment.section}` === classSection)
-          .map((assignment) => normalizeSubject(assignment.subject))
-          .filter((subject) => subject && SUBJECT_KEYS[subject]),
-      ),
-    ];
-    const totalQuestionCount = Math.max(
-      ...Object.keys(questions).map(getQuestionNumber),
-      Object.keys(questions).length,
-      0,
-    );
-
-    Object.entries(questions).forEach(([question, details]) => {
+    Object.entries(questions).forEach(([, details]) => {
       const skill = normalizeBloomSkill(
         details?.blooms_skill ||
           details?.bloomsSkill ||
@@ -442,26 +428,12 @@ function buildTeacherInsights(exams, teacherAssignments) {
       );
       if (!skill) return;
 
-      const storedSubject = normalizeSubject(
+      const subject = normalizeSubject(
         details?.subject ||
           details?.Subject ||
           details?.subject_name ||
           details?.subjectName,
       );
-      const questionNumber = getQuestionNumber(question);
-      const questionsPerSubject = Math.max(
-        1,
-        Math.ceil(
-          (totalQuestionCount || questionNumber || Object.keys(questions).length || 1) /
-            Math.max(activeSubjects.length, 1),
-        ),
-      );
-      const fallbackIndex = Math.min(
-        Math.max(activeSubjects.length - 1, 0),
-        Math.floor(Math.max(questionNumber, 1) - 1) / questionsPerSubject,
-      );
-      const subject =
-        storedSubject || activeSubjects[Math.floor(fallbackIndex)] || null;
       if (!subject || !assignedKeys.has(`${classSection}|${subject}`)) return;
 
       const group = BLOOM_SKILLS.find((item) => item.key === skill)?.group;

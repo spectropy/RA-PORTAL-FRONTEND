@@ -340,36 +340,13 @@ const normalizeCognitiveSubject = (value) => {
   return "";
 };
 
-const getQuestionNumber = (question) =>
-  Number(String(question || "").match(/\d+/)?.[0] || 0);
-
-const getCognitiveSubject = (
-  details = {},
-  question = "",
-  result = {},
-  totalQuestionCount = 0,
-) => {
-  const storedSubject = normalizeCognitiveSubject(
+const getCognitiveSubject = (details = {}) => {
+  return normalizeCognitiveSubject(
     details?.subject ||
       details?.Subject ||
       details?.subject_name ||
       details?.subjectName,
   );
-  if (storedSubject) return storedSubject;
-
-  const activeSubjects = getResultSubjects(result);
-  const questionNumber = getQuestionNumber(question);
-  if (!questionNumber || !activeSubjects.length) return "";
-
-  const questionsPerSubject = Math.max(
-    1,
-    Math.ceil((totalQuestionCount || questionNumber) / activeSubjects.length),
-  );
-  const subjectIndex = Math.min(
-    activeSubjects.length - 1,
-    Math.floor((questionNumber - 1) / questionsPerSubject),
-  );
-  return activeSubjects[subjectIndex]?.key || "";
 };
 
 const getCognitiveResponseStatus = (details = {}) => {
@@ -446,11 +423,6 @@ const buildStudentCognitiveAnalysis = (examResults = []) => {
     const examHots = emptyCognitiveCounts();
     const questions = parseQuestionResults(result.question_results);
     const questionEntries = Object.entries(questions);
-    const totalQuestionCountForMapping = Math.max(
-      ...questionEntries.map(([question]) => getQuestionNumber(question)),
-      questionEntries.length,
-      0,
-    );
     allQuestions += questionEntries.length;
 
     questionEntries.forEach(([question, details]) => {
@@ -461,12 +433,7 @@ const buildStudentCognitiveAnalysis = (examResults = []) => {
       const group = BLOOM_SKILLS.find((item) => item.key === skill)?.group;
       const groupBucket = group === "LOTS" ? lots : hots;
       const examGroupBucket = group === "LOTS" ? examLots : examHots;
-      const subjectKey = getCognitiveSubject(
-        details,
-        question,
-        result,
-        totalQuestionCountForMapping,
-      );
+      const subjectKey = getCognitiveSubject(details);
 
       addCognitiveResponse(skills[skill], status);
       addCognitiveResponse(groupBucket, status);

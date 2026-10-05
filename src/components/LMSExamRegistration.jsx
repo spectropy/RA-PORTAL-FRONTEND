@@ -595,6 +595,7 @@ function buildOutputRow(student, subjectConfig, questionPlan, tagsByQuestion = n
       const tags = tagsByQuestion.get(question.outputQuestionNumber) || {};
       return [
         ...baseValues,
+        tags.subject || "",
         tags.chapter || "",
         tags.topic || "",
         tags.subtopic || "",
@@ -613,6 +614,7 @@ function buildQuestionHeaders(questionNumber, includeQuestionTags) {
 
   return [
     ...headers,
+    `${prefix} Subject`,
     `${prefix} Chapter`,
     `${prefix} Topic`,
     `${prefix} Subtopic`,
@@ -677,6 +679,9 @@ function readQuestionTags(file, questionPlan) {
       if (!questionNumber) return;
 
       tagsByQuestion.set(questionNumber, {
+        subject: cleanText(
+          getByHeaderAliases(object, ["Subject", "Subject Name"]),
+        ),
         chapter: cleanText(getByHeaderAliases(object, ["Chapter"])),
         topic: cleanText(getByHeaderAliases(object, ["Topic"])),
         subtopic: cleanText(getByHeaderAliases(object, ["Subtopic", "Sub Topic"])),
@@ -732,6 +737,7 @@ function validateQuestionTagHeaders(headers) {
     ["Q.No.", "Q.No", "Q No", "Question No"],
     ["Chapter"],
     ["Topic"],
+    ["Subject", "Subject Name"],
     ["Subtopic", "Sub Topic"],
     ["Blooms Skill", "Bloom's Skill", "Bloom Skill"],
     ["Difficulty Level", "Difficulty"],

@@ -4334,12 +4334,7 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSc
       ]));
       const getQuestionSubject = (question, details = {}) => {
         const stored = normalizeSubjectName(details?.subject || details?.Subject);
-        if (stored && subjectTotals[stored]) return stored;
-        const number = Number(String(question || "").match(/\d+/)?.[0] || 0);
-        if (!number || !subjectNames.length) return subjectNames[0];
-        const perSubject = Math.max(1, Math.ceil(totalQuestionCountForMapping / subjectNames.length));
-        const index = Math.min(subjectNames.length - 1, Math.floor((number - 1) / perSubject));
-        return subjectNames[index];
+        return stored && subjectTotals[stored] ? stored : "";
       };
       const studentTotals = new Map();
       const examTotals = new Map();
@@ -4391,6 +4386,7 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSc
             ? "lots"
             : "hots";
           const subjectName = getQuestionSubject(question, details);
+          if (!subjectName) return;
           const subjectTotal = subjectTotals[subjectName];
           if (subjectTotal) {
             const subjectSkillTotal = subjectTotal.skills[skill];
@@ -7783,21 +7779,7 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSc
 
     const getQuestionSubject = (question, details = {}, totalQuestionCount = 0) => {
       const storedSubject = details?.subject || details?.Subject;
-      if (storedSubject) return String(storedSubject);
-
-      const questionNumber = getQuestionNumber(question);
-      if (!questionNumber || !activeSubs.length) return "General";
-
-      const questionsPerSubject = Math.max(
-        1,
-        Math.ceil((totalQuestionCount || questionNumber) / activeSubs.length),
-      );
-      const subjectIndex = Math.min(
-        activeSubs.length - 1,
-        Math.floor((questionNumber - 1) / questionsPerSubject),
-      );
-
-      return activeSubs[subjectIndex] || "General";
+      return storedSubject ? String(storedSubject) : "";
     };
 
     const questionMap = {};
@@ -8405,21 +8387,7 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSc
     const getSubjectForCognitivePdf = (question, details = {}) => {
       const storedSubject = details?.subject || details?.Subject;
       const normalizedStoredSubject = normalizeSubjectNameForCognitivePdf(storedSubject);
-      if (normalizedStoredSubject) return normalizedStoredSubject;
-
-      const questionNumber = getQuestionNumber(question);
-      if (!questionNumber || !activeSubs.length) return "General";
-
-      const questionsPerSubject = Math.max(
-        1,
-        Math.ceil((totalQuestionCountForMapping || questionNumber) / activeSubs.length),
-      );
-      const subjectIndex = Math.min(
-        activeSubs.length - 1,
-        Math.floor((questionNumber - 1) / questionsPerSubject),
-      );
-
-      return activeSubs[subjectIndex] || "General";
+      return normalizedStoredSubject;
     };
     const subjectBloomReportData = (() => {
       const subjectTotals = activeSubs.reduce((acc, subject) => {
@@ -12987,21 +12955,7 @@ export default function SchoolOwnerDashboard({ onBack, isCsm = false, onChangeSc
     const getQuestionSubject = (question, details = {}) => {
       const storedSubject = details?.subject || details?.Subject;
       const normalizedStoredSubject = normalizeSubjectName(storedSubject);
-      if (normalizedStoredSubject) return normalizedStoredSubject;
-
-      const questionNumber = getQuestionNumber(question);
-      if (!questionNumber || !activeSubs.length) return "General";
-
-      const questionsPerSubject = Math.max(
-        1,
-        Math.ceil((totalQuestionCountForMapping || questionNumber) / activeSubs.length),
-      );
-      const subjectIndex = Math.min(
-        activeSubs.length - 1,
-        Math.floor((questionNumber - 1) / questionsPerSubject),
-      );
-
-      return activeSubs[subjectIndex] || "General";
+      return normalizedStoredSubject;
     };
     const subjectCardMeta = {
       Maths: {

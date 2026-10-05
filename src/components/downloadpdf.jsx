@@ -782,17 +782,7 @@ export const generatePDF = async (
       const examOverall = emptyBucket();
       const examLots = emptyBucket();
       const examHots = emptyBucket();
-      const maxQuestionNumber = Math.max(
-        ...entries.map(([question]) => questionNumber(question)),
-        entries.length,
-        0,
-      );
-      const questionsPerSubject = Math.max(
-        1,
-        Math.ceil((maxQuestionNumber || entries.length || 1) / activeSubjects.length),
-      );
-
-      entries.forEach(([question, details]) => {
+      entries.forEach(([, details]) => {
         const skill = normalizeBloomSkill(
           details?.blooms_skill ||
             details?.bloomsSkill ||
@@ -817,11 +807,7 @@ export const generatePDF = async (
         const storedSubject = normalizeSubject(
           details?.subject || details?.Subject || details?.subject_name || details?.subjectName,
         );
-        const fallbackIndex = Math.min(
-          activeSubjects.length - 1,
-          Math.floor((Math.max(questionNumber(question), 1) - 1) / questionsPerSubject),
-        );
-        const subjectKey = storedSubject || activeSubjects[fallbackIndex]?.key;
+        const subjectKey = storedSubject;
 
         addResponse(overall, status);
         addResponse(examOverall, status);
