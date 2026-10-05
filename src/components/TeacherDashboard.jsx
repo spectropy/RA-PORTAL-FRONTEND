@@ -1116,9 +1116,6 @@ export default function TeacherDashboard({
       setFill(COLORS.navy);
       doc.rect(0, 0, pageWidth, headerHeight, "F");
 
-      setFill(COLORS.blue);
-      doc.rect(0, headerHeight - 2, pageWidth, 2, "F");
-
       // School logo container
       const logoBoxX = margin;
       const logoBoxY = 4;
@@ -1220,9 +1217,6 @@ export default function TeacherDashboard({
 
       setFill(COLORS.navy);
       doc.rect(0, 0, pageWidth, 15, "F");
-
-      setFill(COLORS.blue);
-      doc.rect(0, 13.5, pageWidth, 1.5, "F");
 
       setText(COLORS.white);
       doc.setFont("helvetica", "bold");
@@ -1791,128 +1785,17 @@ export default function TeacherDashboard({
       y = doc.lastAutoTable.finalY + 9;
     }
 
-    // =========================================================
-    // COGNITIVE ANALYSIS
-    // =========================================================
-    if (safeClassFocus.length > 0) {
-      y = ensureSectionSpace(y, 40);
+    if (
+      safeCognitiveAnalysis?.overall?.total > 0 ||
+      safeSubjectAnalysis.length > 0
+    ) {
+      y = ensureSectionSpace(y, 24);
 
       setText(COLORS.dark);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("Class Focus Summary", margin, y);
-
-      setText(COLORS.gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.2);
-      doc.text("Assigned class-section focus counts by LOTS, HOTS and score risk", margin, y + 4);
-
-      y += 7;
-
-      doc.autoTable({
-        startY: y,
-        head: [["Class", "Subject", "Avg", "LOTS", "HOTS", "Students", "High Focus", "Medium Focus", "LOTS Weak", "HOTS Weak"]],
-        body: safeClassFocus.map((row) => [
-          row.classSection,
-          row.subject,
-          row.average != null ? formatPercentage(row.average) : "N/A",
-          row.lotsPercentage != null ? formatPercentage(row.lotsPercentage) : "N/A",
-          row.hotsPercentage != null ? formatPercentage(row.hotsPercentage) : "N/A",
-          row.students,
-          row.highFocus,
-          row.mediumFocus,
-          row.lotsWeak,
-          row.hotsWeak,
-        ]),
-        theme: "grid",
-        tableWidth: printableWidth,
-        margin: { left: margin, right: margin, top: 20, bottom: 16 },
-        styles: {
-          font: "helvetica",
-          fontSize: 6.8,
-          cellPadding: 1.5,
-          halign: "center",
-          textColor: COLORS.dark,
-          lineColor: COLORS.border,
-          lineWidth: 0.2,
-        },
-        headStyles: {
-          fillColor: COLORS.navy,
-          textColor: COLORS.white,
-          fontStyle: "bold",
-          fontSize: 6.5,
-        },
-        alternateRowStyles: { fillColor: COLORS.background },
-        columnStyles: createColumnStyles({
-          tableWidth: printableWidth,
-          weights: [1, 0.9, 0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 0.8, 0.8],
-          leftAlignedIndexes: [0, 1],
-        }),
-        willDrawPage: () => drawContinuationHeader(),
-      });
-
-      y = doc.lastAutoTable.finalY + 9;
-    }
-
-    if (safeFocusStudents.length > 0) {
-      y = ensureSectionSpace(y, 45);
-
-      setText(COLORS.dark);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("Students Needing Focus", margin, y);
-
-      setText(COLORS.gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.2);
-      doc.text("Highest priority students based on score, LOTS/HOTS and trend signals", margin, y + 4);
-
-      y += 7;
-
-      doc.autoTable({
-        startY: y,
-        head: [["Student", "ID", "Class", "Subject", "Avg", "Latest", "LOTS", "HOTS", "Focus", "Why Focus"]],
-        body: safeFocusStudents.slice(0, 20).map((student) => [
-          safeText(student.studentName),
-          safeText(student.studentId),
-          student.classSection,
-          student.subject,
-          student.average != null ? formatPercentage(student.average) : "N/A",
-          student.latestScore != null ? formatPercentage(student.latestScore) : "N/A",
-          student.lotsPercentage != null ? formatPercentage(student.lotsPercentage) : "N/A",
-          student.hotsPercentage != null ? formatPercentage(student.hotsPercentage) : "N/A",
-          student.focusLevel,
-          student.reasons.slice(0, 3).join(", "),
-        ]),
-        theme: "grid",
-        tableWidth: printableWidth,
-        margin: { left: margin, right: margin, top: 20, bottom: 16 },
-        styles: {
-          font: "helvetica",
-          fontSize: 6.5,
-          cellPadding: 1.4,
-          halign: "center",
-          textColor: COLORS.dark,
-          lineColor: COLORS.border,
-          lineWidth: 0.2,
-          overflow: "linebreak",
-        },
-        headStyles: {
-          fillColor: COLORS.navy,
-          textColor: COLORS.white,
-          fontStyle: "bold",
-          fontSize: 6.3,
-        },
-        alternateRowStyles: { fillColor: COLORS.background },
-        columnStyles: createColumnStyles({
-          tableWidth: printableWidth,
-          weights: [1.1, 0.9, 0.8, 0.8, 0.65, 0.65, 0.65, 0.65, 0.9, 1.8],
-          leftAlignedIndexes: [0, 9],
-        }),
-        willDrawPage: () => drawContinuationHeader(),
-      });
-
-      y = doc.lastAutoTable.finalY + 9;
+      doc.setFontSize(12);
+      doc.text("Cognitive Profile", margin, y);
+      y += 8;
     }
 
     if (safeCognitiveAnalysis?.overall?.total > 0) {
@@ -2108,6 +1991,7 @@ export default function TeacherDashboard({
 
       const bloomHeatmapRows = safeSubjectAnalysis.map((row) => [
         safeText(row.subject),
+        safeText(row.classSection),
         ...BLOOM_SKILLS.map(({ key }) => {
           const skill = row.bloomSkills?.find((item) => item.skill === key);
           return skill?.percentage != null
@@ -2117,7 +2001,7 @@ export default function TeacherDashboard({
       ]);
       doc.autoTable({
         startY: y,
-        head: [["Subject", ...BLOOM_SKILLS.map(({ key }) => key)]],
+        head: [["Subject", "Class-Section", ...BLOOM_SKILLS.map(({ key }) => key)]],
         body: bloomHeatmapRows,
         theme: "grid",
         tableWidth: printableWidth,
@@ -2136,8 +2020,135 @@ export default function TeacherDashboard({
           textColor: COLORS.white,
           fontStyle: "bold",
         },
-        columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
+        columnStyles: {
+          0: { halign: "left", fontStyle: "bold" },
+          1: { halign: "left" },
+        },
+        willDrawPage: () => drawContinuationHeader(),
       });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    if (safeClassFocus.length > 0) {
+      y = ensureSectionSpace(y, 40);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Class Focus Summary", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Assigned class-section focus counts by LOTS, HOTS and score risk", margin, y + 4);
+
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Class", "Subject", "Avg", "LOTS", "HOTS", "Students", "High Focus", "Medium Focus", "LOTS Weak", "HOTS Weak"]],
+        body: safeClassFocus.map((row) => [
+          row.classSection,
+          row.subject,
+          row.average != null ? formatPercentage(row.average) : "N/A",
+          row.lotsPercentage != null ? formatPercentage(row.lotsPercentage) : "N/A",
+          row.hotsPercentage != null ? formatPercentage(row.hotsPercentage) : "N/A",
+          row.students,
+          row.highFocus,
+          row.mediumFocus,
+          row.lotsWeak,
+          row.hotsWeak,
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 6.8,
+          cellPadding: 1.5,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.5,
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1, 0.9, 0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 0.8, 0.8],
+          leftAlignedIndexes: [0, 1],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
+    }
+
+    if (safeFocusStudents.length > 0) {
+      y = ensureSectionSpace(y, 45);
+
+      setText(COLORS.dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Students Need your attention with remedial action plan", margin, y);
+
+      setText(COLORS.gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.text("Highest priority students based on score, LOTS/HOTS and trend signals", margin, y + 4);
+
+      y += 7;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Student", "ID", "Class", "Subject", "Avg", "Latest", "LOTS", "HOTS", "Focus", "Why Focus"]],
+        body: safeFocusStudents.map((student) => [
+          safeText(student.studentName),
+          safeText(student.studentId),
+          student.classSection,
+          student.subject,
+          student.average != null ? formatPercentage(student.average) : "N/A",
+          student.latestScore != null ? formatPercentage(student.latestScore) : "N/A",
+          student.lotsPercentage != null ? formatPercentage(student.lotsPercentage) : "N/A",
+          student.hotsPercentage != null ? formatPercentage(student.hotsPercentage) : "N/A",
+          student.focusLevel,
+          student.reasons.slice(0, 3).join(", "),
+        ]),
+        theme: "grid",
+        tableWidth: printableWidth,
+        margin: { left: margin, right: margin, top: 20, bottom: 16 },
+        styles: {
+          font: "helvetica",
+          fontSize: 6.5,
+          cellPadding: 1.4,
+          halign: "center",
+          textColor: COLORS.dark,
+          lineColor: COLORS.border,
+          lineWidth: 0.2,
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: COLORS.navy,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 6.3,
+        },
+        alternateRowStyles: { fillColor: COLORS.background },
+        columnStyles: createColumnStyles({
+          tableWidth: printableWidth,
+          weights: [1.1, 0.9, 0.8, 0.8, 0.65, 0.65, 0.65, 0.65, 0.9, 1.8],
+          leftAlignedIndexes: [0, 9],
+        }),
+        willDrawPage: () => drawContinuationHeader(),
+      });
+
+      y = doc.lastAutoTable.finalY + 9;
     }
 
     // =========================================================
@@ -2637,7 +2648,7 @@ function PerformanceContent({
   const renderFocusStudentsSection = ({ showBack = false } = {}) => (
     <section className="td-card">
       <h2 className="td-section-title">
-        <UserRoundCog size={18} /> Students Needing Focus
+        <UserRoundCog size={18} /> Students Need your attention with remedial action plan
       </h2>
       <div className="td-rank-summary-grid">
         <div className="td-rank-summary">
@@ -2678,7 +2689,7 @@ function PerformanceContent({
               </tr>
             </thead>
             <tbody>
-              {visibleFocusStudents.slice(0, 20).map((student, index) => (
+              {visibleFocusStudents.map((student, index) => (
                 <tr
                   key={`${student.studentId}-${student.classSection}-${student.subject}`}
                   className={index % 2 === 0 ? "td-tr-even" : "td-tr-odd"}
@@ -2738,10 +2749,6 @@ function PerformanceContent({
                     ? `#${Math.min(...validTeacherRanks)}`
                     : "-"}
                 </strong>
-              </div>
-              <div className="td-rank-summary">
-                <span>Ranked Entries</span>
-                <strong>{teacherRankRows.length}</strong>
               </div>
               <div className="td-rank-summary">
                 <span>Average Score</span>
@@ -3034,6 +3041,7 @@ function PerformanceContent({
                 <thead>
                   <tr>
                     <th className="td-bloom-label">Subject</th>
+                    <th className="td-bloom-label">Class-Section</th>
                     {BLOOM_SKILLS.map(({ key }) => (
                       <th key={key} className="td-bloom-heading">
                         {key}
@@ -3047,6 +3055,7 @@ function PerformanceContent({
                       <th className="td-bloom-label">
                         {row.subject === "Maths" ? "Mathematics" : row.subject}
                       </th>
+                      <td className="td-bloom-label">{row.classSection}</td>
                       {BLOOM_SKILLS.map(({ key }) => {
                         const skill = row.bloomSkills?.find(
                           (item) => item.skill === key,
