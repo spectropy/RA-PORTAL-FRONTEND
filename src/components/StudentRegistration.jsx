@@ -271,10 +271,6 @@ export default function StudentRegistration({ schools = [] }) {
 
   return (
     <div style={{ padding: 16, fontFamily: "Arial, sans-serif" }}>
-      <h3 style={{ margin: "0 0 20px 0", color: "#1e90ff" }}>
-        Student Registration
-      </h3>
-
       {error && (
         <div
           style={{

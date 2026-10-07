@@ -2071,6 +2071,10 @@ body {
   flex: 1;
 }
 
+.queries-page-content {
+  padding-top: 15px;
+}
+
 /* School Owner Overview */
 .school-overview-page {
   min-height: 100%;

@@ -93,6 +93,12 @@ const TABS = [
   },
 ];
 
+const QUERY_TYPES = [
+  { id: "school", label: "School Queries" },
+  { id: "teacher", label: "Teacher Queries" },
+  { id: "student", label: "Student Queries" },
+];
+
 // € Skeleton rows while loading
 function SkeletonRows() {
   return (
@@ -128,6 +134,7 @@ export default function Dashboard({ user, onLogout }) {
   const [schoolMobileDetailOpen, setSchoolMobileDetailOpen] = useState(false);
   const [posterTemplateMode, setPosterTemplateMode] = useState("cumulative");
   const [converterMode, setConverterMode] = useState("online");
+  const [activeQueryType, setActiveQueryType] = useState("school");
 
   //  Data
   const refresh = useCallback(async () => {
@@ -468,9 +475,25 @@ export default function Dashboard({ user, onLogout }) {
                       View and respond to support queries.
                     </p>
                   </div>
+                  <div className="page-header-actions">
+                    {QUERY_TYPES.map((type) => (
+                      <button
+                        key={type.id}
+                        type="button"
+                        className={
+                          activeQueryType === type.id
+                            ? "btn-link-primary"
+                            : "poster-secondary-btn"
+                        }
+                        onClick={() => setActiveQueryType(type.id)}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="page-content">
-                  <QueriesPage />
+                <div className="page-content queries-page-content">
+                  <QueriesPage activeQueryType={activeQueryType} />
                 </div>
               </div>
             }
