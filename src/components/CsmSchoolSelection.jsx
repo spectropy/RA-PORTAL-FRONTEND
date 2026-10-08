@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getSchools } from "../api";
+import { getCsmSchools } from "../api";
 
 export default function CsmSchoolSelection({ onSelect }) {
   const [schools, setSchools] = useState([]);
@@ -14,7 +14,7 @@ export default function CsmSchoolSelection({ onSelect }) {
     let active = true;
     setLoading(true);
     setError("");
-    getSchools().then((data) => {
+    getCsmSchools().then((data) => {
       if (active) setSchools(data);
     }).catch(() => {
       if (active) setError("Unable to load schools. Please try again.");

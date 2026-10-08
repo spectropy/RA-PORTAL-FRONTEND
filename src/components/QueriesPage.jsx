@@ -16,6 +16,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
   const [subjects, setSubjects] = useState([]);
   const [schools, setSchools] = useState([]);
   const [classSections, setClassSections] = useState([]);
+  const [schoolListClasses, setSchoolListClasses] = useState([]);
 
   const [selectedProgram, setSelectedProgram] = useState("");
   const [selectedExamPattern, setSelectedExamPattern] = useState("");
@@ -83,7 +84,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
     }
     if (selectedSchool) params.append("school", selectedSchool);
     if (activeQueryType === "student" && selectedClassSection) {
-      params.append("class_section", selectedClassSection);
+      params.append("class", selectedClassSection);
     }
 
     // ✅ Use async IIFE inside useEffect
@@ -104,7 +105,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
         setExamPatterns(data.examPatterns || []);
         setSubjects(data.subjects || []);
         setSchools(data.schools || []);
-        setClassSections(data.classSections || []);
+        setClassSections(data.classes || data.classSections || []);
         setStats(
           activeQueryType === "teacher"
             ? data.teachers || []
@@ -164,12 +165,58 @@ export default function QueriesPage({ activeQueryType = "school" }) {
   }, [activeQueryType]);
 
   useEffect(() => {
+    const isListView =
+      (activeQueryType === "school" && schoolView === "list") ||
+      (activeQueryType === "teacher" && teacherView === "list") ||
+      (activeQueryType === "student" && studentView === "list");
+
+    if (!isListView) return;
+
+    const filterType =
+      activeQueryType === "school"
+        ? "schools"
+        : activeQueryType === "teacher"
+          ? "teachers"
+          : "students";
+
+    (async () => {
+      try {
+        const data = await fetchJson(
+          `${API_BASE}/api/queries/${filterType}/filters`,
+        );
+
+        if (data.programs?.length) {
+          setPrograms((currentPrograms) => {
+            const merged = new Set([...currentPrograms, ...data.programs]);
+            return [...merged].sort();
+          });
+        }
+
+        setSchools(data.schools || []);
+        setExamPatterns(data.exams || []);
+
+        if (activeQueryType === "school") {
+          setSchoolListClasses(data.classes || []);
+        } else {
+          setClassSections(data.classes || data.classSections || []);
+        }
+
+        if (activeQueryType === "teacher") {
+          setSubjects(data.subjects || []);
+        }
+      } catch (err) {
+        console.error("Performance filters fetch error:", err);
+      }
+    })();
+  }, [activeQueryType, schoolView, teacherView, studentView]);
+
+  useEffect(() => {
     if (activeQueryType !== "school" || schoolView !== "list") return;
 
     const params = new URLSearchParams();
     if (selectedProgram) params.append("program", selectedProgram);
     if (selectedSchool) params.append("school", selectedSchool);
-    if (selectedClassSection) params.append("class_section", selectedClassSection);
+    if (selectedClassSection) params.append("class", selectedClassSection);
     if (selectedExamPattern) params.append("exam", selectedExamPattern);
 
     setSchoolListLoading(true);
@@ -186,9 +233,9 @@ export default function QueriesPage({ activeQueryType = "school" }) {
             return [...merged].sort();
           });
         }
-        setSchools(data.schools || []);
-        setClassSections(data.classSections || []);
-        setExamPatterns(data.exams || []);
+        if (data.schools) setSchools(data.schools);
+        if (data.classes) setSchoolListClasses(data.classes);
+        if (data.exams) setExamPatterns(data.exams);
         setSchoolListRows(data.schoolsPerformance || []);
       } catch (err) {
         console.error("School list fetch error:", err);
@@ -220,7 +267,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
     const params = new URLSearchParams();
     if (selectedProgram) params.append("program", selectedProgram);
     if (selectedSchool) params.append("school", selectedSchool);
-    if (selectedClassSection) params.append("class_section", selectedClassSection);
+    if (selectedClassSection) params.append("class", selectedClassSection);
     if (selectedExamPattern) params.append("exam", selectedExamPattern);
     if (selectedSubject) params.append("subject", selectedSubject);
 
@@ -239,7 +286,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
           });
         }
         setSchools(data.schools || []);
-        setClassSections(data.classSections || []);
+        setClassSections(data.classes || data.classSections || []);
         setExamPatterns(data.exams || []);
         setSubjects(data.subjects || []);
         setTeacherListRows(data.teachers || []);
@@ -275,7 +322,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
     const params = new URLSearchParams();
     if (selectedProgram) params.append("program", selectedProgram);
     if (selectedSchool) params.append("school", selectedSchool);
-    if (selectedClassSection) params.append("class_section", selectedClassSection);
+    if (selectedClassSection) params.append("class", selectedClassSection);
     if (selectedExamPattern) params.append("exam", selectedExamPattern);
 
     setStudentListLoading(true);
@@ -293,7 +340,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
           });
         }
         setSchools(data.schools || []);
-        setClassSections(data.classSections || []);
+        setClassSections(data.classes || data.classSections || []);
         setExamPatterns(data.exams || []);
         setStudentListRows(data.students || []);
       } catch (err) {
@@ -328,12 +375,12 @@ export default function QueriesPage({ activeQueryType = "school" }) {
 
     const rows = teacherListRows.map((row, index) => ({
       "S.No": index + 1,
-      "Teacher Name": row.teacher_name || "-",
       "Teacher ID / Code": row.teacher_code || "-",
+      "Teacher Name": row.teacher_name || "-",
       Program: row.program || "-",
       School: row.school || "-",
+      "School Name": row.school_name || "-",
       Class: row.class || "-",
-      Section: row.section || "-",
       Subject: row.subject || "-",
       Exam: row.exam || "-",
       "Total Students": row.total_students ?? "-",
@@ -358,12 +405,12 @@ export default function QueriesPage({ activeQueryType = "school" }) {
 
     const rows = studentListRows.map((row, index) => ({
       "S.No": index + 1,
-      "Student Name": row.student_name || "-",
       "Student ID / Roll No": row.student_code || "-",
+      "Student Name": row.student_name || "-",
       Program: row.program || "-",
       School: row.school || "-",
+      "School Name": row.school_name || "-",
       Class: row.class || "-",
-      Section: row.section || "-",
       Exam: row.exam || "-",
       "Percentage %":
         row.percentage === null || row.percentage === undefined
@@ -390,7 +437,8 @@ export default function QueriesPage({ activeQueryType = "school" }) {
       "S.No": index + 1,
       Program: row.program || "-",
       School: row.school || "-",
-      "Class-Section": row.class_section || "-",
+      "School Name": row.school_name || "-",
+      Class: row.class || "-",
       Exam: row.exam || "-",
       "Total Students": row.total_students ?? "-",
       "Average %":
@@ -585,11 +633,11 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                   options={schools}
                 />
                 <FilterSelect
-                  label="Class-Section:"
+                  label="Class:"
                   value={selectedClassSection}
                   onChange={setSelectedClassSection}
-                  placeholder="— All Class-Sections —"
-                  options={classSections}
+                  placeholder="— All Classes —"
+                  options={schoolListClasses}
                 />
                 <FilterSelect
                   label="Exam:"
@@ -623,12 +671,13 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                       {schoolListRows.length > 0 ? (
                         schoolListRows.map((row, index) => (
                           <tr
-                            key={`${row.program}-${row.school}-${row.class_section}-${row.exam}-${index}`}
+                            key={`${row.program}-${row.school}-${row.class}-${row.exam}-${index}`}
                           >
                             <td style={getSchoolPerformanceCellStyle("S.No")}>{index + 1}</td>
                             <td style={getSchoolPerformanceCellStyle("Program")}>{row.program || "-"}</td>
                             <td style={getSchoolPerformanceCellStyle("School")}>{row.school || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("Class-Section")}>{row.class_section || "-"}</td>
+                            <td style={getSchoolPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
+                            <td style={getSchoolPerformanceCellStyle("Class")}>{row.class || "-"}</td>
                             <td style={getSchoolPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
                             <td style={getSchoolPerformanceCellStyle("Total Students")}>{row.total_students ?? "-"}</td>
                             <td style={getSchoolPerformanceCellStyle("Average %")}>
@@ -680,10 +729,10 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                   options={schools}
                 />
                 <FilterSelect
-                  label="Class-Section:"
+                  label="Class:"
                   value={selectedClassSection}
                   onChange={setSelectedClassSection}
-                  placeholder="— All Class-Sections —"
+                  placeholder="— All Classes —"
                   options={classSections}
                 />
                 <FilterSelect
@@ -717,8 +766,19 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                     <thead>
                       <tr>
                         {teacherListColumns.map((column) => (
-                          <th key={column} style={headerStyle}>
-                            {column}
+                          <th
+                            key={column}
+                            style={getTeacherPerformanceCellStyle(column, true)}
+                          >
+                            {column === "All India Rank" ? (
+                              <>
+                                All India
+                                <br />
+                                Rank
+                              </>
+                            ) : (
+                              column
+                            )}
                           </th>
                         ))}
                       </tr>
@@ -729,25 +789,25 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                           <tr
                             key={`${row.teacher_code}-${row.school}-${row.class_section}-${row.subject}-${row.exam}-${index}`}
                           >
-                            <td style={cellStyle}>{index + 1}</td>
-                            <td style={cellStyle}>{row.teacher_name || "-"}</td>
-                            <td style={cellStyle}>{row.teacher_code || "-"}</td>
-                            <td style={cellStyle}>{row.program || "-"}</td>
-                            <td style={cellStyle}>{row.school || "-"}</td>
-                            <td style={cellStyle}>{row.class || "-"}</td>
-                            <td style={cellStyle}>{row.section || "-"}</td>
-                            <td style={cellStyle}>{row.subject || "-"}</td>
-                            <td style={cellStyle}>{row.exam || "-"}</td>
-                            <td style={cellStyle}>
+                            <td style={getTeacherPerformanceCellStyle("S.No")}>{index + 1}</td>
+                            <td style={getTeacherPerformanceCellStyle("Teacher ID / Code")}>{row.teacher_code || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Teacher Name")}>{row.teacher_name || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Program")}>{row.program || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("School")}>{row.school || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Class")}>{row.class || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Subject")}>{row.subject || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
+                            <td style={getTeacherPerformanceCellStyle("Total Students")}>
                               {row.total_students ?? "-"}
                             </td>
-                            <td style={cellStyle}>
+                            <td style={getTeacherPerformanceCellStyle("Average %")}>
                               {row.average_percent === null ||
                               row.average_percent === undefined
                                 ? "-"
                                 : `${row.average_percent}%`}
                             </td>
-                            <td style={cellStyle}>
+                            <td style={getTeacherPerformanceCellStyle("All India Rank")}>
                               {row.all_india_rank ?? "-"}
                             </td>
                           </tr>
@@ -791,10 +851,10 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                   options={schools}
                 />
                 <FilterSelect
-                  label="Class-Section:"
+                  label="Class:"
                   value={selectedClassSection}
                   onChange={setSelectedClassSection}
-                  placeholder="— All Class-Sections —"
+                  placeholder="— All Classes —"
                   options={classSections}
                 />
                 <FilterSelect
@@ -837,12 +897,16 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                             key={`${row.student_code}-${row.school}-${row.class_section}-${row.exam}-${index}`}
                           >
                             <td style={getStudentPerformanceCellStyle("S.No")}>{index + 1}</td>
-                            <td style={getStudentPerformanceCellStyle("Student Name")}>{row.student_name || "-"}</td>
                             <td style={getStudentPerformanceCellStyle("Student ID / Roll No")}>{row.student_code || "-"}</td>
+                            <td style={getStudentPerformanceCellStyle("Student Name")}>
+                              <span style={studentNameClampStyle}>
+                                {row.student_name || "-"}
+                              </span>
+                            </td>
                             <td style={getStudentPerformanceCellStyle("Program")}>{row.program || "-"}</td>
                             <td style={getStudentPerformanceCellStyle("School")}>{row.school || "-"}</td>
+                            <td style={getStudentPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
                             <td style={getStudentPerformanceCellStyle("Class")}>{row.class || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("Section")}>{row.section || "-"}</td>
                             <td style={getStudentPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
                             <td style={getStudentPerformanceCellStyle("Percentage %")}>
                               {row.percentage === null ||
@@ -1043,7 +1107,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
           </>
         )}
 
-        {/* Class-Section Selector */}
+        {/* Class Selector */}
         {activeQueryType === "student" && (
           <>
           <div>
@@ -1082,7 +1146,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                 fontWeight: "bold",
               }}
             >
-              Class-Section:
+              Class:
             </label>
             <select
               value={selectedClassSection}
@@ -1094,7 +1158,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                 minWidth: "180px",
               }}
             >
-              <option value="">— All Class-Sections —</option>
+              <option value="">— All Classes —</option>
               {classSections.map((classSection) => (
                 <option key={classSection} value={classSection}>
                   {classSection}
@@ -1158,7 +1222,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
               <tr>
                 <th style={headerStyle}>Exams</th>
                 <th style={headerStyle}>Schools</th>
-                <th style={headerStyle}>Class-Sections</th>
+                <th style={headerStyle}>Classes</th>
                 <th style={headerStyle}>Students</th>
               </tr>
             </thead>
@@ -1208,7 +1272,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
                 <th style={headerStyle}>Subject</th>
                 <th style={headerStyle}>Schools</th>
                 <th style={headerStyle}>Teachers</th>
-                <th style={headerStyle}>Class-Sections</th>
+                <th style={headerStyle}>Classes</th>
                 <th style={headerStyle}>Students</th>
               </tr>
             </thead>
@@ -1245,7 +1309,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
           >
             <thead>
               <tr>
-                <th style={headerStyle}>Class-Section</th>
+                <th style={headerStyle}>Class</th>
                 <th style={headerStyle}>Schools</th>
                 <th style={headerStyle}>Students</th>
                 <th style={headerStyle}>Exams</th>
@@ -1254,8 +1318,8 @@ export default function QueriesPage({ activeQueryType = "school" }) {
             <tbody>
               {stats.length > 0 ? (
                 stats.map((row, i) => (
-                  <tr key={`${row.classSection}-${i}`}>
-                    <td style={cellStyle}>{row.classSection}</td>
+                  <tr key={`${row.class || row.classSection}-${i}`}>
+                    <td style={cellStyle}>{row.class || row.classSection}</td>
                     <td style={cellStyle}>{row.schoolCount}</td>
                     <td style={cellStyle}>{row.studentCount}</td>
                     <td style={cellStyle}>{row.examCount}</td>
@@ -1323,12 +1387,12 @@ function FilterSelect({ label, value, onChange, placeholder, options }) {
 
 const teacherListColumns = [
   "S.No",
-  "Teacher Name",
   "Teacher ID / Code",
+  "Teacher Name",
   "Program",
   "School",
+  "School Name",
   "Class",
-  "Section",
   "Subject",
   "Exam",
   "Total Students",
@@ -1338,12 +1402,12 @@ const teacherListColumns = [
 
 const studentListColumns = [
   "S.No",
-  "Student Name",
   "Student ID / Roll No",
+  "Student Name",
   "Program",
   "School",
+  "School Name",
   "Class",
-  "Section",
   "Exam",
   "Percentage %",
   "Class Rank",
@@ -1355,13 +1419,48 @@ const schoolListColumns = [
   "S.No",
   "Program",
   "School",
-  "Class-Section",
+  "School Name",
+  "Class",
   "Exam",
   "Total Students",
   "Average %",
   "School Rank",
   "All India Rank",
 ];
+
+function getTeacherPerformanceCellStyle(column, isHeader = false) {
+  const base = isHeader
+    ? {
+        ...headerStyle,
+        padding: "8px 9px",
+        fontSize: "12px",
+        lineHeight: 1.25,
+        whiteSpace: "normal",
+      }
+    : {
+        ...cellStyle,
+        padding: "8px 9px",
+        fontSize: "12px",
+        lineHeight: 1.25,
+        verticalAlign: "top",
+        wordBreak: "break-word",
+      };
+
+  if (column === "S.No") return { ...base, width: "44px", minWidth: "44px" };
+  if (column === "Teacher ID / Code") return { ...base, width: "92px", minWidth: "92px" };
+  if (column === "Teacher Name") return { ...base, width: "130px", minWidth: "130px" };
+  if (column === "Program") return { ...base, width: "70px", minWidth: "70px", whiteSpace: "nowrap" };
+  if (column === "School") return { ...base, width: "80px", minWidth: "80px" };
+  if (column === "School Name") return { ...base, width: "185px", minWidth: "185px", maxWidth: "185px" };
+  if (column === "Class") return { ...base, width: "76px", minWidth: "76px" };
+  if (column === "Subject") return { ...base, width: "78px", minWidth: "78px" };
+  if (column === "Exam") return { ...base, width: "96px", minWidth: "96px", whiteSpace: "nowrap" };
+  if (column === "Total Students") return { ...base, width: "88px", minWidth: "88px" };
+  if (column === "Average %") return { ...base, width: "82px", minWidth: "82px", whiteSpace: "nowrap" };
+  if (column === "All India Rank") return { ...base, width: "112px", minWidth: "112px", paddingRight: "18px" };
+
+  return base;
+}
 
 function getSchoolPerformanceCellStyle(column, isHeader = false) {
   const base = isHeader
@@ -1382,6 +1481,7 @@ function getSchoolPerformanceCellStyle(column, isHeader = false) {
       };
 
   if (column === "S.No") return { ...base, width: "52px" };
+  if (column === "School Name") return { ...base, width: "160px" };
   if (["School Rank", "All India Rank", "Total Students"].includes(column)) {
     return { ...base, width: "90px" };
   }
@@ -1402,26 +1502,45 @@ function getStudentPerformanceCellStyle(column, isHeader = false) {
         padding: "8px 10px",
         fontSize: "12px",
         lineHeight: 1.25,
-        verticalAlign: "middle",
+        verticalAlign: "top",
+        wordBreak: "break-word",
       };
 
+  if (column === "S.No") return { ...base, width: "44px", minWidth: "44px" };
+  if (column === "Student ID / Roll No") return { ...base, width: "82px", minWidth: "82px" };
   if (column === "Student Name") {
     return {
       ...base,
-      width: "180px",
-      minWidth: "180px",
-      maxWidth: "180px",
+      width: "150px",
+      minWidth: "150px",
+      maxWidth: "150px",
+      paddingLeft: "8px",
       whiteSpace: "normal",
       overflow: "hidden",
-      display: isHeader ? "table-cell" : "-webkit-box",
-      WebkitLineClamp: isHeader ? "unset" : 2,
-      WebkitBoxOrient: "vertical",
       wordBreak: "break-word",
     };
+  }
+  if (column === "Program") return { ...base, width: "88px", minWidth: "88px", whiteSpace: "nowrap" };
+  if (column === "School") return { ...base, width: "76px", minWidth: "76px" };
+  if (column === "School Name") return { ...base, width: "170px", minWidth: "170px", maxWidth: "170px" };
+  if (column === "Class") return { ...base, width: "80px", minWidth: "80px" };
+  if (column === "Exam") return { ...base, width: "105px", minWidth: "105px", whiteSpace: "nowrap" };
+  if (column === "Percentage %") return { ...base, width: "86px", minWidth: "86px", whiteSpace: "nowrap" };
+  if (["Class Rank", "School Rank", "All India Rank"].includes(column)) {
+    return { ...base, width: "78px", minWidth: "78px" };
   }
 
   return base;
 }
+
+const studentNameClampStyle = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  whiteSpace: "normal",
+  wordBreak: "break-word",
+};
 
 const dashboardTitleRowStyle = {
   display: "flex",

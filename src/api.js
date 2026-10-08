@@ -50,6 +50,13 @@ export async function getSchools() {
   return j.data || [];
 }
 
+export async function getCsmSchools() {
+  const r = await fetch(`${API_BASE}/api/schools/csm-selector`);
+  if (!r.ok) throw new Error(await parseAndFormatError(r));
+  const j = await r.json();
+  return j.data || [];
+}
+
 export async function createSchool(payload) {
   const r = await fetch(`${API_BASE}/api/schools`, {
     method: "POST",
