@@ -380,6 +380,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
       Program: row.program || "-",
       School: row.school || "-",
       "School Name": row.school_name || "-",
+      Area: row.area || "-",
       Class: row.class || "-",
       Subject: row.subject || "-",
       Exam: row.exam || "-",
@@ -410,6 +411,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
       Program: row.program || "-",
       School: row.school || "-",
       "School Name": row.school_name || "-",
+      Area: row.area || "-",
       Class: row.class || "-",
       Exam: row.exam || "-",
       "Percentage %":
@@ -438,6 +440,7 @@ export default function QueriesPage({ activeQueryType = "school" }) {
       Program: row.program || "-",
       School: row.school || "-",
       "School Name": row.school_name || "-",
+      Area: row.area || "-",
       Class: row.class || "-",
       Exam: row.exam || "-",
       "Total Students": row.total_students ?? "-",
@@ -656,52 +659,112 @@ export default function QueriesPage({ activeQueryType = "school" }) {
               {schoolListLoading && <p>Loading school list...</p>}
 
               {!schoolListLoading && (
-                <div style={wideTableScrollStyle}>
-                  <table style={studentPerformanceTableStyle}>
-                    <thead>
-                      <tr>
-                        {schoolListColumns.map((column) => (
-                          <th key={column} style={getSchoolPerformanceCellStyle(column, true)}>
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolListRows.length > 0 ? (
-                        schoolListRows.map((row, index) => (
-                          <tr
-                            key={`${row.program}-${row.school}-${row.class}-${row.exam}-${index}`}
-                          >
-                            <td style={getSchoolPerformanceCellStyle("S.No")}>{index + 1}</td>
-                            <td style={getSchoolPerformanceCellStyle("Program")}>{row.program || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("School")}>{row.school || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("Class")}>{row.class || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("Total Students")}>{row.total_students ?? "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("Average %")}>
-                              {row.average_percent === null ||
-                              row.average_percent === undefined
-                                ? "-"
-                                : `${row.average_percent}%`}
-                            </td>
-                            <td style={getSchoolPerformanceCellStyle("School Rank")}>{row.school_rank ?? "-"}</td>
-                            <td style={getSchoolPerformanceCellStyle("All India Rank")}>{row.all_india_rank ?? "-"}</td>
-                          </tr>
-                        ))
-                      ) : (
+                <>
+                <div className="school-performance-table-wrap" style={wideTableScrollStyle}>
+                  <table
+                    className="school-performance-table"
+                    style={{
+                      ...studentPerformanceTableStyle,
+                      minWidth: "1080px",
+                      tableLayout: "auto",
+                    }}
+                  >
+                      <thead>
                         <tr>
-                          <td style={cellStyle} colSpan={9}>
-                            {hasSchoolListFilters
-                              ? "No matching school performance data found."
-                              : "No school performance data available."}
-                          </td>
+                          {schoolListColumns.map((column) => (
+                            <th key={column} style={getSchoolPerformanceCellStyle(column, true)}>
+                              {column}
+                            </th>
+                          ))}
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {schoolListRows.length > 0 ? (
+                          schoolListRows.map((row, index) => (
+                            <tr
+                              key={`${row.program}-${row.school}-${row.class}-${row.exam}-${index}`}
+                            >
+                              <td style={getSchoolPerformanceCellStyle("S.No")}>{index + 1}</td>
+                              <td style={getSchoolPerformanceCellStyle("Program")}>{row.program || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("School")}>{row.school || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("Area")}>{row.area || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("Class")}>{row.class || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("Total Students")}>{row.total_students ?? "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("Average %")}>
+                                {formatPercent(row.average_percent)}
+                              </td>
+                              <td style={getSchoolPerformanceCellStyle("School Rank")}>{row.school_rank ?? "-"}</td>
+                              <td style={getSchoolPerformanceCellStyle("All India Rank")}>{row.all_india_rank ?? "-"}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td style={cellStyle} colSpan={schoolListColumns.length}>
+                              {hasSchoolListFilters
+                                ? "No matching school performance data found."
+                                : "No school performance data available."}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="school-performance-mobile-list">
+                    {schoolListRows.length > 0 ? (
+                      schoolListRows.map((row, index) => (
+                        <article
+                          className="school-performance-card"
+                          key={`${row.program}-${row.school}-${row.class}-${row.exam}-${index}-mobile`}
+                        >
+                          <div className="school-performance-card__top">
+                            <span className="school-performance-card__index">{index + 1}</span>
+                            <div>
+                              <h3>{row.school_name || "-"}</h3>
+                              <p>{row.area || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="school-performance-card__meta">
+                            <span>School</span>
+                            <strong>{row.school || "-"}</strong>
+                            <span>Program</span>
+                            <strong>{row.program || "-"}</strong>
+                            <span>Class</span>
+                            <strong>{row.class || "-"}</strong>
+                            <span>Exam</span>
+                            <strong>{row.exam || "-"}</strong>
+                          </div>
+                          <div className="school-performance-card__stats">
+                            <div>
+                              <span>Total Students</span>
+                              <strong>{row.total_students ?? "-"}</strong>
+                            </div>
+                            <div>
+                              <span>Average</span>
+                              <strong>{formatPercent(row.average_percent)}</strong>
+                            </div>
+                            <div>
+                              <span>School Rank</span>
+                              <strong>{row.school_rank ?? "-"}</strong>
+                            </div>
+                            <div>
+                              <span>All India Rank</span>
+                              <strong>{row.all_india_rank ?? "-"}</strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="school-performance-empty">
+                        {hasSchoolListFilters
+                          ? "No matching school performance data found."
+                          : "No school performance data available."}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </>
           ) : activeQueryType === "teacher" && teacherView === "list" ? (
@@ -759,71 +822,130 @@ export default function QueriesPage({ activeQueryType = "school" }) {
               {teacherListLoading && <p>Loading teacher list...</p>}
 
               {!teacherListLoading && (
-                <div style={wideTableScrollStyle}>
-                  <table
-                    style={studentPerformanceTableStyle}
-                  >
-                    <thead>
-                      <tr>
-                        {teacherListColumns.map((column) => (
-                          <th
-                            key={column}
-                            style={getTeacherPerformanceCellStyle(column, true)}
-                          >
-                            {column === "All India Rank" ? (
-                              <>
-                                All India
-                                <br />
-                                Rank
-                              </>
-                            ) : (
-                              column
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {teacherListRows.length > 0 ? (
-                        teacherListRows.map((row, index) => (
-                          <tr
-                            key={`${row.teacher_code}-${row.school}-${row.class_section}-${row.subject}-${row.exam}-${index}`}
-                          >
-                            <td style={getTeacherPerformanceCellStyle("S.No")}>{index + 1}</td>
-                            <td style={getTeacherPerformanceCellStyle("Teacher ID / Code")}>{row.teacher_code || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Teacher Name")}>{row.teacher_name || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Program")}>{row.program || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("School")}>{row.school || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Class")}>{row.class || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Subject")}>{row.subject || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
-                            <td style={getTeacherPerformanceCellStyle("Total Students")}>
-                              {row.total_students ?? "-"}
-                            </td>
-                            <td style={getTeacherPerformanceCellStyle("Average %")}>
-                              {row.average_percent === null ||
-                              row.average_percent === undefined
-                                ? "-"
-                                : `${row.average_percent}%`}
-                            </td>
-                            <td style={getTeacherPerformanceCellStyle("All India Rank")}>
-                              {row.all_india_rank ?? "-"}
+                <>
+                  <div className="teacher-performance-table-wrap" style={wideTableScrollStyle}>
+                    <table
+                      className="teacher-performance-table"
+                      style={{
+                        ...studentPerformanceTableStyle,
+                        minWidth: "1320px",
+                        tableLayout: "auto",
+                      }}
+                    >
+                      <thead>
+                        <tr>
+                          {teacherListColumns.map((column) => (
+                            <th
+                              key={column}
+                              style={getTeacherPerformanceCellStyle(column, true)}
+                            >
+                              {column === "All India Rank" ? (
+                                <>
+                                  All India
+                                  <br />
+                                  Rank
+                                </>
+                              ) : (
+                                column
+                              )}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teacherListRows.length > 0 ? (
+                          teacherListRows.map((row, index) => (
+                            <tr
+                              key={`${row.teacher_code}-${row.school}-${row.class_section}-${row.subject}-${row.exam}-${index}`}
+                            >
+                              <td style={getTeacherPerformanceCellStyle("S.No")}>{index + 1}</td>
+                              <td style={getTeacherPerformanceCellStyle("Teacher ID / Code")}>{row.teacher_code || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Teacher Name")}>{row.teacher_name || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Program")}>{row.program || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("School")}>{row.school || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Area")}>{row.area || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Class")}>{row.class || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Subject")}>{row.subject || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
+                              <td style={getTeacherPerformanceCellStyle("Total Students")}>
+                                {row.total_students ?? "-"}
+                              </td>
+                              <td style={getTeacherPerformanceCellStyle("Average %")}>
+                                {formatPercent(row.average_percent)}
+                              </td>
+                              <td style={getTeacherPerformanceCellStyle("All India Rank")}>
+                                {row.all_india_rank ?? "-"}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td style={cellStyle} colSpan={teacherListColumns.length}>
+                              {hasTeacherListFilters
+                                ? "No matching teacher performance data found."
+                                : "No teacher performance data available."}
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td style={cellStyle} colSpan={12}>
-                            {hasTeacherListFilters
-                              ? "No matching teacher performance data found."
-                              : "No teacher performance data available."}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="teacher-performance-mobile-list">
+                    {teacherListRows.length > 0 ? (
+                      teacherListRows.map((row, index) => (
+                        <article
+                          className="teacher-performance-card"
+                          key={`${row.teacher_code}-${row.school}-${row.class_section}-${row.subject}-${row.exam}-${index}-mobile`}
+                        >
+                          <div className="teacher-performance-card__top">
+                            <span className="teacher-performance-card__index">{index + 1}</span>
+                            <div>
+                              <h3>{row.teacher_name || "-"}</h3>
+                              <p>{row.teacher_code || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="teacher-performance-card__school">
+                            <strong>{row.school_name || "-"}</strong>
+                            <span>{row.area || "-"}</span>
+                            <span>{row.school || "-"}</span>
+                          </div>
+                          <div className="teacher-performance-card__meta">
+                            <span>Program</span>
+                            <strong>{row.program || "-"}</strong>
+                            <span>Class</span>
+                            <strong>{row.class || "-"}</strong>
+                            <span>Subject</span>
+                            <strong>{row.subject || "-"}</strong>
+                            <span>Exam</span>
+                            <strong>{row.exam || "-"}</strong>
+                          </div>
+                          <div className="teacher-performance-card__stats">
+                            <div>
+                              <span>Total Students</span>
+                              <strong>{row.total_students ?? "-"}</strong>
+                            </div>
+                            <div>
+                              <span>Average</span>
+                              <strong>{formatPercent(row.average_percent)}</strong>
+                            </div>
+                            <div>
+                              <span>All India Rank</span>
+                              <strong>{row.all_india_rank ?? "-"}</strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="teacher-performance-empty">
+                        {hasTeacherListFilters
+                          ? "No matching teacher performance data found."
+                          : "No teacher performance data available."}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </>
           ) : activeQueryType === "student" && studentView === "list" ? (
@@ -874,63 +996,124 @@ export default function QueriesPage({ activeQueryType = "school" }) {
               {studentListLoading && <p>Loading student list...</p>}
 
               {!studentListLoading && (
-                <div style={wideTableScrollStyle}>
-                  <table
-                    style={studentPerformanceTableStyle}
-                  >
-                    <thead>
-                      <tr>
-                        {studentListColumns.map((column) => (
-                          <th
-                            key={column}
-                            style={getStudentPerformanceCellStyle(column, true)}
-                          >
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {studentListRows.length > 0 ? (
-                        studentListRows.map((row, index) => (
-                          <tr
-                            key={`${row.student_code}-${row.school}-${row.class_section}-${row.exam}-${index}`}
-                          >
-                            <td style={getStudentPerformanceCellStyle("S.No")}>{index + 1}</td>
-                            <td style={getStudentPerformanceCellStyle("Student ID / Roll No")}>{row.student_code || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("Student Name")}>
-                              <span style={studentNameClampStyle}>
-                                {row.student_name || "-"}
-                              </span>
-                            </td>
-                            <td style={getStudentPerformanceCellStyle("Program")}>{row.program || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("School")}>{row.school || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("Class")}>{row.class || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("Percentage %")}>
-                              {row.percentage === null ||
-                              row.percentage === undefined
-                                ? "-"
-                                : `${row.percentage}%`}
-                            </td>
-                            <td style={getStudentPerformanceCellStyle("Class Rank")}>{row.class_rank ?? "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("School Rank")}>{row.school_rank ?? "-"}</td>
-                            <td style={getStudentPerformanceCellStyle("All India Rank")}>{row.all_india_rank ?? "-"}</td>
-                          </tr>
-                        ))
-                      ) : (
+                <>
+                  <div className="student-performance-table-wrap" style={wideTableScrollStyle}>
+                    <table
+                      className="student-performance-table"
+                      style={{
+                        ...studentPerformanceTableStyle,
+                        minWidth: "1280px",
+                        tableLayout: "auto",
+                      }}
+                    >
+                      <thead>
                         <tr>
-                          <td style={cellStyle} colSpan={12}>
-                            {hasStudentListFilters
-                              ? "No matching student performance data found."
-                              : "No student performance data available."}
-                          </td>
+                          {studentListColumns.map((column) => (
+                            <th
+                              key={column}
+                              style={getStudentPerformanceCellStyle(column, true)}
+                            >
+                              {column}
+                            </th>
+                          ))}
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {studentListRows.length > 0 ? (
+                          studentListRows.map((row, index) => (
+                            <tr
+                              key={`${row.student_code}-${row.school}-${row.class_section}-${row.exam}-${index}`}
+                            >
+                              <td style={getStudentPerformanceCellStyle("S.No")}>{index + 1}</td>
+                              <td style={getStudentPerformanceCellStyle("Student ID / Roll No")}>{row.student_code || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("Student Name")}>
+                                <span style={studentNameClampStyle}>
+                                  {row.student_name || "-"}
+                                </span>
+                              </td>
+                              <td style={getStudentPerformanceCellStyle("Program")}>{row.program || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("School")}>{row.school || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("School Name")}>{row.school_name || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("Area")}>{row.area || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("Class")}>{row.class || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("Exam")}>{row.exam || "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("Percentage %")}>
+                                {formatPercent(row.percentage)}
+                              </td>
+                              <td style={getStudentPerformanceCellStyle("Class Rank")}>{row.class_rank ?? "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("School Rank")}>{row.school_rank ?? "-"}</td>
+                              <td style={getStudentPerformanceCellStyle("All India Rank")}>{row.all_india_rank ?? "-"}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td style={cellStyle} colSpan={studentListColumns.length}>
+                              {hasStudentListFilters
+                                ? "No matching student performance data found."
+                                : "No student performance data available."}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="student-performance-mobile-list">
+                    {studentListRows.length > 0 ? (
+                      studentListRows.map((row, index) => (
+                        <article
+                          className="student-performance-card"
+                          key={`${row.student_code}-${row.school}-${row.class_section}-${row.exam}-${index}-mobile`}
+                        >
+                          <div className="student-performance-card__top">
+                            <span className="student-performance-card__index">{index + 1}</span>
+                            <div>
+                              <h3>{row.student_name || "-"}</h3>
+                              <p>{row.student_code || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="student-performance-card__school">
+                            <strong>{row.school_name || "-"}</strong>
+                            <span>{row.area || "-"}</span>
+                            <span>{row.school || "-"}</span>
+                          </div>
+                          <div className="student-performance-card__meta">
+                            <span>Program</span>
+                            <strong>{row.program || "-"}</strong>
+                            <span>Class</span>
+                            <strong>{row.class || "-"}</strong>
+                            <span>Exam</span>
+                            <strong>{row.exam || "-"}</strong>
+                          </div>
+                          <div className="student-performance-card__stats">
+                            <div>
+                              <span>Percentage</span>
+                              <strong>{formatPercent(row.percentage)}</strong>
+                            </div>
+                            <div>
+                              <span>Class Rank</span>
+                              <strong>{row.class_rank ?? "-"}</strong>
+                            </div>
+                            <div>
+                              <span>School Rank</span>
+                              <strong>{row.school_rank ?? "-"}</strong>
+                            </div>
+                            <div>
+                              <span>All India Rank</span>
+                              <strong>{row.all_india_rank ?? "-"}</strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="student-performance-empty">
+                        {hasStudentListFilters
+                          ? "No matching student performance data found."
+                          : "No student performance data available."}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </>
           ) : (
@@ -1385,6 +1568,10 @@ function FilterSelect({ label, value, onChange, placeholder, options }) {
   );
 }
 
+function formatPercent(value) {
+  return value === null || value === undefined ? "-" : `${value}%`;
+}
+
 const teacherListColumns = [
   "S.No",
   "Teacher ID / Code",
@@ -1392,6 +1579,7 @@ const teacherListColumns = [
   "Program",
   "School",
   "School Name",
+  "Area",
   "Class",
   "Subject",
   "Exam",
@@ -1407,6 +1595,7 @@ const studentListColumns = [
   "Program",
   "School",
   "School Name",
+  "Area",
   "Class",
   "Exam",
   "Percentage %",
@@ -1420,6 +1609,7 @@ const schoolListColumns = [
   "Program",
   "School",
   "School Name",
+  "Area",
   "Class",
   "Exam",
   "Total Students",
@@ -1443,21 +1633,22 @@ function getTeacherPerformanceCellStyle(column, isHeader = false) {
         fontSize: "12px",
         lineHeight: 1.25,
         verticalAlign: "top",
-        wordBreak: "break-word",
+        wordBreak: "normal",
       };
 
   if (column === "S.No") return { ...base, width: "44px", minWidth: "44px" };
-  if (column === "Teacher ID / Code") return { ...base, width: "92px", minWidth: "92px" };
-  if (column === "Teacher Name") return { ...base, width: "130px", minWidth: "130px" };
+  if (column === "Teacher ID / Code") return { ...base, width: "112px", minWidth: "112px", whiteSpace: "nowrap" };
+  if (column === "Teacher Name") return { ...base, width: "145px", minWidth: "145px", whiteSpace: "normal" };
   if (column === "Program") return { ...base, width: "70px", minWidth: "70px", whiteSpace: "nowrap" };
-  if (column === "School") return { ...base, width: "80px", minWidth: "80px" };
-  if (column === "School Name") return { ...base, width: "185px", minWidth: "185px", maxWidth: "185px" };
-  if (column === "Class") return { ...base, width: "76px", minWidth: "76px" };
-  if (column === "Subject") return { ...base, width: "78px", minWidth: "78px" };
+  if (column === "School") return { ...base, width: "88px", minWidth: "88px", whiteSpace: "nowrap" };
+  if (column === "School Name") return { ...base, width: "190px", minWidth: "190px", maxWidth: "190px", whiteSpace: "normal" };
+  if (column === "Area") return { ...base, width: "140px", minWidth: "140px", whiteSpace: "normal" };
+  if (column === "Class") return { ...base, width: "88px", minWidth: "88px", whiteSpace: "nowrap" };
+  if (column === "Subject") return { ...base, width: "88px", minWidth: "88px", whiteSpace: "nowrap" };
   if (column === "Exam") return { ...base, width: "96px", minWidth: "96px", whiteSpace: "nowrap" };
-  if (column === "Total Students") return { ...base, width: "88px", minWidth: "88px" };
+  if (column === "Total Students") return { ...base, width: "92px", minWidth: "92px", whiteSpace: "nowrap" };
   if (column === "Average %") return { ...base, width: "82px", minWidth: "82px", whiteSpace: "nowrap" };
-  if (column === "All India Rank") return { ...base, width: "112px", minWidth: "112px", paddingRight: "18px" };
+  if (column === "All India Rank") return { ...base, width: "112px", minWidth: "112px", paddingRight: "18px", whiteSpace: "nowrap" };
 
   return base;
 }
@@ -1477,13 +1668,19 @@ function getSchoolPerformanceCellStyle(column, isHeader = false) {
         fontSize: "12px",
         lineHeight: 1.25,
         verticalAlign: "middle",
-        wordBreak: "break-word",
+        wordBreak: "normal",
       };
 
   if (column === "S.No") return { ...base, width: "52px" };
-  if (column === "School Name") return { ...base, width: "160px" };
+  if (column === "Program") return { ...base, width: "82px", whiteSpace: "nowrap" };
+  if (column === "School") return { ...base, width: "96px", whiteSpace: "nowrap" };
+  if (column === "School Name") return { ...base, width: "190px", whiteSpace: "normal" };
+  if (column === "Area") return { ...base, width: "150px", whiteSpace: "normal" };
+  if (column === "Class") return { ...base, width: "96px", whiteSpace: "nowrap" };
+  if (column === "Exam") return { ...base, width: "120px", whiteSpace: "nowrap" };
+  if (column === "Average %") return { ...base, width: "96px", whiteSpace: "nowrap" };
   if (["School Rank", "All India Rank", "Total Students"].includes(column)) {
-    return { ...base, width: "90px" };
+    return { ...base, width: "96px", whiteSpace: "nowrap" };
   }
   return base;
 }
@@ -1503,17 +1700,17 @@ function getStudentPerformanceCellStyle(column, isHeader = false) {
         fontSize: "12px",
         lineHeight: 1.25,
         verticalAlign: "top",
-        wordBreak: "break-word",
+        wordBreak: "normal",
       };
 
   if (column === "S.No") return { ...base, width: "44px", minWidth: "44px" };
-  if (column === "Student ID / Roll No") return { ...base, width: "82px", minWidth: "82px" };
+  if (column === "Student ID / Roll No") return { ...base, width: "92px", minWidth: "92px", whiteSpace: "nowrap" };
   if (column === "Student Name") {
     return {
       ...base,
-      width: "150px",
-      minWidth: "150px",
-      maxWidth: "150px",
+      width: "165px",
+      minWidth: "165px",
+      maxWidth: "165px",
       paddingLeft: "8px",
       whiteSpace: "normal",
       overflow: "hidden",
@@ -1521,13 +1718,14 @@ function getStudentPerformanceCellStyle(column, isHeader = false) {
     };
   }
   if (column === "Program") return { ...base, width: "88px", minWidth: "88px", whiteSpace: "nowrap" };
-  if (column === "School") return { ...base, width: "76px", minWidth: "76px" };
-  if (column === "School Name") return { ...base, width: "170px", minWidth: "170px", maxWidth: "170px" };
-  if (column === "Class") return { ...base, width: "80px", minWidth: "80px" };
+  if (column === "School") return { ...base, width: "82px", minWidth: "82px", whiteSpace: "nowrap" };
+  if (column === "School Name") return { ...base, width: "185px", minWidth: "185px", maxWidth: "185px", whiteSpace: "normal" };
+  if (column === "Area") return { ...base, width: "135px", minWidth: "135px", whiteSpace: "normal" };
+  if (column === "Class") return { ...base, width: "80px", minWidth: "80px", whiteSpace: "nowrap" };
   if (column === "Exam") return { ...base, width: "105px", minWidth: "105px", whiteSpace: "nowrap" };
   if (column === "Percentage %") return { ...base, width: "86px", minWidth: "86px", whiteSpace: "nowrap" };
   if (["Class Rank", "School Rank", "All India Rank"].includes(column)) {
-    return { ...base, width: "78px", minWidth: "78px" };
+    return { ...base, width: "86px", minWidth: "86px", whiteSpace: "nowrap" };
   }
 
   return base;
@@ -1580,7 +1778,9 @@ const cellStyle = {
 };
 
 const wideTableScrollStyle = {
-  overflow: "visible",
+  overflowX: "auto",
+  overflowY: "visible",
+  WebkitOverflowScrolling: "touch",
   maxHeight: "none",
   paddingBottom: 0,
 };

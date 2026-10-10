@@ -2075,6 +2075,433 @@ body {
   padding-top: 15px;
 }
 
+.school-performance-table-wrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.school-performance-table {
+  width: 100%;
+}
+
+.school-performance-mobile-list {
+  display: none;
+}
+
+.school-performance-card {
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.school-performance-card + .school-performance-card {
+  margin-top: 12px;
+}
+
+.school-performance-card__top {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.school-performance-card__index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #eaf2ff;
+  color: #174ea6;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.school-performance-card__top h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.school-performance-card__top p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.school-performance-card__meta {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px 0;
+}
+
+.school-performance-card__meta span,
+.school-performance-card__stats span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.school-performance-card__meta strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.school-performance-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.school-performance-card__stats div {
+  min-width: 0;
+  border-radius: 7px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 9px;
+}
+
+.school-performance-card__stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.school-performance-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 18px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.teacher-performance-table-wrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.teacher-performance-table {
+  width: 100%;
+}
+
+.teacher-performance-mobile-list {
+  display: none;
+}
+
+.teacher-performance-card {
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.teacher-performance-card + .teacher-performance-card {
+  margin-top: 12px;
+}
+
+.teacher-performance-card__top {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.teacher-performance-card__index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #eef6f2;
+  color: #137047;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.teacher-performance-card__top h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.teacher-performance-card__top p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.teacher-performance-card__school {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.teacher-performance-card__school strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.teacher-performance-card__school span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.teacher-performance-card__meta {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px 0;
+}
+
+.teacher-performance-card__meta span,
+.teacher-performance-card__stats span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.teacher-performance-card__meta strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.teacher-performance-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.teacher-performance-card__stats div {
+  min-width: 0;
+  border-radius: 7px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 9px;
+}
+
+.teacher-performance-card__stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.teacher-performance-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 18px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.student-performance-table-wrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.student-performance-table {
+  width: 100%;
+}
+
+.student-performance-mobile-list {
+  display: none;
+}
+
+.student-performance-card {
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.student-performance-card + .student-performance-card {
+  margin-top: 12px;
+}
+
+.student-performance-card__top {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.student-performance-card__index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.student-performance-card__top h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.student-performance-card__top p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.student-performance-card__school {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.student-performance-card__school strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.student-performance-card__school span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.student-performance-card__meta {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px 0;
+}
+
+.student-performance-card__meta span,
+.student-performance-card__stats span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.student-performance-card__meta strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.student-performance-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.student-performance-card__stats div {
+  min-width: 0;
+  border-radius: 7px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 9px;
+}
+
+.student-performance-card__stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.student-performance-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 18px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .queries-page-content {
+    padding: 16px;
+  }
+
+  .school-performance-table-wrap {
+    display: none;
+  }
+
+  .school-performance-mobile-list {
+    display: block;
+  }
+
+  .teacher-performance-table-wrap {
+    display: none;
+  }
+
+  .teacher-performance-mobile-list {
+    display: block;
+  }
+
+  .teacher-performance-card__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .student-performance-table-wrap {
+    display: none;
+  }
+
+  .student-performance-mobile-list {
+    display: block;
+  }
+}
+
 /* School Owner Overview */
 .school-overview-page {
   min-height: 100%;
